@@ -1,0 +1,35 @@
+# Every highlighted construct in one file
+function int factorial int n
+    if less n 2 return 1
+    else return multiply n factorial subtract n 1
+
+function string join string a string b block
+    def string text
+    set text add a b
+    return text
+end
+
+function void greet string name
+    writeline add "Hi \"" add name "\"\n"
+
+def int i
+def float ratio
+def bool done
+set i 0
+set ratio divide convert float 7 2.0
+set done false
+
+while not done block
+    set i add i 1
+    if equal modulo i 2 0 continue
+    if greater i 7 break
+    write convert string i
+end
+writeline subtract 0 -7
+
+greet join "Py" "rop"
+writeline factorial 10
+writeline and true or false not done
+write "Name: "
+writeline read
+writeline "bad \q escape"

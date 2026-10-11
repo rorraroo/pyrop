@@ -1,0 +1,35 @@
+{
+  "name": "pyrop",
+  "displayName": "Pyrop",
+  "description": "Syntax highlighting for the Pyrop language.",
+  "version": "0.1.0",
+  "publisher": "radariandev",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "pyrop",
+        "aliases": [
+          "Pyrop",
+          "pyrop"
+        ],
+        "extensions": [
+          ".prp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pyrop",
+        "scopeName": "source.pyrop",
+        "path": "./syntaxes/pyrop.tmLanguage.json"
+      }
+    ]
+  }
+}

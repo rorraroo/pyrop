@@ -8,7 +8,7 @@
     <Version>0.1.0</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>pyrop</ToolCommandName>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

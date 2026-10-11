@@ -5,12 +5,16 @@ namespace Pyrop.Cli;
 
 public static class Repl
 {
+    public static string Version = "unknown";
+
     public static int Run()
     {
         var output = new ConsoleProgramOutput();
         var session = new PyropSession(Console.In, output);
         var pending = new StringBuilder();
 
+        AnsiConsole.Write(new FigletText("Pyrop").Color(Color.FromHex("#7A1C1C")));
+        AnsiConsole.Write(new Rule("[grey]v" + Version + "[/]").Centered().Justify(Justify.Left));
         AnsiConsole.MarkupLine("[bold]Pyrop[/] REPL. Press [grey]Ctrl+Z[/] then [grey]Enter[/] (Windows) or [grey]Ctrl+D[/] to exit.");
         AnsiConsole.MarkupLine("[grey]Unfinished input continues on the next line; an empty line submits it.[/]");
 

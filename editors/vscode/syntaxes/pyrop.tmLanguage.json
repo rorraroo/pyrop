@@ -1,0 +1,108 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Pyrop",
+  "scopeName": "source.pyrop",
+  "fileTypes": ["prp"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#function-header" },
+    { "include": "#declaration" },
+    { "include": "#assignment" },
+    { "include": "#conversion" },
+    { "include": "#number" },
+    { "include": "#control" },
+    { "include": "#keyword" },
+    { "include": "#type" },
+    { "include": "#boolean" },
+    { "include": "#builtin" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.pyrop"
+    },
+    "string": {
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.pyrop" } },
+      "end": "\"|$",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.pyrop" } },
+      "name": "string.quoted.double.pyrop",
+      "patterns": [
+        { "match": "\\\\[\"\\\\nt]", "name": "constant.character.escape.pyrop" },
+        { "match": "\\\\.", "name": "invalid.illegal.escape.pyrop" }
+      ]
+    },
+    "function-header": {
+      "begin": "\\b(function)\\s+(?:(int|float|string|bool|void)\\s+)?([^\\W\\d]\\w*)?",
+      "beginCaptures": {
+        "1": { "name": "storage.type.function.pyrop" },
+        "2": { "name": "storage.type.pyrop" },
+        "3": { "name": "entity.name.function.pyrop" }
+      },
+      "end": "(?!\\s*\\b(?:int|float|string|bool)\\b)",
+      "patterns": [
+        {
+          "match": "\\b(int|float|string|bool)\\s+([^\\W\\d]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.pyrop" },
+            "2": { "name": "variable.parameter.pyrop" }
+          }
+        }
+      ]
+    },
+    "declaration": {
+      "match": "\\b(def)\\s+(?:(int|float|string|bool)\\s+)?([^\\W\\d]\\w*)?",
+      "captures": {
+        "1": { "name": "storage.modifier.pyrop" },
+        "2": { "name": "storage.type.pyrop" },
+        "3": { "name": "variable.other.declaration.pyrop" }
+      }
+    },
+    "assignment": {
+      "match": "\\b(set)\\s+([^\\W\\d]\\w*)?",
+      "captures": {
+        "1": { "name": "keyword.other.set.pyrop" },
+        "2": { "name": "variable.other.pyrop" }
+      }
+    },
+    "conversion": {
+      "match": "\\b(convert)\\s+(int|float|string|bool)?\\b",
+      "captures": {
+        "1": { "name": "keyword.operator.convert.pyrop" },
+        "2": { "name": "storage.type.pyrop" }
+      }
+    },
+    "number": {
+      "patterns": [
+        { "match": "(?<![\\w.])-?\\d+\\.\\d+(?![\\w.])", "name": "constant.numeric.float.pyrop" },
+        { "match": "(?<![\\w.])-?\\d+(?![\\w.])", "name": "constant.numeric.integer.pyrop" }
+      ]
+    },
+    "control": {
+      "match": "\\b(if|else|while|break|continue|return|block|end)\\b",
+      "name": "keyword.control.pyrop"
+    },
+    "keyword": {
+      "match": "\\b(write|writeline)\\b",
+      "name": "keyword.other.pyrop"
+    },
+    "type": {
+      "match": "\\b(int|float|string|bool|void)\\b",
+      "name": "storage.type.pyrop"
+    },
+    "boolean": {
+      "match": "\\b(true|false)\\b",
+      "name": "constant.language.boolean.pyrop"
+    },
+    "builtin": {
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read)\\b",
+      "name": "support.function.builtin.pyrop"
+    },
+    "identifier": {
+      "match": "\\b[^\\W\\d]\\w*\\b",
+      "name": "variable.other.pyrop"
+    }
+  }
+}

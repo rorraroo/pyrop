@@ -5,6 +5,8 @@ using Spectre.Console;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+Repl.Version = typeof(Repl).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "unknown";
+
 return args switch
 {
     [] => Repl.Run(),
@@ -31,8 +33,7 @@ static int ShowHelp()
 
 static int ShowVersion()
 {
-    var version = typeof(Repl).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
-    AnsiConsole.MarkupLine($"pyrop {Markup.Escape(version.Split('+')[0])}");
+    AnsiConsole.MarkupLine($"pyrop {Markup.Escape(Repl.Version)}");
     return 0;
 }
 

@@ -1,0 +1,22 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "autoClosingPairs": [
+    { "open": "\"", "close": "\"", "notIn": ["string", "comment"] }
+  ],
+  "surroundingPairs": [
+    ["\"", "\""]
+  ],
+  "wordPattern": "[^\\W\\d]\\w*|-?\\d+(\\.\\d+)?",
+  "indentationRules": {
+    "increaseIndentPattern": "\\bblock\\s*(#.*)?$",
+    "decreaseIndentPattern": "^\\s*end\\b"
+  },
+  "folding": {
+    "markers": {
+      "start": "\\bblock\\s*(#.*)?$",
+      "end": "^\\s*end\\b"
+    }
+  }
+}
