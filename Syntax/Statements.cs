@@ -27,9 +27,16 @@ public sealed record BlockStatement(IReadOnlyList<Statement> Statements, SourceP
 
 public sealed record CallStatement(Expression Call, SourcePosition Position) : Statement(Position);
 
+public sealed record IncludeStatement(string Path, SyntaxTree? Included, SourcePosition Position) : Statement(Position);
+
 public sealed record SyntaxTree(IReadOnlyList<Statement> Statements)
 {
-    public IEnumerable<FunctionStatement> Functions => Statements.OfType<FunctionStatement>();
+    public IEnumerable<Statement> TopLevel =>
+        Statements.SelectMany(statement => statement is IncludeStatement { Included: { } included }
+            ? included.TopLevel
+            : [statement]);
 
-    public IEnumerable<DefStatement> Globals => Statements.OfType<DefStatement>();
+    public IEnumerable<FunctionStatement> Functions => TopLevel.OfType<FunctionStatement>();
+
+    public IEnumerable<DefStatement> Globals => TopLevel.OfType<DefStatement>();
 }

@@ -5,6 +5,7 @@
   "fileTypes": ["prp"],
   "patterns": [
     { "include": "#comment" },
+    { "include": "#import" },
     { "include": "#string" },
     { "include": "#function-header" },
     { "include": "#declaration" },
@@ -22,6 +23,10 @@
     "comment": {
       "match": "#.*$",
       "name": "comment.line.number-sign.pyrop"
+    },
+    "import": {
+      "match": "\\b(include)\\b",
+      "name": "keyword.control.import.pyrop"
     },
     "string": {
       "begin": "\"",

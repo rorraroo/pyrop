@@ -5,30 +5,51 @@ namespace Pyrop.Parsing;
 
 public static class SignatureScanner
 {
-    public static IReadOnlyList<FunctionSignature> Scan(IReadOnlyList<Token> tokens, FunctionTable existing)
+    public static IReadOnlyList<FunctionSignature> Scan(IReadOnlyList<Token> tokens, FunctionTable existing, IncludeContext? includes = null)
     {
-        var cursor = new TokenCursor(tokens);
-        var signatures = new List<FunctionSignature>();
-        var names = new HashSet<string>();
-        while (!cursor.IsAtEnd)
-        {
-            if (!cursor.Current.IsWord(Keywords.Function))
-            {
-                cursor.Advance();
-                continue;
-            }
+        var scan = new ScanState(existing, includes);
+        scan.ScanFile(tokens, includes?.BaseDirectory, reportsIncompleteInput: true);
+        return scan.Signatures;
+    }
 
-            cursor.Advance();
-            var signature = ReadHeader(cursor, existing);
-            if (existing.Contains(signature.Name) || !names.Add(signature.Name))
+    private sealed class ScanState(FunctionTable existing, IncludeContext? includes)
+    {
+        private readonly HashSet<string> _names = new();
+        private readonly HashSet<string> _visited = new(includes?.Included ?? [], SourceLoader.PathComparer);
+
+        public List<FunctionSignature> Signatures { get; } = new();
+
+        public void ScanFile(IReadOnlyList<Token> tokens, string? directory, bool reportsIncompleteInput)
+        {
+            var cursor = new TokenCursor(tokens, reportsIncompleteInput);
+            while (!cursor.IsAtEnd)
+            {
+                var token = cursor.Advance();
+                if (token.IsWord(Keywords.Function))
+                {
+                    AddSignature(ReadHeader(cursor, existing));
+                }
+                else if (includes is not null && directory is not null && token.IsWord(Keywords.Include) && cursor.Current.Kind == TokenKind.String)
+                {
+                    var path = cursor.Advance();
+                    var file = includes.Loader.Load(path.Text, directory, path.Position);
+                    if (_visited.Add(file.FullPath))
+                    {
+                        ScanFile(file.Tokens, file.Directory, reportsIncompleteInput: false);
+                    }
+                }
+            }
+        }
+
+        private void AddSignature(FunctionSignature signature)
+        {
+            if (existing.Contains(signature.Name) || !_names.Add(signature.Name))
             {
                 throw new PyropException(ErrorStage.Parse, $"Function '{signature.Name}' is already defined.", signature.Position);
             }
 
-            signatures.Add(signature);
+            Signatures.Add(signature);
         }
-
-        return signatures;
     }
 
     public static FunctionSignature ReadHeader(TokenCursor cursor, FunctionTable functions)

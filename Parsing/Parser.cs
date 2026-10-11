@@ -9,24 +9,27 @@ public sealed class Parser
 {
     private static readonly IReadOnlySet<string> NoParameters = new HashSet<string>();
 
-    private readonly TokenCursor _cursor;
     private readonly FunctionTable _functions;
+    private readonly IncludeContext? _includes;
+    private TokenCursor _cursor;
+    private string? _directory;
     private FunctionSignature? _currentFunction;
     private int _loopDepth;
     private int _nesting;
 
-    private Parser(IReadOnlyList<Token> tokens, FunctionTable functions)
+    private Parser(IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes)
     {
         _cursor = new TokenCursor(tokens);
         _functions = functions;
+        _includes = includes;
+        _directory = includes?.BaseDirectory;
     }
 
-    public static SyntaxTree Parse(IReadOnlyList<Token> tokens, FunctionTable functions) =>
-        new Parser(tokens, functions).ParseProgram();
+    public static SyntaxTree Parse(IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes = null) =>
+        new Parser(tokens, functions, includes).ParseProgram(new HashSet<string>());
 
-    private SyntaxTree ParseProgram()
+    private SyntaxTree ParseProgram(HashSet<string> declared)
     {
-        var declared = new HashSet<string>();
         var statements = new List<Statement>();
         while (!_cursor.IsAtEnd)
         {
@@ -36,8 +39,56 @@ public sealed class Parser
         return new SyntaxTree(statements);
     }
 
-    private Statement ParseListedStatement(HashSet<string> declared, IReadOnlySet<string> parameters) =>
-        _cursor.Current.IsWord(Keywords.Def) ? ParseDef(declared, parameters) : ParseStatement();
+    private Statement ParseListedStatement(HashSet<string> declared, IReadOnlySet<string> parameters)
+    {
+        if (_cursor.Current.IsWord(Keywords.Def))
+        {
+            return ParseDef(declared, parameters);
+        }
+
+        if (_cursor.Current.IsWord(Keywords.Include) && _nesting == 0 && _currentFunction is null)
+        {
+            return ParseInclude(declared);
+        }
+
+        return ParseStatement();
+    }
+
+    private Statement ParseInclude(HashSet<string> globals)
+    {
+        var start = _cursor.Advance();
+        var pathToken = _cursor.Current;
+        if (pathToken.Kind != TokenKind.String)
+        {
+            throw _cursor.Error($"'include' takes a string literal path, found {pathToken.Describe()}.");
+        }
+
+        _cursor.Advance();
+        if (_includes is null || _directory is null)
+        {
+            throw _cursor.Error("'include' is not available here.", start);
+        }
+
+        var file = _includes.Loader.Load(pathToken.Text, _directory, pathToken.Position);
+        if (!_includes.Included.Add(file.FullPath))
+        {
+            return new IncludeStatement(pathToken.Text, null, start.Position);
+        }
+
+        var outerCursor = _cursor;
+        var outerDirectory = _directory;
+        _cursor = new TokenCursor(file.Tokens, reportsIncompleteInput: false);
+        _directory = file.Directory;
+        try
+        {
+            return new IncludeStatement(pathToken.Text, ParseProgram(globals), start.Position);
+        }
+        finally
+        {
+            _cursor = outerCursor;
+            _directory = outerDirectory;
+        }
+    }
 
     private Statement ParseBody(string owner, IReadOnlySet<string>? parameters = null)
     {
@@ -75,6 +126,7 @@ public sealed class Parser
         return token.Text switch
         {
             Keywords.Def => throw _cursor.Error("A def cannot be used here; wrap it in block … end."),
+            Keywords.Include => throw _cursor.Error("'include' is only allowed at the top level."),
             Keywords.Set => ParseSet(),
             Keywords.If => ParseIf(),
             Keywords.While => ParseWhile(),

@@ -2,7 +2,7 @@ using Pyrop.Lexing;
 
 namespace Pyrop.Parsing;
 
-public sealed class TokenCursor(IReadOnlyList<Token> tokens)
+public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompleteInput = true)
 {
     private int _index;
 
@@ -28,7 +28,7 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens)
     public PyropException Error(string message, Token? at = null)
     {
         var token = at ?? Current;
-        return new PyropException(ErrorStage.Parse, message, token.Position, token.Kind == TokenKind.EndOfInput);
+        return new PyropException(ErrorStage.Parse, message, token.Position, reportsIncompleteInput && token.Kind == TokenKind.EndOfInput);
     }
 
     public Token ExpectWord(string expectation)

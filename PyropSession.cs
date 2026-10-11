@@ -16,19 +16,25 @@ public enum InputStatus
 public sealed class PyropSession(TextReader input, IProgramOutput output)
 {
     private readonly Interpreter _interpreter = new(input, output);
+    private readonly Dictionary<string, string> _sources = new();
     private FunctionTable _functions = FunctionTable.Empty;
     private IReadOnlyDictionary<string, PyropType> _globals = new Dictionary<string, PyropType>();
+    private HashSet<string> _included = new(SourceLoader.PathComparer);
+    private string? _lastInput;
 
     public InputStatus Probe(string source) => LargeStack.Run(() => ProbeOnCurrentThread(source));
 
-    public void Run(string source) => LargeStack.Run(() => RunOnCurrentThread(source));
+    public void Run(string source, string? sourcePath = null) => LargeStack.Run(() => RunOnCurrentThread(source, sourcePath));
+
+    public string? SourceText(string? sourceName) =>
+        sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
 
     private InputStatus ProbeOnCurrentThread(string source)
     {
         try
         {
-            var (tree, _) = Parse(source);
-            return tree.Statements.Count > 0 && EndsWithOpenIf(tree.Statements[^1])
+            var parsed = Parse(source, null);
+            return parsed.Tree.Statements.Count > 0 && EndsWithOpenIf(parsed.Tree.Statements[^1])
                 ? InputStatus.AwaitingElse
                 : InputStatus.Ready;
         }
@@ -42,15 +48,25 @@ public sealed class PyropSession(TextReader input, IProgramOutput output)
         }
     }
 
-    private bool RunOnCurrentThread(string source)
+    private bool RunOnCurrentThread(string source, string? sourcePath)
     {
-        var (tree, functions) = Parse(source);
-        var check = TypeChecker.Check(tree, _globals);
-        _functions = functions;
+        if (sourcePath is null)
+        {
+            _lastInput = source;
+        }
+        else
+        {
+            _sources[sourcePath] = source;
+        }
+
+        var parsed = Parse(source, sourcePath);
+        var check = TypeChecker.Check(parsed.Tree, _globals);
+        _functions = parsed.Functions;
         _globals = check.Globals;
+        _included = parsed.Included;
         try
         {
-            _interpreter.Execute(tree, check);
+            _interpreter.Execute(parsed.Tree, check);
         }
         catch (Exception exception) when (exception is not PyropException)
         {
@@ -60,20 +76,43 @@ public sealed class PyropSession(TextReader input, IProgramOutput output)
         return true;
     }
 
-    private (SyntaxTree Tree, FunctionTable Functions) Parse(string source)
+    private sealed record ParsedInput(SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included);
+
+    private ParsedInput Parse(string source, string? sourcePath)
     {
-        var tokens = Lexer.Tokenize(source);
-        var signatures = SignatureScanner.Scan(tokens, _functions);
-        foreach (var signature in signatures.Where(signature => _globals.ContainsKey(signature.Name)))
+        var included = new HashSet<string>(_included, SourceLoader.PathComparer);
+        var baseDirectory = Environment.CurrentDirectory;
+        if (sourcePath is not null)
         {
-            throw new PyropException(
-                ErrorStage.Parse,
-                $"'{signature.Name}' is already a global variable and cannot be used as a function name.",
-                signature.Position);
+            var fullPath = Path.GetFullPath(sourcePath);
+            included.Add(fullPath);
+            baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
 
-        var functions = _functions.With(signatures);
-        return (Parser.Parse(tokens, functions), functions);
+        var loader = new SourceLoader();
+        var includes = new IncludeContext(loader, baseDirectory, included);
+        try
+        {
+            var tokens = Lexer.Tokenize(source, sourcePath);
+            var signatures = SignatureScanner.Scan(tokens, _functions, includes);
+            foreach (var signature in signatures.Where(signature => _globals.ContainsKey(signature.Name)))
+            {
+                throw new PyropException(
+                    ErrorStage.Parse,
+                    $"'{signature.Name}' is already a global variable and cannot be used as a function name.",
+                    signature.Position);
+            }
+
+            var functions = _functions.With(signatures);
+            return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included);
+        }
+        finally
+        {
+            foreach (var (name, text) in loader.Texts)
+            {
+                _sources[name] = text;
+            }
+        }
     }
 
     private static bool EndsWithOpenIf(Statement statement) => statement switch

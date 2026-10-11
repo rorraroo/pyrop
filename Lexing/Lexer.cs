@@ -6,16 +6,19 @@ namespace Pyrop.Lexing;
 public sealed class Lexer
 {
     private readonly string _source;
+    private readonly string? _sourceName;
     private int _index;
     private int _line = 1;
     private int _column = 1;
 
-    private Lexer(string source)
+    private Lexer(string source, string? sourceName)
     {
         _source = source;
+        _sourceName = sourceName;
     }
 
-    public static IReadOnlyList<Token> Tokenize(string source) => new Lexer(source).TokenizeAll();
+    public static IReadOnlyList<Token> Tokenize(string source, string? sourceName = null) =>
+        new Lexer(source, sourceName).TokenizeAll();
 
     private IReadOnlyList<Token> TokenizeAll()
     {
@@ -37,7 +40,7 @@ public sealed class Lexer
 
     private char Current => _source[_index];
 
-    private SourcePosition CurrentPosition => new(_line, _column);
+    private SourcePosition CurrentPosition => new(_line, _column, _sourceName);
 
     private char? PeekAhead(int offset) =>
         _index + offset < _source.Length ? _source[_index + offset] : null;

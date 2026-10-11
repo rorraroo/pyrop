@@ -102,6 +102,13 @@ public sealed class TypeChecker
             case CallStatement call:
                 TypeOf(call.Call, scope);
                 break;
+            case IncludeStatement include:
+                foreach (var inner in include.Included?.Statements ?? [])
+                {
+                    CheckStatement(inner, scope);
+                }
+
+                break;
             case BreakStatement or ContinueStatement:
                 break;
             default:

@@ -50,7 +50,7 @@ public static class Repl
             catch (PyropException exception)
             {
                 output.EnsureLineStart();
-                ErrorRenderer.Render(exception, source, "input");
+                ErrorRenderer.Render(exception, "input", session.SourceText);
             }
         }
     }

@@ -4,14 +4,15 @@ namespace Pyrop.Cli;
 
 public static class ErrorRenderer
 {
-    public static void Render(PyropException exception, string source, string origin)
+    public static void Render(PyropException exception, string origin, Func<string?, string?> sourceText)
     {
-        var lines = source.Split('\n');
         foreach (var error in exception.Errors)
         {
+            var location = error.Position.Source ?? origin;
             AnsiConsole.MarkupLine(
-                $"[red bold]{StageName(error.Stage)}[/] [grey]{Markup.Escape(origin)}:{error.Position}[/] {Markup.Escape(error.Message)}");
+                $"[red bold]{StageName(error.Stage)}[/] [grey]{Markup.Escape(location)}:{error.Position}[/] {Markup.Escape(error.Message)}");
 
+            var lines = sourceText(error.Position.Source)?.Split('\n') ?? [];
             if (error.Position.Line < 1 || error.Position.Line > lines.Length)
             {
                 continue;

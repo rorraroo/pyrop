@@ -18,13 +18,14 @@ public static class Keywords
     public const string Write = "write";
     public const string WriteLine = "writeline";
     public const string Convert = "convert";
+    public const string Include = "include";
     public const string True = "true";
     public const string False = "false";
 
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        Convert, True, False,
+        Convert, Include, True, False,
         .. new[] { PyropType.Int, PyropType.Float, PyropType.String, PyropType.Bool, PyropType.Void }.Select(type => type.Name()),
         .. Builtins.All.Keys,
     ];

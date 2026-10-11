@@ -1,4 +1,6 @@
 # Every highlighted construct in one file
+include "sample.prp"
+
 function int factorial int n
     if less n 2 return 1
     else return multiply n factorial subtract n 1

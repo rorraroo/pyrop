@@ -87,6 +87,17 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
             case CallStatement call:
                 EvaluateCall(call.Call, scope);
                 return Completion.Normal;
+            case IncludeStatement include:
+                foreach (var inner in include.Included?.Statements ?? [])
+                {
+                    var result = ExecuteStatement(inner, scope);
+                    if (result.Kind != CompletionKind.Normal)
+                    {
+                        return result;
+                    }
+                }
+
+                return Completion.Normal;
             default:
                 throw Internal($"Unknown statement {statement.GetType().Name}.", statement.Position);
         }

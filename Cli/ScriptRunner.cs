@@ -17,13 +17,13 @@ public static class ScriptRunner
         var session = new PyropSession(Console.In, output);
         try
         {
-            session.Run(source);
+            session.Run(source, path);
             return 0;
         }
         catch (PyropException exception)
         {
             output.EnsureLineStart();
-            ErrorRenderer.Render(exception, source, path);
+            ErrorRenderer.Render(exception, path, session.SourceText);
             return 1;
         }
     }
