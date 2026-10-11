@@ -1,36 +1,44 @@
-# Pyrop for VS Code
+# Pyrop
 
-Syntax highlighting for [Pyrop](../../Reference.md) (`.prp`) files.
-
-## What it does
-
-- Highlights keywords, types, built-in operations, `true`/`false`, numbers, strings, escape sequences and `#` comments.
-- Highlights the names being declared in `function` headers (function name and parameters) and in `def`.
-- `Ctrl+/` toggles `#` comments, `"` auto-closes, `block` … `end` regions fold, and the line after `block` is indented.
-
-Calls to user-defined functions look the same as variables. Without brackets, telling them apart needs the interpreter's function table, which a regex grammar cannot see.
-
-## Trying it out
-
-Open this folder (`editors/vscode`) in VS Code and press `F5`. A second VS Code window opens with the extension loaded; open [samples/sample.prp](samples/sample.prp) there. After editing the grammar, run **Developer: Reload Window** in that window to see the changes.
-
-## Installing it
-
-Build a `.vsix` package with the bundled script. It needs no Node.js:
+Language support for **Pyrop**, a small statically typed language written in prefix notation, with no brackets and no symbols.
 
 ```
-powershell -ExecutionPolicy Bypass -File editors\vscode\pack.ps1
+function int factorial int n
+    if less n 2 return 1
+    else return multiply n factorial subtract n 1
+
+def int i
+set i 1
+while less i 6 block
+    writeline factorial i
+    set i add i 1
+end
 ```
 
-This creates `editors\vscode\pyrop-0.1.0.vsix`. Install it in either of two ways:
+## Features
 
-- In VS Code, open the Extensions view, click **…** at the top, and choose **Install from VSIX…**.
-- From a terminal: `code --install-extension editors\vscode\pyrop-0.1.0.vsix`
+- **Syntax highlighting** for `.prp` files: keywords, types, built-in operations, numbers, strings with escape sequences, and comments.
+- **Declarations stand out:** function names and parameters in `function` headers, and new variables in `def`.
+- **Invalid escape sequences** such as `\q` are marked as errors.
+- **Editing helpers:**
+  - `Ctrl+/` toggles `#` comments.
+  - Quotes close automatically.
+  - `block` … `end` regions can be folded.
+  - The line after `block` is indented automatically.
+- **File icon:** the Pyrop crystal appears next to `.prp` files in the explorer and on editor tabs.
 
-The same `.vsix` file can be sent to anyone else who uses VS Code. After changing the grammar, bump `version` in `package.json`, run the script again, and reinstall.
+## Running Pyrop programs
 
-With Node.js installed, `npx @vscode/vsce package` produces an equivalent package and also checks the manifest.
+This extension adds editor support only. To run programs, install the `pyrop` command-line tool, then:
 
-## Keeping it in sync
+```
+pyrop program.prp     # run a script
+pyrop                 # start the interactive REPL
+pyrop --help          # show all options
+```
 
-The word lists in [syntaxes/pyrop.tmLanguage.json](syntaxes/pyrop.tmLanguage.json) must match `Parsing/Keywords.cs` and `Runtime/Builtins.cs`. Update both whenever a keyword or built-in is added.
+## Known limitations
+
+- Calls to your own functions are coloured like variables. In Pyrop, `square x` looks the same whether `square` is a function or a variable, and telling them apart needs the full program.
+- Errors are not shown in the editor yet. They are reported when the program is run.
+- The file icon shows with icon themes that have no icon of their own for `.prp`, including the default theme. The **Minimal** and **None** themes show no file icons at all.

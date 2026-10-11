@@ -2,8 +2,9 @@
   "name": "pyrop",
   "displayName": "Pyrop",
   "description": "Syntax highlighting for the Pyrop language.",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "publisher": "radariandev",
+  "icon": "icons/pyrop-128.png",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -21,6 +22,10 @@
         "extensions": [
           ".prp"
         ],
+        "icon": {
+          "light": "./icons/pyrop.svg",
+          "dark": "./icons/pyrop.svg"
+        },
         "configuration": "./language-configuration.json"
       }
     ],
