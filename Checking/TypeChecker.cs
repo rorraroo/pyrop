@@ -64,7 +64,7 @@ public sealed class TypeChecker
         switch (statement)
         {
             case DefStatement def:
-                scope.Declare(def.Name, def.Type);
+                CheckDef(def, scope);
                 break;
             case SetStatement set:
                 CheckSet(set, scope);
@@ -114,6 +114,16 @@ public sealed class TypeChecker
             default:
                 throw new InvalidOperationException($"Unknown statement {statement.GetType().Name}.");
         }
+    }
+
+    private void CheckDef(DefStatement def, SymbolScope scope)
+    {
+        if (TypeOf(def.Value, scope) is { } actual && actual != def.Type)
+        {
+            Report($"Cannot initialize {def.Type.Name()} variable '{def.Name}' with a {actual.Name()} value.", def.Value.Position);
+        }
+
+        scope.Declare(def.Name, def.Type);
     }
 
     private void CheckSet(SetStatement set, SymbolScope scope)
@@ -167,7 +177,7 @@ public sealed class TypeChecker
 
     private void CheckReturn(ReturnStatement returnStatement, SymbolScope scope)
     {
-        if (returnStatement.Value is null || _currentFunction is null)
+        if (_currentFunction is null)
         {
             return;
         }

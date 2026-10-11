@@ -7,8 +7,7 @@ function int factorial int n
     if less n 2 return 1
     else return multiply n factorial subtract n 1
 
-def int i
-set i 1
+def int i 1
 while less i 6 block
     writeline factorial i
     set i add i 1

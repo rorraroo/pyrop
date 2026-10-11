@@ -54,7 +54,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         switch (statement)
         {
             case DefStatement def:
-                scope.Declare(def.Name, def.Type);
+                ExecuteDef(def, scope);
                 return Completion.Normal;
             case SetStatement set:
                 ExecuteSet(set, scope);
@@ -75,9 +75,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
             case FunctionStatement:
                 return Completion.Normal;
             case ReturnStatement returnStatement:
-                return new Completion(
-                    CompletionKind.Return,
-                    returnStatement.Value is null ? null : Evaluate(returnStatement.Value, scope));
+                return new Completion(CompletionKind.Return, Evaluate(returnStatement.Value, scope));
             case WriteStatement write:
                 var text = Evaluate(write.Value, scope).ToText();
                 output.Write(write.AppendNewLine ? text + "\n" : text);
@@ -134,6 +132,17 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         return Completion.Normal;
     }
 
+    private void ExecuteDef(DefStatement def, Scope scope)
+    {
+        var value = Evaluate(def.Value, scope);
+        if (value.Type != def.Type)
+        {
+            throw Internal($"Type mismatch initializing {def.Type.Name()} variable '{def.Name}' with {value.Type.Name()}.", def.Position);
+        }
+
+        scope.Declare(def.Name, def.Type, value);
+    }
+
     private void ExecuteSet(SetStatement set, Scope scope)
     {
         var value = Evaluate(set.Value, scope);
@@ -173,7 +182,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
             case VariableExpression variable:
                 var slot = scope.Find(variable.Name)
                     ?? throw Runtime($"Variable '{variable.Name}' does not exist yet; its def has not run.", variable.Position);
-                return slot.Value ?? throw Runtime($"Variable '{variable.Name}' is used before it is set.", variable.Position);
+                return slot.Value;
             case BuiltinCallExpression call:
                 return CallBuiltin(call, scope);
             case FunctionCallExpression call:
@@ -218,8 +227,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         for (var index = 0; index < arguments.Count; index++)
         {
             var parameter = signature.Parameters[index];
-            functionScope.Declare(parameter.Name, parameter.Type);
-            functionScope.Find(parameter.Name)!.Value = arguments[index];
+            functionScope.Declare(parameter.Name, parameter.Type, arguments[index]);
         }
 
         _callDepth++;

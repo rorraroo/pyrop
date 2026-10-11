@@ -168,7 +168,12 @@ public sealed class Parser
             throw _cursor.Error($"Variable '{name}' is already declared in this block.", nameToken);
         }
 
-        return new DefStatement(type, name, start.Position);
+        if (_cursor.IsAtEnd || (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text)))
+        {
+            throw _cursor.Error($"Variable '{name}' needs an initial value: def {type.Name()} {name} <expression>.");
+        }
+
+        return new DefStatement(type, name, ParseExpression(), start.Position);
     }
 
     private PyropType ParseValueType(string owner)
@@ -266,8 +271,14 @@ public sealed class Parser
             throw _cursor.Error("'return' is only allowed inside a function.", start);
         }
 
-        var value = _currentFunction.ReturnType == PyropType.Void ? null : ParseExpression();
-        return new ReturnStatement(value, start.Position);
+        if (_currentFunction.ReturnType == PyropType.Void)
+        {
+            throw _cursor.Error(
+                $"'return' is not allowed in void function '{_currentFunction.Name}'; it ends when its body finishes.",
+                start);
+        }
+
+        return new ReturnStatement(ParseExpression(), start.Position);
     }
 
     private Statement ParseWrite(bool appendNewLine)

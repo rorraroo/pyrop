@@ -3,7 +3,9 @@ namespace Pyrop.Tests;
 public class TypeCheckerTests
 {
     [Theory]
-    [InlineData("def int a\nset a \"text\"", "Cannot set int variable")]
+    [InlineData("def int a 0\nset a \"text\"", "Cannot set int variable")]
+    [InlineData("def int a \"text\"", "Cannot initialize int variable 'a' with a string value")]
+    [InlineData("def int a add a 1", "Undeclared variable 'a'")]
     [InlineData("writeline add 1 2.0", "'add' cannot take int float")]
     [InlineData("writeline convert int true", "Cannot convert bool to int")]
     [InlineData("if 1 writeline 1", "condition of 'if' must be bool")]
@@ -11,8 +13,8 @@ public class TypeCheckerTests
     [InlineData("writeline missing", "Undeclared variable 'missing'")]
     [InlineData("function int f return \"x\"", "must return int, found string")]
     [InlineData("function int f int x return x\nwriteline f 1.5", "Argument 'x' of 'f' must be int")]
-    [InlineData("writeline later\ndef int later", "Undeclared variable 'later'")]
-    [InlineData("block def int inner end\nfunction int f return inner", "Undeclared variable 'inner'")]
+    [InlineData("writeline later\ndef int later 1", "Undeclared variable 'later'")]
+    [InlineData("block def int inner 1 end\nfunction int f return inner", "Undeclared variable 'inner'")]
     public void RejectsTypeErrors(string source, string message)
     {
         var error = Run.Failure(source);
@@ -36,7 +38,7 @@ public class TypeCheckerTests
     [Fact]
     public void FunctionsSeeGlobalsDeclaredLaterInTheFile()
     {
-        Assert.Equal("5\n", Run.Program("function int get return value\ndef int value\nset value 5\nwriteline get"));
+        Assert.Equal("5\n", Run.Program("function int get return value\ndef int value 5\nwriteline get"));
     }
 
     [Theory]

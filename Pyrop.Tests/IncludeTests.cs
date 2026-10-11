@@ -45,7 +45,7 @@ public sealed class IncludeTests : IDisposable
     [Fact]
     public void IncludedStatementsRunAtTheIncludeOnce()
     {
-        WriteFile("lib.prp", "def int counter\nset counter 10\nwriteline \"lib loaded\"");
+        WriteFile("lib.prp", "def int counter 10\nwriteline \"lib loaded\"");
 
         var output = RunFile("main.prp", "writeline \"start\"\ninclude \"lib.prp\"\ninclude \"lib.prp\"\nwriteline counter");
 
@@ -102,11 +102,11 @@ public sealed class IncludeTests : IDisposable
     [Theory]
     [InlineData("block include \"lib.prp\" end", "only allowed at the top level")]
     [InlineData("function void f include \"lib.prp\"", "only allowed at the top level")]
-    [InlineData("def string path\ninclude path", "string literal path")]
-    [InlineData("def int shared\ninclude \"lib.prp\"", "already declared")]
+    [InlineData("def string path \"lib.prp\"\ninclude path", "string literal path")]
+    [InlineData("def int shared 0\ninclude \"lib.prp\"", "already declared")]
     public void RejectsInvalidIncludes(string main, string message)
     {
-        WriteFile("lib.prp", "def int shared");
+        WriteFile("lib.prp", "def int shared 1");
 
         var error = FailFile("main.prp", main);
 

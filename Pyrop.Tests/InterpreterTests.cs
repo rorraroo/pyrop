@@ -37,8 +37,7 @@ public class InterpreterTests
     public void LoopsWithBreakAndContinue()
     {
         const string source = """
-            def int i
-            set i 0
+            def int i 0
             while true block
                 set i add i 1
                 if equal modulo i 2 0 continue
@@ -54,11 +53,9 @@ public class InterpreterTests
     public void BlocksCreateFreshScopesPerIteration()
     {
         const string source = """
-            def int i
-            set i 0
+            def int i 0
             while less i 2 block
-                def int x
-                set x i
+                def int x i
                 write x
                 set i add i 1
             end
@@ -68,13 +65,17 @@ public class InterpreterTests
     }
 
     [Fact]
-    public void VoidFunctionsCanReturnEarly()
+    public void InitializerSeesTheOuterVariableItShadows()
+    {
+        Assert.Equal("2\n1\n", Run.Program("def int x 1\nblock def int x add x 1 writeline x end\nwriteline x"));
+    }
+
+    [Fact]
+    public void VoidFunctionsEndWhenTheirBodyFinishes()
     {
         const string source = """
-            function void greet string name block
-                if equal name "" return
-                writeline add "Hi " name
-            end
+            function void greet string name
+                if not equal name "" writeline add "Hi " name
             greet ""
             greet "Ann"
             """;
@@ -113,10 +114,10 @@ public class InterpreterTests
     [InlineData("writeline multiply convert float \"1e308\" 10.0", "out of range")]
     [InlineData("writeline convert int \"abc\"", "Cannot convert \"abc\" to int")]
     [InlineData("writeline convert int 3000000000.0", "out of range for int")]
-    [InlineData("def int x\nwriteline x", "used before it is set")]
     [InlineData("writeline read", "end of input")]
     [InlineData("function int down int n return down add n 1\nwriteline down 0", "Call depth limit")]
-    [InlineData("function int get return late\nwriteline get\ndef int late", "does not exist yet")]
+    [InlineData("function int get return late\nwriteline get\ndef int late 1", "does not exist yet")]
+    [InlineData("function int get return late\ndef int late get", "does not exist yet")]
     public void ReportsRuntimeErrors(string source, string message)
     {
         var error = Run.Failure(source);

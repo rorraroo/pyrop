@@ -6,20 +6,16 @@ function int factorial int n
     else return multiply n factorial subtract n 1
 
 function string join string a string b block
-    def string text
-    set text add a b
+    def string text add a b
     return text
 end
 
 function void greet string name
     writeline add "Hi \"" add name "\"\n"
 
-def int i
-def float ratio
-def bool done
-set i 0
-set ratio divide convert float 7 2.0
-set done false
+def int i 0
+def float ratio divide convert float 7 2.0
+def bool done false
 
 while not done block
     set i add i 1
@@ -29,7 +25,7 @@ while not done block
 end
 writeline subtract 0 -7
 
-greet join "Py" "rop"
+greet add "Py" "rop"
 writeline factorial 10
 writeline and true or false not done
 write "Name: "

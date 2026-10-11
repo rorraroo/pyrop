@@ -30,7 +30,14 @@ public static class Keywords
         .. Builtins.All.Keys,
     ];
 
+    private static readonly HashSet<string> Statements =
+    [
+        Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine, Include,
+    ];
+
     public static bool IsReserved(string word) => Reserved.Contains(word);
+
+    public static bool IsStatement(string word) => Statements.Contains(word);
 
     public static PyropType? ValueType(string word) =>
         PyropTypes.FromName(word) is { } type && type != PyropType.Void ? type : null;

@@ -50,17 +50,21 @@ public class ParserTests
 
     [Theory]
     [InlineData("writeline add 1 2 3", "cannot stand alone")]
-    [InlineData("if true def int x", "cannot be the body")]
-    [InlineData("def int x\ndef int x", "already declared")]
-    [InlineData("function int f int x block\ndef int x\nreturn 1\nend", "shadow the parameter")]
+    [InlineData("if true def int x 1", "cannot be the body")]
+    [InlineData("def int x 1\ndef int x 2", "already declared")]
+    [InlineData("function int f int x block\ndef int x 2\nreturn 1\nend", "shadow the parameter")]
+    [InlineData("def int x\nset x 1", "needs an initial value")]
+    [InlineData("block def int x end", "needs an initial value")]
     [InlineData("function int f int x int x return x", "declared twice")]
     [InlineData("break", "only allowed inside a while")]
-    [InlineData("while true function void f return", "top level")]
+    [InlineData("while true function void f writeline 1", "top level")]
     [InlineData("return 1", "only allowed inside a function")]
-    [InlineData("function void v return\nwriteline v", "returns void")]
+    [InlineData("function void f return", "not allowed in void function 'f'")]
+    [InlineData("function void f block writeline 1 if true return end", "not allowed in void function 'f'")]
+    [InlineData("function void v writeline 1\nwriteline v", "returns void")]
     [InlineData("def int add", "reserved word")]
-    [InlineData("function void f return\ndef int f", "is a function")]
-    [InlineData("function void f return\nfunction int f return 1", "already defined")]
+    [InlineData("function void f writeline 1\ndef int f", "is a function")]
+    [InlineData("function void f writeline 1\nfunction int f return 1", "already defined")]
     [InlineData("def void x", "cannot have type void")]
     [InlineData("end", "without a matching")]
     public void RejectsInvalidPrograms(string source, string message)
@@ -76,6 +80,7 @@ public class ParserTests
     [InlineData("block writeline 1")]
     [InlineData("writeline add 1")]
     [InlineData("function int f int x")]
+    [InlineData("def int x")]
     public void FlagsTruncatedInputAsIncomplete(string source)
     {
         Assert.True(Assert.Throws<PyropException>(() => Parse(source)).IsIncompleteInput);
