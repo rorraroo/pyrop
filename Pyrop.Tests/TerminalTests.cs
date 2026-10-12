@@ -187,6 +187,19 @@ public class TerminalTests
     }
 
     [Fact]
+    public void ConsoleOutputCanEndLinesWithACarriageReturn()
+    {
+        var writer = new StringWriter();
+        var output = new ConsoleProgramOutput(writer, plain: false, newLine: "\r\n");
+
+        output.Write("Hello, World!\n", OutputStyle.None);
+        output.Write("a\nb\n", OutputStyle.Warning);
+
+        Assert.Equal("Hello, World!\r\n\e[33ma\e[0m\r\n\e[33mb\e[0m\r\n", writer.ToString());
+        Assert.True(output.AtLineStart);
+    }
+
+    [Fact]
     public void ConsoleOutputDecoratesPrompts()
     {
         var writer = new StringWriter();

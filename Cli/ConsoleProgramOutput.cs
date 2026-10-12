@@ -2,7 +2,7 @@ using Pyrop.Runtime;
 
 namespace Pyrop.Cli;
 
-public sealed class ConsoleProgramOutput(TextWriter writer, bool plain, bool inputEchoed = false) : IProgramOutput
+public sealed class ConsoleProgramOutput(TextWriter writer, bool plain, bool inputEchoed = false, string newLine = "\n") : IProgramOutput
 {
     public bool AtLineStart { get; private set; } = true;
 
@@ -13,7 +13,8 @@ public sealed class ConsoleProgramOutput(TextWriter writer, bool plain, bool inp
             return;
         }
 
-        writer.Write(plain || style == OutputStyle.None ? text : Styled(text, style));
+        var rendered = plain || style == OutputStyle.None ? text : Styled(text, style);
+        writer.Write(newLine == "\n" ? rendered : rendered.Replace("\n", newLine));
         writer.Flush();
         AtLineStart = text[^1] == '\n';
     }

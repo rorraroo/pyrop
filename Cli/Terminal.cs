@@ -27,7 +27,11 @@ public static class Terminal
     }
 
     public static ConsoleProgramOutput CreateProgramOutput() =>
-        new(AnsiConsole.Profile.Out.Writer, Plain, inputEchoed: !Console.IsInputRedirected);
+        new(
+            AnsiConsole.Profile.Out.Writer,
+            Plain,
+            inputEchoed: !Console.IsInputRedirected,
+            newLine: OperatingSystem.IsWindows() && !Console.IsOutputRedirected ? "\r\n" : "\n");
 
     public static void SeparateErrorsFrom(ConsoleProgramOutput output)
     {
