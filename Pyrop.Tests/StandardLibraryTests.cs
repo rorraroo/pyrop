@@ -69,6 +69,26 @@ public class StandardLibraryTests
     }
 
     [Theory]
+    [InlineData("find_from \"a-b-c\" \"-\" 0", "1")]
+    [InlineData("find_from \"a-b-c\" \"-\" 2", "3")]
+    [InlineData("find_from \"a-b-c\" \"-\" 4", "-1")]
+    [InlineData("find_from \"abc\" \"\" 3", "3")]
+    [InlineData("find_from \"" + Sword + "a" + Sword + "a\" \"a\" 2", "3")]
+    [InlineData("find_from \"" + DecomposedC + "cc\" \"c\" 0", "1")]
+    public void FindFromSearchesFromAPosition(string expression, string expected)
+    {
+        Assert.Equal(expected, Evaluate(expression));
+    }
+
+    [Theory]
+    [InlineData("find_from \"abc\" \"a\" 4", "Position 4 is out of range for a 3-character text, numbered from 0.")]
+    [InlineData("find_from \"abc\" \"a\" -1", "Position -1 is out of range for a 3-character text, numbered from 0.")]
+    public void FindFromRejectsAStartOutsideTheText(string expression, string message)
+    {
+        Assert.Equal(message, RuntimeFailure(expression));
+    }
+
+    [Theory]
     [InlineData("replace \"a-b-c\" \"-\" \"+\"", "a+b+c")]
     [InlineData("replace \"aaa\" \"aa\" \"b\"", "ba")]
     [InlineData("replace \"abc\" \"x\" \"y\"", "abc")]

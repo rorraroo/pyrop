@@ -46,10 +46,22 @@ public static class TextOperations
         return text[map.OffsetOf(index)..map.OffsetOf(index + 1)];
     }
 
-    public static long Find(string text, string needle)
+    public static long Find(string text, string needle) => FindAt(text, needle, MapOf(text), 0);
+
+    public static long FindFrom(IBuiltinInvocation invocation, string text, string needle, long start)
     {
         var map = MapOf(text);
-        var offset = AlignedMatches(text, needle, map).DefaultIfEmpty(-1).First();
+        if (start < 0 || start > map.Count)
+        {
+            throw invocation.Fail($"Position {start} is out of range for a {map.Count}-character text, numbered from 0.");
+        }
+
+        return FindAt(text, needle, map, map.OffsetOf(start));
+    }
+
+    private static long FindAt(string text, string needle, CharacterMap map, int from)
+    {
+        var offset = AlignedMatches(text, needle, map, from).DefaultIfEmpty(-1).First();
         return offset < 0 ? -1 : map.IndexAt(offset);
     }
 
@@ -164,9 +176,8 @@ public static class TextOperations
         return true;
     }
 
-    private static IEnumerable<int> AlignedMatches(string text, string needle, CharacterMap map)
+    private static IEnumerable<int> AlignedMatches(string text, string needle, CharacterMap map, int from = 0)
     {
-        var from = 0;
         while (from <= text.Length)
         {
             var offset = text.IndexOf(needle, from, StringComparison.Ordinal);

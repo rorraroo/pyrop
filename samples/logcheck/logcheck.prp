@@ -1,0 +1,49 @@
+include "lines.prp"
+
+if less argument_count 1 block
+    write_line "usage: logcheck <log file> [report file]"
+    exit 2
+end
+
+def string log_path argument_at 0
+def string report_path "report.txt"
+if greater argument_count 1 set report_path argument_at 1
+
+if not file_exists log_path block
+    with_style "danger" write_line add "No such file: " log_path
+    exit 3
+end
+
+def string text read_file log_path
+def int size length_of text
+def int start 0
+def int line_number 0
+def int total 0
+def int errors 0
+def int warnings 0
+def string report add "Errors in " add log_path "\n\n"
+
+while less start size block
+    def int stop line_end text start
+    def string line trim substring text start subtract stop start
+    set start add stop 1
+    set line_number add line_number 1
+    if equal line "" continue
+    set total add total 1
+    if starts_with upper line "ERROR" block
+        set errors add errors 1
+        set report add report add pad_left convert string line_number 5 " " add ": " add line "\n"
+    end
+    else if starts_with upper line "WARN" set warnings add warnings 1
+end
+
+def string summary add counted total "line" add ", " add counted errors "error" add ", " counted warnings "warning"
+write_file report_path add report add "\n" add summary "\n"
+write_line summary
+
+if greater errors 0 block
+    with_style "danger" write_line add "Errors found; see " add report_path "."
+    exit 1
+end
+
+with_style "success" write_line "No errors."

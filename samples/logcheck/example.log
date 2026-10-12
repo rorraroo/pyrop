@@ -1,0 +1,9 @@
+INFO  2026-10-12 08:00:01 Service started
+INFO  2026-10-12 08:00:02 Listening on port 8080
+WARN  2026-10-12 08:15:40 Slow response from database (1.8 s)
+
+ERROR 2026-10-12 09:02:11 Payment gateway timed out
+INFO  2026-10-12 09:02:12 Retrying payment
+error 2026-10-12 09:02:20 Payment gateway refused the request
+WARN  2026-10-12 10:30:00 Disk usage at 91 %
+INFO  2026-10-12 11:00:00 Daily backup finished

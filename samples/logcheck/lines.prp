@@ -1,0 +1,11 @@
+function int line_end string text int start block
+    def int stop find_from text "\n" start
+    if less stop 0 return length_of text
+    return stop
+end
+
+function string counted int count string word block
+    def string text add convert string count add " " word
+    if equal count 1 return text
+    return add text "s"
+end
