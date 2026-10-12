@@ -84,6 +84,28 @@ public class InterpreterTests
     }
 
     [Fact]
+    public void ReturnVoidExitsAVoidFunctionEarly()
+    {
+        const string source = """
+            function void count int limit
+            block
+                def int i 0
+                while true
+                block
+                    if equal i limit return void
+                    writeline i
+                    set i add i 1
+                end
+                writeline "unreachable"
+            end
+            count 2
+            writeline "done"
+            """;
+
+        Assert.Equal("0\n1\ndone\n", Run.Program(source));
+    }
+
+    [Fact]
     public void ShortCircuitsLogicalOperations()
     {
         Assert.Equal("false\ntrue\n", Run.Program("writeline and false equal divide 1 0 0\nwriteline or true equal divide 1 0 0"));

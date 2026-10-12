@@ -30,7 +30,7 @@ public sealed class TypeChecker
             if (sessionGlobals.TryGetValue(global.Name, out var existing) && existing != global.Type)
             {
                 Report(
-                    $"Global '{global.Name}' was declared as {existing.Name()} earlier in this session and cannot be redeclared as {global.Type.Name()}.",
+                    $"Global '{global.Name}' was declared as {existing.Name} earlier in this session and cannot be redeclared as {global.Type.Name}.",
                     global.Position);
             }
 
@@ -120,7 +120,7 @@ public sealed class TypeChecker
     {
         if (TypeOf(def.Value, scope) is { } actual && actual != def.Type)
         {
-            Report($"Cannot initialize {def.Type.Name()} variable '{def.Name}' with a {actual.Name()} value.", def.Value.Position);
+            Report($"Cannot initialize {def.Type.Name} variable '{def.Name}' with a {actual.Name} value.", def.Value.Position);
         }
 
         scope.Declare(def.Name, def.Type);
@@ -137,7 +137,7 @@ public sealed class TypeChecker
 
         if (valueType is { } actual && actual != variableType)
         {
-            Report($"Cannot set {variableType.Name()} variable '{set.Name}' to a {actual.Name()} value.", set.Value.Position);
+            Report($"Cannot set {variableType.Name} variable '{set.Name}' to a {actual.Name} value.", set.Value.Position);
         }
     }
 
@@ -145,7 +145,7 @@ public sealed class TypeChecker
     {
         if (TypeOf(condition, scope) is { } type && type != PyropType.Bool)
         {
-            Report($"The condition of '{owner}' must be bool, found {type.Name()}.", condition.Position);
+            Report($"The condition of '{owner}' must be bool, found {type.Name}.", condition.Position);
         }
     }
 
@@ -170,14 +170,14 @@ public sealed class TypeChecker
         if (function.Signature.ReturnType != PyropType.Void && !ReturnPaths.AlwaysReturns(function.Body))
         {
             Report(
-                $"Function '{function.Signature.Name}' must return a value of type {function.Signature.ReturnType.Name()} on every path.",
+                $"Function '{function.Signature.Name}' must return a value of type {function.Signature.ReturnType.Name} on every path.",
                 function.Signature.Position);
         }
     }
 
     private void CheckReturn(ReturnStatement returnStatement, SymbolScope scope)
     {
-        if (_currentFunction is null)
+        if (_currentFunction is null || returnStatement.Value is null)
         {
             return;
         }
@@ -185,7 +185,7 @@ public sealed class TypeChecker
         if (TypeOf(returnStatement.Value, scope) is { } type && type != _currentFunction.ReturnType)
         {
             Report(
-                $"Function '{_currentFunction.Name}' must return {_currentFunction.ReturnType.Name()}, found {type.Name()}.",
+                $"Function '{_currentFunction.Name}' must return {_currentFunction.ReturnType.Name}, found {type.Name}.",
                 returnStatement.Value.Position);
         }
     }
@@ -212,7 +212,7 @@ public sealed class TypeChecker
             case ConvertExpression convert:
                 if (TypeOf(convert.Operand, scope) is { } from && !Conversions.IsAllowed(from, convert.Target))
                 {
-                    Report($"Cannot convert {from.Name()} to {convert.Target.Name()}.", convert.Position);
+                    Report($"Cannot convert {from.Name} to {convert.Target.Name}.", convert.Position);
                 }
 
                 return convert.Target;
@@ -228,21 +228,21 @@ public sealed class TypeChecker
         if (argumentTypes.Any(type => type is null))
         {
             var results = operation.Overloads.Select(overload => overload.Result).Distinct().ToList();
-            return results.Count == 1 ? results[0] : null;
+            return results is [{ IsConcrete: true } result] ? result : null;
         }
 
-        var known = argumentTypes.Select(type => type!.Value).ToList();
-        if (operation.FindOverload(known) is not { } overload)
+        var known = argumentTypes.Select(type => type!).ToList();
+        if (operation.FindOverload(known) is not { } match)
         {
             var accepted = string.Join(", ", operation.Overloads.Select(candidate => candidate.DescribeParameters()));
             Report(
-                $"'{operation.Name}' cannot take {string.Join(" ", known.Select(type => type.Name()))}. It accepts: {accepted}.",
+                $"'{operation.Name}' cannot take {string.Join(" ", known.Select(type => type.Name))}. It accepts: {accepted}.",
                 call.Position);
             return null;
         }
 
-        _overloads[call] = overload;
-        return overload.Result;
+        _overloads[call] = match.Overload;
+        return match.Result;
     }
 
     private void CheckFunctionArguments(FunctionCallExpression call, SymbolScope scope)
@@ -253,7 +253,7 @@ public sealed class TypeChecker
             if (TypeOf(call.Arguments[index], scope) is { } type && type != parameter.Type)
             {
                 Report(
-                    $"Argument '{parameter.Name}' of '{call.Function.Name}' must be {parameter.Type.Name()}, found {type.Name()}.",
+                    $"Argument '{parameter.Name}' of '{call.Function.Name}' must be {parameter.Type.Name}, found {type.Name}.",
                     call.Arguments[index].Position);
             }
         }

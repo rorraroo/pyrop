@@ -19,7 +19,7 @@ public sealed record ContinueStatement(SourcePosition Position) : Statement(Posi
 
 public sealed record FunctionStatement(FunctionSignature Signature, Statement Body, SourcePosition Position) : Statement(Position);
 
-public sealed record ReturnStatement(Expression Value, SourcePosition Position) : Statement(Position);
+public sealed record ReturnStatement(Expression? Value, SourcePosition Position) : Statement(Position);
 
 public sealed record WriteStatement(Expression Value, bool AppendNewLine, SourcePosition Position) : Statement(Position);
 

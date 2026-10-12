@@ -14,21 +14,35 @@ public delegate Value BuiltinImplementation(IBuiltinInvocation invocation);
 public sealed record BuiltinOverload(IReadOnlyList<PyropType> Parameters, PyropType Result, BuiltinImplementation Implementation)
 {
     public string DescribeParameters() =>
-        Parameters.Count == 0 ? "no arguments" : string.Join(" ", Parameters.Select(type => type.Name()));
+        Parameters.Count == 0 ? "no arguments" : string.Join(" ", Parameters.Select(type => type.Name));
 }
+
+public sealed record OverloadMatch(BuiltinOverload Overload, PyropType Result);
 
 public sealed record BuiltinOperation(string Name, int Arity, IReadOnlyList<BuiltinOverload> Overloads)
 {
-    public BuiltinOverload? FindOverload(IReadOnlyList<PyropType> argumentTypes) =>
-        Overloads.FirstOrDefault(overload => overload.Parameters.SequenceEqual(argumentTypes));
+    public OverloadMatch? FindOverload(IReadOnlyList<PyropType> argumentTypes)
+    {
+        foreach (var overload in Overloads)
+        {
+            var bindings = new Dictionary<TypeParameter, PyropType>();
+            if (overload.Parameters.Count == argumentTypes.Count
+                && overload.Parameters.Zip(argumentTypes).All(pair => pair.First.TryMatch(pair.Second, bindings)))
+            {
+                return new OverloadMatch(overload, overload.Result.Substitute(bindings));
+            }
+        }
+
+        return null;
+    }
 }
 
 public static class Builtins
 {
-    private const PyropType I = PyropType.Int;
-    private const PyropType F = PyropType.Float;
-    private const PyropType S = PyropType.String;
-    private const PyropType B = PyropType.Bool;
+    private static readonly PyropType I = PyropType.Int;
+    private static readonly PyropType F = PyropType.Float;
+    private static readonly PyropType S = PyropType.String;
+    private static readonly PyropType B = PyropType.Bool;
 
     public static IReadOnlyDictionary<string, BuiltinOperation> All { get; } = new BuiltinOperation[]
     {

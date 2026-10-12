@@ -155,7 +155,7 @@ public sealed class Parser
     private Statement ParseDef(HashSet<string> declared, IReadOnlySet<string> parameters)
     {
         var start = _cursor.Advance();
-        var type = ParseValueType("variable");
+        var type = TypeReader.ReadValueType(_cursor, "variable");
         var nameToken = _cursor.Current;
         var name = _cursor.ExpectIdentifier("variable name", _functions);
         if (parameters.Contains(name))
@@ -170,22 +170,10 @@ public sealed class Parser
 
         if (_cursor.IsAtEnd || (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text)))
         {
-            throw _cursor.Error($"Variable '{name}' needs an initial value: def {type.Name()} {name} <expression>.");
+            throw _cursor.Error($"Variable '{name}' needs an initial value: def {type.Name} {name} <expression>.");
         }
 
         return new DefStatement(type, name, ParseExpression(), start.Position);
-    }
-
-    private PyropType ParseValueType(string owner)
-    {
-        var token = _cursor.ExpectWord("a type");
-        if (token.Text == "void")
-        {
-            throw _cursor.Error($"A {owner} cannot have type void.", token);
-        }
-
-        return Keywords.ValueType(token.Text)
-            ?? throw _cursor.Error($"Expected a type (int, float, string or bool), found {token.Describe()}.", token);
     }
 
     private Statement ParseSet()
@@ -271,11 +259,23 @@ public sealed class Parser
             throw _cursor.Error("'return' is only allowed inside a function.", start);
         }
 
+        var voidName = PyropType.Void.Name;
         if (_currentFunction.ReturnType == PyropType.Void)
         {
+            if (!_cursor.Current.IsWord(voidName))
+            {
+                throw _cursor.Error(
+                    $"Void function '{_currentFunction.Name}' must use 'return void', found {_cursor.Current.Describe()}.");
+            }
+
+            _cursor.Advance();
+            return new ReturnStatement(null, start.Position);
+        }
+
+        if (_cursor.Current.IsWord(voidName))
+        {
             throw _cursor.Error(
-                $"'return' is not allowed in void function '{_currentFunction.Name}'; it ends when its body finishes.",
-                start);
+                $"'return void' is only allowed in void functions; '{_currentFunction.Name}' returns {_currentFunction.ReturnType.Name}.");
         }
 
         return new ReturnStatement(ParseExpression(), start.Position);
@@ -347,7 +347,7 @@ public sealed class Parser
                 return new LiteralExpression(BoolValue.False, token.Position);
             case Keywords.Convert:
                 _cursor.Advance();
-                var target = ParseValueType("conversion target");
+                var target = TypeReader.ReadValueType(_cursor, "conversion target");
                 return new ConvertExpression(target, ParseExpression(), token.Position);
         }
 

@@ -75,7 +75,9 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
             case FunctionStatement:
                 return Completion.Normal;
             case ReturnStatement returnStatement:
-                return new Completion(CompletionKind.Return, Evaluate(returnStatement.Value, scope));
+                return new Completion(
+                    CompletionKind.Return,
+                    returnStatement.Value is null ? null : Evaluate(returnStatement.Value, scope));
             case WriteStatement write:
                 var text = Evaluate(write.Value, scope).ToText();
                 output.Write(write.AppendNewLine ? text + "\n" : text);
@@ -137,7 +139,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         var value = Evaluate(def.Value, scope);
         if (value.Type != def.Type)
         {
-            throw Internal($"Type mismatch initializing {def.Type.Name()} variable '{def.Name}' with {value.Type.Name()}.", def.Position);
+            throw Internal($"Type mismatch initializing {def.Type.Name} variable '{def.Name}' with {value.Type.Name}.", def.Position);
         }
 
         scope.Declare(def.Name, def.Type, value);
@@ -150,7 +152,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
             ?? throw Runtime($"Variable '{set.Name}' does not exist yet; its def has not run.", set.Position);
         if (variable.Type != value.Type)
         {
-            throw Internal($"Type mismatch assigning {value.Type.Name()} to {variable.Type.Name()} variable '{set.Name}'.", set.Position);
+            throw Internal($"Type mismatch assigning {value.Type.Name} to {variable.Type.Name} variable '{set.Name}'.", set.Position);
         }
 
         variable.Value = value;

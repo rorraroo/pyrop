@@ -54,9 +54,7 @@ public static class SignatureScanner
 
     public static FunctionSignature ReadHeader(TokenCursor cursor, FunctionTable functions)
     {
-        var returnTypeToken = cursor.ExpectWord("a return type");
-        var returnType = PyropTypes.FromName(returnTypeToken.Text)
-            ?? throw cursor.Error($"Expected a return type (int, float, string, bool or void), found {returnTypeToken.Describe()}.", returnTypeToken);
+        var returnType = TypeReader.ReadReturnType(cursor);
 
         var nameToken = cursor.Current;
         var name = cursor.ExpectIdentifier("function name", functions);
@@ -64,17 +62,17 @@ public static class SignatureScanner
         var parameters = new List<Parameter>();
         while (true)
         {
-            if (cursor.Current.IsWord("void"))
+            if (cursor.Current.IsWord(PyropType.Void.Name))
             {
                 throw cursor.Error("A parameter cannot have type void.");
             }
 
-            if (cursor.Current.Kind != TokenKind.Word || Keywords.ValueType(cursor.Current.Text) is not { } parameterType)
+            if (!TypeReader.StartsValueType(cursor.Current))
             {
                 break;
             }
 
-            cursor.Advance();
+            var parameterType = TypeReader.ReadValueType(cursor, "parameter");
             var parameterToken = cursor.Current;
             var parameterName = cursor.ExpectIdentifier("parameter name", functions);
             if (parameterName == name)

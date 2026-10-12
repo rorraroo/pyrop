@@ -4,15 +4,28 @@ namespace Pyrop.Runtime;
 
 public static class Conversions
 {
-    public static bool IsAllowed(PyropType from, PyropType to) => (from, to) switch
+    public static bool IsAllowed(PyropType from, PyropType to)
     {
-        (PyropType.Void, _) or (_, PyropType.Void) => false,
-        _ when from == to => true,
-        (_, PyropType.String) => true,
-        (PyropType.String, _) => true,
-        (PyropType.Int, PyropType.Float) or (PyropType.Float, PyropType.Int) => true,
-        _ => false,
-    };
+        if (from == PyropType.Void || to == PyropType.Void)
+        {
+            return false;
+        }
+
+        if (from == to)
+        {
+            return true;
+        }
+
+        if (!PyropTypes.ValueTypes.Contains(from) || !PyropTypes.ValueTypes.Contains(to))
+        {
+            return false;
+        }
+
+        return to == PyropType.String
+            || from == PyropType.String
+            || (from == PyropType.Int && to == PyropType.Float)
+            || (from == PyropType.Float && to == PyropType.Int);
+    }
 
     public static Value Convert(Value value, PyropType target, Func<string, Exception> fail)
     {
@@ -21,16 +34,16 @@ public static class Conversions
             return value;
         }
 
-        return (value, target) switch
+        return value switch
         {
-            (_, PyropType.String) => new StringValue(value.ToText()),
-            (IntValue integer, PyropType.Float) => new FloatValue(integer.Value),
-            (FloatValue number, PyropType.Int) => FloatToInt(number.Value, fail),
-            (StringValue text, PyropType.Int) => StringToInt(text.Value, fail),
-            (StringValue text, PyropType.Float) => StringToFloat(text.Value, fail),
-            (StringValue text, PyropType.Bool) => StringToBool(text.Value, fail),
+            _ when target == PyropType.String => new StringValue(value.ToText()),
+            IntValue integer when target == PyropType.Float => new FloatValue(integer.Value),
+            FloatValue number when target == PyropType.Int => FloatToInt(number.Value, fail),
+            StringValue text when target == PyropType.Int => StringToInt(text.Value, fail),
+            StringValue text when target == PyropType.Float => StringToFloat(text.Value, fail),
+            StringValue text when target == PyropType.Bool => StringToBool(text.Value, fail),
             _ => throw new InvalidOperationException(
-                $"Conversion from {value.Type.Name()} to {target.Name()} should have been rejected by the type checker."),
+                $"Conversion from {value.Type.Name} to {target.Name} should have been rejected by the type checker."),
         };
     }
 
