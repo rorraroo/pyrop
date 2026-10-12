@@ -32,7 +32,7 @@ public static class BuildCommand
         {
             return Fail(
                 "pyrop --build needs the standalone pyrop, a self-contained single-file build that copies itself into the program. " +
-                "This pyrop runs on an installed .NET. Create the standalone pyrop with publish.ps1 in the Pyrop repository.");
+                "This pyrop runs on an installed .NET. Create it by running dotnet publish in the Pyrop repository.");
         }
 
         return Build(script, output, baseExecutable);

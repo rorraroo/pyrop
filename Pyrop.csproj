@@ -5,10 +5,19 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.8.0</Version>
+    <Version>0.8.1</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>pyrop</ToolCommandName>
     <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_IsPublishing)' == 'true'">
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildProjectDirectory)\publish\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>
