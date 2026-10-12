@@ -9,12 +9,12 @@ public static class ScriptRunner
     {
         if (!File.Exists(path))
         {
-            AnsiConsole.MarkupLine($"[red bold]Error[/] File '{Markup.Escape(path)}' was not found.");
+            Terminal.Errors.MarkupLine($"[red bold]Error[/] File '{Markup.Escape(path)}' was not found.");
             return 1;
         }
 
         var source = File.ReadAllText(path);
-        var output = new ConsoleProgramOutput();
+        var output = Terminal.CreateProgramOutput();
         var session = new PyropSession(Console.In, output, HostContext.ForProcess(arguments));
         try
         {
@@ -22,7 +22,7 @@ public static class ScriptRunner
         }
         catch (PyropException exception)
         {
-            output.EnsureLineStart();
+            Terminal.SeparateErrorsFrom(output);
             ErrorRenderer.Render(exception, path, session.SourceText);
             return 1;
         }

@@ -9,8 +9,10 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     public const int MaxExitCode = 255;
 
     private readonly LineInput _input = input;
+    private readonly IProgramOutput _output = output;
     private readonly HostContext _host = host;
     private readonly RandomSource _random = new();
+    private OutputStyle _style = OutputStyle.None;
     private readonly Scope _globals = new(null);
     private readonly Dictionary<string, FunctionStatement> _functions = new();
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
@@ -96,10 +98,12 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                     returnStatement.Value is null ? null : Evaluate(returnStatement.Value, scope));
             case WriteStatement write:
                 var text = Evaluate(write.Value, scope).ToText();
-                output.Write(write.AppendNewLine ? text + "\n" : text);
+                _output.Write(write.AppendNewLine ? text + "\n" : text, _style);
                 return Completion.Normal;
             case ExitStatement exit:
                 throw new ExitSignal(EvaluateExitCode(exit, scope));
+            case WithStyleStatement styled:
+                return ExecuteWithStyle(styled, scope);
             case BlockStatement block:
                 return ExecuteBlock(block, new Scope(scope));
             case CallStatement call:
@@ -118,6 +122,21 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return Completion.Normal;
             default:
                 throw Internal($"Unknown statement {statement.GetType().Name}.", statement.Position);
+        }
+    }
+
+    private Completion ExecuteWithStyle(WithStyleStatement styled, Scope scope)
+    {
+        var name = Evaluate(styled.Style, scope).AsString();
+        var outer = _style;
+        _style = OutputStyles.Find(name) ?? throw Runtime(OutputStyles.UnknownMessage(name), styled.Style.Position);
+        try
+        {
+            return ExecuteStatement(styled.Body, scope);
+        }
+        finally
+        {
+            _style = outer;
         }
     }
 
@@ -306,6 +325,10 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         public HostContext Host => interpreter._host;
 
         public RandomSource Random => interpreter._random;
+
+        public IProgramOutput Output => interpreter._output;
+
+        public OutputStyle Style => interpreter._style;
 
         public Exception Fail(string message) => Runtime(message, call.Position);
     }

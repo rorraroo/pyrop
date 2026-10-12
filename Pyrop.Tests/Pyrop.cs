@@ -7,7 +7,18 @@ internal sealed class StringOutput : IProgramOutput
 {
     private readonly StringBuilder _text = new();
 
-    public void Write(string text) => _text.Append(text);
+    public void Write(string text, OutputStyle style) =>
+        _text.Append(style == OutputStyle.None ? text : $"<{OutputStyles.NameOf(style)}>{text}</{OutputStyles.NameOf(style)}>");
+
+    public void WritePrompt(string prompt, string? hint, OutputStyle style)
+    {
+        Write(prompt, style);
+        Write(hint ?? "", OutputStyle.None);
+    }
+
+    public void LineRead()
+    {
+    }
 
     public override string ToString() => _text.ToString();
 }

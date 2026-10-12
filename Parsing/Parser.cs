@@ -137,6 +137,7 @@ public sealed class Parser
             Keywords.Write => ParseWrite(appendNewLine: false),
             Keywords.WriteLine => ParseWrite(appendNewLine: true),
             Keywords.Exit => ParseExit(),
+            Keywords.WithStyle => ParseWithStyle(),
             Keywords.Block => ParseNestedBlock(),
             Keywords.End => throw _cursor.Error("'end' without a matching 'block'."),
             Keywords.Else => throw _cursor.Error("'else' without a matching 'if'."),
@@ -294,6 +295,13 @@ public sealed class Parser
     {
         var start = _cursor.Advance();
         return new ExitStatement(ParseExpression(), start.Position);
+    }
+
+    private Statement ParseWithStyle()
+    {
+        var start = _cursor.Advance();
+        var style = ParseExpression();
+        return new WithStyleStatement(style, ParseBody("a with_style"), start.Position);
     }
 
     private Statement ParseNestedBlock()

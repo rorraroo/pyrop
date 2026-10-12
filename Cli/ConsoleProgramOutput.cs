@@ -1,30 +1,63 @@
 using Pyrop.Runtime;
-using Spectre.Console;
 
 namespace Pyrop.Cli;
 
-public sealed class ConsoleProgramOutput : IProgramOutput
+public sealed class ConsoleProgramOutput(TextWriter writer, bool plain, bool inputEchoed = false) : IProgramOutput
 {
     public bool AtLineStart { get; private set; } = true;
 
-    public void Write(string text)
+    public void Write(string text, OutputStyle style)
     {
         if (text.Length == 0)
         {
             return;
         }
 
-        var writer = AnsiConsole.Profile.Out.Writer;
-        writer.Write(text);
+        writer.Write(plain || style == OutputStyle.None ? text : Styled(text, style));
         writer.Flush();
         AtLineStart = text[^1] == '\n';
+    }
+
+    public void WritePrompt(string prompt, string? hint, OutputStyle style)
+    {
+        if (!plain)
+        {
+            Write("? ", OutputStyle.Info);
+        }
+
+        Write(prompt, style);
+        Write(hint ?? "", OutputStyle.Muted);
+    }
+
+    public void LineRead()
+    {
+        if (inputEchoed)
+        {
+            AtLineStart = true;
+        }
     }
 
     public void EnsureLineStart()
     {
         if (!AtLineStart)
         {
-            Write("\n");
+            Write("\n", OutputStyle.None);
         }
+    }
+
+    private static string Styled(string text, OutputStyle style)
+    {
+        var code = style switch
+        {
+            OutputStyle.Emphasis => "1",
+            OutputStyle.Muted => "90",
+            OutputStyle.Success => "32",
+            OutputStyle.Warning => "33",
+            OutputStyle.Danger => "31",
+            OutputStyle.Info => "36",
+            _ => throw new ArgumentOutOfRangeException(nameof(style)),
+        };
+
+        return string.Join('\n', text.Split('\n').Select(line => line.Length == 0 ? line : $"\e[{code}m{line}\e[0m"));
     }
 }

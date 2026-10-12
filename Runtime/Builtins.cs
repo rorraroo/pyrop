@@ -10,6 +10,10 @@ public interface IBuiltinInvocation
 
     RandomSource Random { get; }
 
+    IProgramOutput Output { get; }
+
+    OutputStyle Style { get; }
+
     Exception Fail(string message);
 }
 
@@ -83,7 +87,11 @@ public static class Builtins
         Operation("not",
             Overload([B], B, c => BoolValue.Of(!c.Argument(0).AsBool()))),
         Operation("read",
-            Overload([], S, c => new StringValue(c.Input.ReadLine() ?? throw c.Fail("read reached the end of input.")))),
+            Overload([], S, c => new StringValue(ReadLine(c, "read reached the end of input.")))),
+        Operation("ask",
+            Overload([S], S, c => new StringValue(Ask(c, c.Argument(0).AsString())))),
+        Operation("confirm",
+            Overload([S], B, c => BoolValue.Of(Confirm(c, c.Argument(0).AsString())))),
         Operation("input_ended",
             Overload([], B, c => BoolValue.Of(c.Input.HasEnded()))),
         Operation("argument_count",
@@ -255,6 +263,38 @@ public static class Builtins
     {
         invocation.Random.Seed(seed);
         return null;
+    }
+
+    private static string ReadLine(IBuiltinInvocation invocation, string endOfInputMessage)
+    {
+        var line = invocation.Input.ReadLine() ?? throw invocation.Fail(endOfInputMessage);
+        invocation.Output.LineRead();
+        return line;
+    }
+
+    private static string Ask(IBuiltinInvocation invocation, string prompt)
+    {
+        invocation.Output.WritePrompt(prompt, null, invocation.Style);
+        return ReadLine(invocation, "'ask' reached the end of input.");
+    }
+
+    private static bool Confirm(IBuiltinInvocation invocation, string prompt)
+    {
+        while (true)
+        {
+            invocation.Output.WritePrompt(prompt.TrimEnd(), " [y/n] ", invocation.Style);
+            var answer = ReadLine(invocation, "'confirm' reached the end of input.");
+            switch (answer.Trim().ToLowerInvariant())
+            {
+                case "y" or "yes":
+                    return true;
+                case "n" or "no":
+                    return false;
+                default:
+                    invocation.Output.Write("Please answer y or n.\n", OutputStyle.Warning);
+                    break;
+            }
+        }
     }
 
     private static string ArgumentAt(IBuiltinInvocation invocation, long index)

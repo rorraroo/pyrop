@@ -11,12 +11,19 @@ public static class Repl
     public static int Run()
     {
         var input = new LineInput(Console.In);
-        var output = new ConsoleProgramOutput();
+        var output = Terminal.CreateProgramOutput();
         var session = new PyropSession(input, output, HostContext.ForProcess([]));
         var pending = new StringBuilder();
 
-        AnsiConsole.Write(new FigletText("Pyrop").Color(Color.FromHex("#7A1C1C")));
-        AnsiConsole.Write(new Rule("[grey]v" + Version + "[/]").Centered().Justify(Justify.Left));
+        if (Terminal.Plain)
+        {
+            AnsiConsole.WriteLine($"Pyrop {Version}");
+        }
+        else
+        {
+            AnsiConsole.Write(new FigletText("Pyrop").Color(Color.FromHex("#7A1C1C")));
+            AnsiConsole.Write(new Rule("[grey]v" + Version + "[/]").Centered().Justify(Justify.Left));
+        }
         AnsiConsole.MarkupLine("[bold]Pyrop[/] REPL. Type [grey]exit 0[/], or press [grey]Ctrl+Z[/] then [grey]Enter[/] (Windows) or [grey]Ctrl+D[/] to leave.");
         AnsiConsole.MarkupLine("[grey]Unfinished input continues on the next line; an empty line submits it.[/]");
 
@@ -55,7 +62,7 @@ public static class Repl
             }
             catch (PyropException exception)
             {
-                output.EnsureLineStart();
+                Terminal.SeparateErrorsFrom(output);
                 ErrorRenderer.Render(exception, "input", session.SourceText);
             }
         }

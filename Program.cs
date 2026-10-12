@@ -7,7 +7,10 @@ Console.OutputEncoding = Encoding.UTF8;
 
 Repl.Version = typeof(Repl).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "unknown";
 
-return args switch
+var plain = args is ["--plain", ..];
+Terminal.Configure(plain);
+
+return (plain ? args[1..] : args) switch
 {
     [] => Repl.Run(),
     ["--version" or "-v"] => ShowVersion(),
@@ -20,11 +23,12 @@ static int ShowHelp()
 {
     AnsiConsole.MarkupLine("[bold]Pyrop[/] — a bracket-free, prefix-notation, statically typed language.");
     AnsiConsole.WriteLine();
-    WriteUsageLines();
+    WriteUsageLines(AnsiConsole.Console);
     AnsiConsole.WriteLine();
     var options = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
     options.AddRow("[bold]file.prp[/] [grey][[arguments]][/]", "Run a script, passing it any further arguments. Exits with the code given to exit, 0 if the script finishes, or 1 on any error.");
     options.AddRow("[grey](no arguments)[/]", "Start the interactive REPL.");
+    options.AddRow("[bold]--plain[/]", "Write no colours, styles or prompt decorations. Also on when output is redirected or NO_COLOR is set.");
     options.AddRow("[bold]-h[/], [bold]--help[/]", "Show this help.");
     options.AddRow("[bold]-v[/], [bold]--version[/]", "Show the version.");
     AnsiConsole.Write(options);
@@ -39,13 +43,13 @@ static int ShowVersion()
 
 static int ShowUsage()
 {
-    WriteUsageLines();
-    AnsiConsole.MarkupLine("Run [bold]pyrop --help[/] for details.");
+    WriteUsageLines(Terminal.Errors);
+    Terminal.Errors.MarkupLine("Run [bold]pyrop --help[/] for details.");
     return 2;
 }
 
-static void WriteUsageLines()
+static void WriteUsageLines(IAnsiConsole console)
 {
-    AnsiConsole.MarkupLine("Usage: [bold]pyrop[/] [grey][[file.prp [[arguments]]]][/]");
-    AnsiConsole.MarkupLine("       [bold]pyrop[/] [grey]--help | --version[/]");
+    console.MarkupLine("Usage: [bold]pyrop[/] [grey][[--plain]] [[file.prp [[arguments]]]][/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey]--help | --version[/]");
 }

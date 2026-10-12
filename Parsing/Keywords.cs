@@ -20,20 +20,21 @@ public static class Keywords
     public const string Convert = "convert";
     public const string Include = "include";
     public const string Exit = "exit";
+    public const string WithStyle = "with_style";
     public const string True = "true";
     public const string False = "false";
 
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        Convert, Include, Exit, True, False,
+        Convert, Include, Exit, WithStyle, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
     ];
 
     private static readonly HashSet<string> Statements =
     [
-        Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine, Include, Exit,
+        Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine, Include, Exit, WithStyle,
     ];
 
     public static bool IsReserved(string word) => Reserved.Contains(word);

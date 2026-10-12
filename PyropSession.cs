@@ -129,6 +129,7 @@ public sealed class PyropSession
         IfStatement { Else: { } otherwise } => EndsWithOpenIf(otherwise),
         WhileStatement loop => EndsWithOpenIf(loop.Body),
         FunctionStatement function => EndsWithOpenIf(function.Body),
+        WithStyleStatement styled => EndsWithOpenIf(styled.Body),
         _ => false,
     };
 }

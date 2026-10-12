@@ -9,7 +9,7 @@ public static class ErrorRenderer
         foreach (var error in exception.Errors)
         {
             var location = error.Position.Source ?? origin;
-            AnsiConsole.MarkupLine(
+            Terminal.Errors.MarkupLine(
                 $"[red bold]{StageName(error.Stage)}[/] [grey]{Markup.Escape(location)}:{error.Position}[/] {Markup.Escape(error.Message)}");
 
             var lines = sourceText(error.Position.Source)?.Split('\n') ?? [];
@@ -20,8 +20,8 @@ public static class ErrorRenderer
 
             var line = lines[error.Position.Line - 1].TrimEnd('\r');
             var caretPadding = new string(line.Take(Math.Max(0, error.Position.Column - 1)).Select(c => c == '\t' ? '\t' : ' ').ToArray());
-            AnsiConsole.MarkupLine($"  [grey]|[/] {Markup.Escape(line)}");
-            AnsiConsole.MarkupLine($"  [grey]|[/] {caretPadding}[red]^[/]");
+            Terminal.Errors.MarkupLine($"  [grey]|[/] {Markup.Escape(line)}");
+            Terminal.Errors.MarkupLine($"  [grey]|[/] {caretPadding}[red]^[/]");
         }
     }
 

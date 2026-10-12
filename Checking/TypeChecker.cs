@@ -98,6 +98,10 @@ public sealed class TypeChecker
                 }
 
                 break;
+            case WithStyleStatement styled:
+                CheckStyle(styled.Style, scope);
+                CheckStatement(styled.Body, scope);
+                break;
             case BlockStatement block:
                 var blockScope = new SymbolScope(scope);
                 foreach (var inner in block.Statements)
@@ -153,6 +157,18 @@ public sealed class TypeChecker
         if (TypeOf(condition, scope) is { } type && type != PyropType.Bool)
         {
             Report($"The condition of '{owner}' must be bool, found {type.Name}.", condition.Position);
+        }
+    }
+
+    private void CheckStyle(Expression style, SymbolScope scope)
+    {
+        if (TypeOf(style, scope) is { } type && type != PyropType.String)
+        {
+            Report($"The style of 'with_style' must be string, found {type.Name}.", style.Position);
+        }
+        else if (style is LiteralExpression { Value: StringValue { Value: var name } } && OutputStyles.Find(name) is null)
+        {
+            Report(OutputStyles.UnknownMessage(name), style.Position);
         }
     }
 
