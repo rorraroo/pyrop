@@ -89,6 +89,40 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void BuildNeedsTheStandalonePyrop()
+    {
+        var (output, errors, exitCode) = Pyrop("--build", Script("write_line 1"));
+
+        Assert.Equal("", output);
+        Assert.Contains("pyrop --build needs the standalone pyrop", errors);
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public void AScriptNamedBuildRuns()
+    {
+        var path = Path.Combine(_directory, "build");
+        File.WriteAllText(path, "write_line argument_at 0");
+        var start = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = _directory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add(typeof(Terminal).Assembly.Location);
+        start.ArgumentList.Add("build");
+        start.ArgumentList.Add("x.prp");
+        start.Environment.Remove("NO_COLOR");
+
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.Equal("x.prp\n", output);
+        Assert.Equal(0, process.ExitCode);
+    }
+
+    [Fact]
     public void RedirectedErrorsAreNotWrapped()
     {
         var (_, errors, _) = Pyrop(Script("with_style add 1 \"a\" write \"x\""));

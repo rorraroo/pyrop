@@ -1,11 +1,30 @@
 using System.Reflection;
 using System.Text;
+using Pyrop.Bundling;
 using Pyrop.Cli;
 using Spectre.Console;
 
 Console.OutputEncoding = Encoding.UTF8;
 
 Repl.Version = typeof(Repl).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "unknown";
+
+Bundle? bundle;
+try
+{
+    bundle = ReadOwnBundle();
+}
+catch (Exception exception) when (exception is InvalidDataException or EndOfStreamException)
+{
+    Terminal.Configure(plainRequested: false);
+    Terminal.Errors.MarkupLine("[red bold]Error[/] This program is damaged: the Pyrop program inside it cannot be read.");
+    return 1;
+}
+
+if (bundle is not null)
+{
+    Terminal.Configure(plainRequested: false);
+    return ScriptRunner.RunBundle(bundle, args);
+}
 
 var plain = args is ["--plain", ..];
 Terminal.Configure(plain);
@@ -15,9 +34,27 @@ return (plain ? args[1..] : args) switch
     [] => Repl.Run(),
     ["--version" or "-v"] => ShowVersion(),
     ["--help" or "-h"] => ShowHelp(),
+    ["--build" or "-b", .. var buildArguments] => BuildCommand.Run(buildArguments),
     [var path, .. var arguments] when !path.StartsWith('-') => ScriptRunner.Run(path, arguments),
     _ => ShowUsage(),
 };
+
+static Bundle? ReadOwnBundle()
+{
+    if (Environment.ProcessPath is not { } path)
+    {
+        return null;
+    }
+
+    try
+    {
+        return Bundle.ReadFrom(path);
+    }
+    catch (Exception exception) when (exception is (IOException or UnauthorizedAccessException) and not InvalidDataException)
+    {
+        return null;
+    }
+}
 
 static int ShowHelp()
 {
@@ -27,6 +64,7 @@ static int ShowHelp()
     AnsiConsole.WriteLine();
     var options = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
     options.AddRow("[bold]file.prp[/] [grey][[arguments]][/]", "Run a script, passing it any further arguments. Exits with the code given to exit, 0 if the script finishes, or 1 on any error.");
+    options.AddRow("[bold]-b[/], [bold]--build[/] [grey]file.prp [[-o output]][/]", "Build a standalone executable containing the script and its includes. Needs the standalone pyrop.");
     options.AddRow("[grey](no arguments)[/]", "Start the interactive REPL.");
     options.AddRow("[bold]--plain[/]", "Write no colours, styles or prompt decorations. Also on when output is redirected or NO_COLOR is set.");
     options.AddRow("[bold]-h[/], [bold]--help[/]", "Show this help.");
@@ -51,5 +89,6 @@ static int ShowUsage()
 static void WriteUsageLines(IAnsiConsole console)
 {
     console.MarkupLine("Usage: [bold]pyrop[/] [grey][[--plain]] [[file.prp [[arguments]]]][/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey]--build file.prp [[-o output]][/]");
     console.MarkupLine("       [bold]pyrop[/] [grey]--help | --version[/]");
 }

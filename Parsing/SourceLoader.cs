@@ -7,7 +7,7 @@ public sealed record SourceFile(string FullPath, string DisplayName, string Text
     public string Directory => Path.GetDirectoryName(FullPath)!;
 }
 
-public sealed class SourceLoader
+public sealed class SourceLoader(ISourceStore store)
 {
     public static StringComparer PathComparer { get; } =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -16,6 +16,8 @@ public sealed class SourceLoader
     private readonly Dictionary<string, string> _texts = new();
 
     public IReadOnlyDictionary<string, string> Texts => _texts;
+
+    public IEnumerable<SourceFile> Files => _files.Values;
 
     public static string Resolve(string path, string baseDirectory) =>
         Path.GetFullPath(Path.Combine(baseDirectory, path));
@@ -28,20 +30,18 @@ public sealed class SourceLoader
             return cached;
         }
 
-        string text;
+        StoredSource source;
         try
         {
-            text = File.ReadAllText(fullPath);
+            source = store.Read(fullPath);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             throw new PyropException(ErrorStage.Parse, $"Cannot include \"{path}\": {DescribeFailure(exception, fullPath)}", requestedAt);
         }
 
-        var relativePath = Path.GetRelativePath(Environment.CurrentDirectory, fullPath);
-        var displayName = relativePath.StartsWith("..") || Path.IsPathRooted(relativePath) ? fullPath : relativePath;
-        _texts[displayName] = text;
-        var file = new SourceFile(fullPath, displayName, text, Lexer.Tokenize(text, displayName));
+        _texts[source.DisplayName] = source.Text;
+        var file = new SourceFile(fullPath, source.DisplayName, source.Text, Lexer.Tokenize(source.Text, source.DisplayName));
         _files[fullPath] = file;
         return file;
     }

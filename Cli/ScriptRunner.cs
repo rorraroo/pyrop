@@ -1,3 +1,5 @@
+using Pyrop.Bundling;
+using Pyrop.Parsing;
 using Pyrop.Runtime;
 using Spectre.Console;
 
@@ -13,12 +15,30 @@ public static class ScriptRunner
             return 1;
         }
 
-        var source = File.ReadAllText(path);
-        var output = Terminal.CreateProgramOutput();
-        var session = new PyropSession(Console.In, output, HostContext.ForProcess(arguments));
+        string source;
         try
         {
-            return session.Run(source, path) ?? 0;
+            source = File.ReadAllText(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Terminal.Errors.MarkupLine($"[red bold]Error[/] Cannot read '{Markup.Escape(path)}': {Markup.Escape(exception.Message)}");
+            return 1;
+        }
+
+        return Execute(source, path, null, null, arguments);
+    }
+
+    public static int RunBundle(Bundle bundle, IReadOnlyList<string> arguments) =>
+        Execute(bundle.Entry.Text, bundle.EntryName, BundleSourceStore.FullPathOf(bundle.EntryName), new BundleSourceStore(bundle), arguments);
+
+    private static int Execute(string source, string path, string? fullPath, ISourceStore? store, IReadOnlyList<string> arguments)
+    {
+        var output = Terminal.CreateProgramOutput();
+        var session = new PyropSession(new LineInput(Console.In), output, HostContext.ForProcess(arguments), store);
+        try
+        {
+            return session.Run(source, path, fullPath) ?? 0;
         }
         catch (PyropException exception)
         {

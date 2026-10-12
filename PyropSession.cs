@@ -16,25 +16,31 @@ public enum InputStatus
 public sealed class PyropSession
 {
     private readonly Interpreter _interpreter;
+    private readonly ISourceStore _store;
     private readonly Dictionary<string, string> _sources = new();
     private FunctionTable _functions = FunctionTable.Empty;
     private IReadOnlyDictionary<string, PyropType> _globals = new Dictionary<string, PyropType>();
     private HashSet<string> _included = new(SourceLoader.PathComparer);
     private string? _lastInput;
 
-    public PyropSession(LineInput input, IProgramOutput output, HostContext? host = null)
+    public PyropSession(LineInput input, IProgramOutput output, HostContext? host = null, ISourceStore? store = null)
     {
         _interpreter = new Interpreter(input, output, host ?? HostContext.Isolated);
+        _store = store ?? FileSourceStore.Instance;
     }
 
-    public PyropSession(TextReader input, IProgramOutput output, HostContext? host = null)
-        : this(new LineInput(input), output, host)
+    public PyropSession(TextReader input, IProgramOutput output, HostContext? host = null, ISourceStore? store = null)
+        : this(new LineInput(input), output, host, store)
     {
     }
 
     public InputStatus Probe(string source) => LargeStack.Run(() => ProbeOnCurrentThread(source));
 
-    public int? Run(string source, string? sourcePath = null) => LargeStack.Run(() => RunOnCurrentThread(source, sourcePath));
+    public int? Run(string source, string? sourcePath = null, string? sourceFullPath = null) =>
+        LargeStack.Run(() => RunOnCurrentThread(source, sourcePath, sourceFullPath));
+
+    public IReadOnlyList<SourceFile> Check(string source, string sourcePath, string? sourceFullPath = null) =>
+        LargeStack.Run(() => CheckOnCurrentThread(source, sourcePath, sourceFullPath));
 
     public string? SourceText(string? sourceName) =>
         sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
@@ -43,7 +49,7 @@ public sealed class PyropSession
     {
         try
         {
-            var parsed = Parse(source, null);
+            var parsed = Parse(source, null, null);
             return parsed.Tree.Statements.Count > 0 && EndsWithOpenIf(parsed.Tree.Statements[^1])
                 ? InputStatus.AwaitingElse
                 : InputStatus.Ready;
@@ -58,7 +64,15 @@ public sealed class PyropSession
         }
     }
 
-    private int? RunOnCurrentThread(string source, string? sourcePath)
+    private IReadOnlyList<SourceFile> CheckOnCurrentThread(string source, string sourcePath, string? sourceFullPath)
+    {
+        _sources[sourcePath] = source;
+        var parsed = Parse(source, sourcePath, sourceFullPath);
+        TypeChecker.Check(parsed.Tree, _globals);
+        return parsed.Files;
+    }
+
+    private int? RunOnCurrentThread(string source, string? sourcePath, string? sourceFullPath)
     {
         if (sourcePath is null)
         {
@@ -69,7 +83,7 @@ public sealed class PyropSession
             _sources[sourcePath] = source;
         }
 
-        var parsed = Parse(source, sourcePath);
+        var parsed = Parse(source, sourcePath, sourceFullPath);
         var check = TypeChecker.Check(parsed.Tree, _globals);
         _functions = parsed.Functions;
         _globals = check.Globals;
@@ -84,20 +98,20 @@ public sealed class PyropSession
         }
     }
 
-    private sealed record ParsedInput(SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included);
+    private sealed record ParsedInput(SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included, IReadOnlyList<SourceFile> Files);
 
-    private ParsedInput Parse(string source, string? sourcePath)
+    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath)
     {
         var included = new HashSet<string>(_included, SourceLoader.PathComparer);
         var baseDirectory = Environment.CurrentDirectory;
         if (sourcePath is not null)
         {
-            var fullPath = Path.GetFullPath(sourcePath);
+            var fullPath = sourceFullPath ?? Path.GetFullPath(sourcePath);
             included.Add(fullPath);
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
 
-        var loader = new SourceLoader();
+        var loader = new SourceLoader(_store);
         var includes = new IncludeContext(loader, baseDirectory, included);
         try
         {
@@ -112,7 +126,7 @@ public sealed class PyropSession
             }
 
             var functions = _functions.With(signatures);
-            return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included);
+            return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included, [.. loader.Files]);
         }
         finally
         {
