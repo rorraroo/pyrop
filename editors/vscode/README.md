@@ -9,7 +9,7 @@ function int factorial int n
 
 def int i 1
 while less i 6 block
-    writeline factorial i
+    write_line factorial i
     set i add i 1
 end
 ```

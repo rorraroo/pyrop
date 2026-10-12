@@ -15,7 +15,7 @@ public class SessionTests
     {
         _session.Run("def int x 2");
         _session.Run("function int double int n return multiply n 2");
-        _session.Run("writeline double x");
+        _session.Run("write_line double x");
 
         Assert.Equal("4\n", _output.ToString());
     }
@@ -23,9 +23,9 @@ public class SessionTests
     [Fact]
     public void FailedInputsLeaveNoTrace()
     {
-        Assert.Throws<PyropException>(() => _session.Run("function int f return 1\nwriteline add 1 true"));
+        Assert.Throws<PyropException>(() => _session.Run("function int f return 1\nwrite_line add 1 true"));
 
-        _session.Run("function int f return 2\nwriteline f");
+        _session.Run("function int f return 2\nwrite_line f");
 
         Assert.Equal("2\n", _output.ToString());
     }
@@ -35,7 +35,7 @@ public class SessionTests
     {
         _session.Run("def int x 1");
         _session.Run("def int x add x 4");
-        _session.Run("writeline x");
+        _session.Run("write_line x");
 
         Assert.Equal("5\n", _output.ToString());
         var exception = Assert.Throws<PyropException>(() => _session.Run("def string x \"a\""));
@@ -52,13 +52,13 @@ public class SessionTests
     }
 
     [Theory]
-    [InlineData("block writeline 1", InputStatus.Incomplete)]
-    [InlineData("writeline add 1", InputStatus.Incomplete)]
-    [InlineData("if true writeline 1", InputStatus.AwaitingElse)]
-    [InlineData("if true writeline 1 else if false writeline 2", InputStatus.AwaitingElse)]
-    [InlineData("if true writeline 1 else writeline 2", InputStatus.Ready)]
-    [InlineData("writeline 1", InputStatus.Ready)]
-    [InlineData("writeline add 1 true", InputStatus.Ready)]
+    [InlineData("block write_line 1", InputStatus.Incomplete)]
+    [InlineData("write_line add 1", InputStatus.Incomplete)]
+    [InlineData("if true write_line 1", InputStatus.AwaitingElse)]
+    [InlineData("if true write_line 1 else if false write_line 2", InputStatus.AwaitingElse)]
+    [InlineData("if true write_line 1 else write_line 2", InputStatus.Ready)]
+    [InlineData("write_line 1", InputStatus.Ready)]
+    [InlineData("write_line add 1 true", InputStatus.Ready)]
     [InlineData("end", InputStatus.Ready)]
     public void ProbesWhetherInputIsComplete(string source, InputStatus expected)
     {

@@ -157,9 +157,9 @@ public sealed class Lexer
             return new Token(TokenKind.Float, text, start);
         }
 
-        if (!int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _))
+        if (!long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _))
         {
-            throw Error($"Integer literal {text} does not fit in a 32-bit int.", start);
+            throw Error($"Integer literal {text} does not fit in a 64-bit int.", start);
         }
 
         return new Token(TokenKind.Integer, text, start);

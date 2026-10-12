@@ -14,16 +14,19 @@ internal sealed class StringOutput : IProgramOutput
 
 internal static class Run
 {
-    public static string Program(string source, string input = "")
+    public static string Program(string source, string input = "", HostContext? host = null) =>
+        Execute(source, input, host).Output;
+
+    public static (string Output, int? ExitCode) Execute(string source, string input = "", HostContext? host = null)
     {
         var output = new StringOutput();
-        new PyropSession(new StringReader(input), output).Run(source);
-        return output.ToString();
+        var exitCode = new PyropSession(new StringReader(input), output, host).Run(source);
+        return (output.ToString(), exitCode);
     }
 
-    public static PyropError Failure(string source, string input = "")
+    public static PyropError Failure(string source, string input = "", HostContext? host = null)
     {
-        var exception = Assert.Throws<PyropException>(() => Program(source, input));
+        var exception = Assert.Throws<PyropException>(() => Program(source, input, host));
         return Assert.Single(exception.Errors);
     }
 

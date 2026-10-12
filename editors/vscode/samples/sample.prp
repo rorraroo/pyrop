@@ -11,7 +11,7 @@ function string join string a string b block
 end
 
 function void greet string name
-    writeline add "Hi \"" add name "\"\n"
+    write_line add "Hi \"" add name "\"\n"
 
 def int i 0
 def float ratio divide convert float 7 2.0
@@ -23,11 +23,11 @@ while not done block
     if greater i 7 break
     write convert string i
 end
-writeline subtract 0 -7
+write_line subtract 0 -7
 
 greet add "Py" "rop"
-writeline factorial 10
-writeline and true or false not done
+write_line factorial 10
+write_line and true or false not done
 write "Name: "
-writeline read
-writeline "bad \q escape"
+write_line read
+write_line "bad \q escape"

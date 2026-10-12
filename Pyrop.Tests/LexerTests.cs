@@ -28,7 +28,8 @@ public class LexerTests
     [InlineData("\"bad \\q escape\"")]
     [InlineData("1.")]
     [InlineData("12abc")]
-    [InlineData("99999999999")]
+    [InlineData("9223372036854775808")]
+    [InlineData("-9223372036854775809")]
     [InlineData("add 1 + 2")]
     public void RejectsMalformedInput(string source)
     {

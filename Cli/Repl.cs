@@ -1,4 +1,5 @@
 using System.Text;
+using Pyrop.Runtime;
 using Spectre.Console;
 
 namespace Pyrop.Cli;
@@ -9,20 +10,21 @@ public static class Repl
 
     public static int Run()
     {
+        var input = new LineInput(Console.In);
         var output = new ConsoleProgramOutput();
-        var session = new PyropSession(Console.In, output);
+        var session = new PyropSession(input, output, HostContext.ForProcess([]));
         var pending = new StringBuilder();
 
         AnsiConsole.Write(new FigletText("Pyrop").Color(Color.FromHex("#7A1C1C")));
         AnsiConsole.Write(new Rule("[grey]v" + Version + "[/]").Centered().Justify(Justify.Left));
-        AnsiConsole.MarkupLine("[bold]Pyrop[/] REPL. Press [grey]Ctrl+Z[/] then [grey]Enter[/] (Windows) or [grey]Ctrl+D[/] to exit.");
+        AnsiConsole.MarkupLine("[bold]Pyrop[/] REPL. Type [grey]exit 0[/], or press [grey]Ctrl+Z[/] then [grey]Enter[/] (Windows) or [grey]Ctrl+D[/] to leave.");
         AnsiConsole.MarkupLine("[grey]Unfinished input continues on the next line; an empty line submits it.[/]");
 
         while (true)
         {
             output.EnsureLineStart();
             AnsiConsole.Markup(pending.Length == 0 ? "[green]pyrop>[/] " : "[grey]  ...>[/] ");
-            var line = Console.In.ReadLine();
+            var line = input.ReadLine();
             if (line is null)
             {
                 AnsiConsole.WriteLine();
@@ -45,7 +47,11 @@ public static class Repl
             pending.Clear();
             try
             {
-                session.Run(source);
+                if (session.Run(source) is { } exitCode)
+                {
+                    output.EnsureLineStart();
+                    return exitCode;
+                }
             }
             catch (PyropException exception)
             {

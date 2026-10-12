@@ -39,15 +39,15 @@ public sealed class IncludeTests : IDisposable
     {
         WriteFile("lib.prp", "function int square int x return multiply x x");
 
-        Assert.Equal("16\n", RunFile("main.prp", "writeline square 4\ninclude \"lib.prp\""));
+        Assert.Equal("16\n", RunFile("main.prp", "write_line square 4\ninclude \"lib.prp\""));
     }
 
     [Fact]
     public void IncludedStatementsRunAtTheIncludeOnce()
     {
-        WriteFile("lib.prp", "def int counter 10\nwriteline \"lib loaded\"");
+        WriteFile("lib.prp", "def int counter 10\nwrite_line \"lib loaded\"");
 
-        var output = RunFile("main.prp", "writeline \"start\"\ninclude \"lib.prp\"\ninclude \"lib.prp\"\nwriteline counter");
+        var output = RunFile("main.prp", "write_line \"start\"\ninclude \"lib.prp\"\ninclude \"lib.prp\"\nwrite_line counter");
 
         Assert.Equal("start\nlib loaded\n10\n", output);
     }
@@ -58,7 +58,7 @@ public sealed class IncludeTests : IDisposable
         WriteFile("lib/math.prp", "include \"helpers.prp\"\nfunction int triple int x return add x double x");
         WriteFile("lib/helpers.prp", "function int double int x return add x x");
 
-        Assert.Equal("9\n", RunFile("main.prp", "include \"lib/math.prp\"\nwriteline triple 3"));
+        Assert.Equal("9\n", RunFile("main.prp", "include \"lib/math.prp\"\nwrite_line triple 3"));
     }
 
     [Fact]
@@ -67,13 +67,13 @@ public sealed class IncludeTests : IDisposable
         WriteFile("a.prp", "include \"b.prp\"\nfunction int one return 1");
         WriteFile("b.prp", "include \"a.prp\"\nfunction int two return add one one");
 
-        Assert.Equal("2\n", RunFile("main.prp", "include \"a.prp\"\nwriteline two"));
+        Assert.Equal("2\n", RunFile("main.prp", "include \"a.prp\"\nwrite_line two"));
     }
 
     [Fact]
     public void IncludingTheMainFileIsIgnored()
     {
-        Assert.Equal("once\n", RunFile("main.prp", "include \"main.prp\"\nwriteline \"once\""));
+        Assert.Equal("once\n", RunFile("main.prp", "include \"main.prp\"\nwrite_line \"once\""));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class IncludeTests : IDisposable
     [Fact]
     public void ReportsErrorsInsideIncludedFilesWithTheirFile()
     {
-        WriteFile("lib.prp", "\nwriteline add 1 true");
+        WriteFile("lib.prp", "\nwrite_line add 1 true");
 
         var error = FailFile("main.prp", "include \"lib.prp\"");
 
@@ -124,12 +124,12 @@ public sealed class IncludeTests : IDisposable
     [Fact]
     public void ReplSessionsRememberIncludedFiles()
     {
-        var lib = WriteFile("lib.prp", "function int answer return 42\nwriteline \"loaded\"");
+        var lib = WriteFile("lib.prp", "function int answer return 42\nwrite_line \"loaded\"");
         var include = $"include \"{lib.Replace("\\", "\\\\")}\"";
 
         _session.Run(include);
         _session.Run(include);
-        _session.Run("writeline answer");
+        _session.Run("write_line answer");
 
         Assert.Equal("loaded\n42\n", _output.ToString());
     }
@@ -140,9 +140,31 @@ public sealed class IncludeTests : IDisposable
         var lib = WriteFile("lib.prp", "function int answer return 42");
         var include = $"include \"{lib.Replace("\\", "\\\\")}\"";
 
-        Assert.Throws<PyropException>(() => _session.Run($"{include}\nwriteline add 1 true"));
-        _session.Run($"{include}\nwriteline answer");
+        Assert.Throws<PyropException>(() => _session.Run($"{include}\nwrite_line add 1 true"));
+        _session.Run($"{include}\nwrite_line answer");
 
         Assert.Equal("42\n", _output.ToString());
+    }
+
+    [Fact]
+    public void ExitInAnIncludedFileEndsTheWholeProgram()
+    {
+        WriteFile("lib.prp", "write_line \"in lib\"\nexit 5\nwrite_line \"never\"");
+        const string main = "write_line \"main\"\ninclude \"lib.prp\"\nwrite_line \"after\"";
+        var path = WriteFile("main.prp", main);
+
+        Assert.Equal(5, _session.Run(main, path));
+        Assert.Equal("main\nin lib\n", _output.ToString());
+    }
+
+    [Fact]
+    public void ReportsAnExitCodeOutOfRangeInTheIncludedFile()
+    {
+        WriteFile("lib.prp", "exit 256");
+
+        var error = FailFile("main.prp", "include \"lib.prp\"");
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal("lib.prp", Path.GetFileName(error.Position.Source));
     }
 }

@@ -23,6 +23,8 @@ public sealed record ReturnStatement(Expression? Value, SourcePosition Position)
 
 public sealed record WriteStatement(Expression Value, bool AppendNewLine, SourcePosition Position) : Statement(Position);
 
+public sealed record ExitStatement(Expression Code, SourcePosition Position) : Statement(Position);
+
 public sealed record BlockStatement(IReadOnlyList<Statement> Statements, SourcePosition Position) : Statement(Position);
 
 public sealed record CallStatement(Expression Call, SourcePosition Position) : Statement(Position);

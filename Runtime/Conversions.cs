@@ -47,19 +47,22 @@ public static class Conversions
         };
     }
 
-    private static IntValue FloatToInt(double value, Func<string, Exception> fail)
+    private const double SmallestIntAsFloat = -9_223_372_036_854_775_808.0;
+    private const double FirstFloatAboveInt = 9_223_372_036_854_775_808.0;
+
+    public static IntValue FloatToInt(double value, Func<string, Exception> fail)
     {
         var truncated = Math.Truncate(value);
-        if (truncated < int.MinValue || truncated > int.MaxValue)
+        if (truncated < SmallestIntAsFloat || truncated >= FirstFloatAboveInt)
         {
             throw fail($"Float {new FloatValue(value).ToText()} is out of range for int.");
         }
 
-        return new IntValue((int)truncated);
+        return new IntValue((long)truncated);
     }
 
     private static IntValue StringToInt(string text, Func<string, Exception> fail) =>
-        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
+        long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
             ? new IntValue(result)
             : throw fail($"Cannot convert \"{text}\" to int.");
 

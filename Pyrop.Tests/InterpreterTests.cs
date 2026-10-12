@@ -5,7 +5,7 @@ public class InterpreterTests
     [Fact]
     public void RunsArithmeticAndOutput()
     {
-        Assert.Equal("30\n3.5\nab", Run.Program("writeline add 10 20\nwriteline divide 7.0 2.0\nwrite add \"a\" \"b\""));
+        Assert.Equal("30\n3.5\nab", Run.Program("write_line add 10 20\nwrite_line divide 7.0 2.0\nwrite add \"a\" \"b\""));
     }
 
     [Fact]
@@ -15,7 +15,7 @@ public class InterpreterTests
             function int factorial int n
                 if less n 2 return 1
                 else return multiply n factorial subtract n 1
-            writeline factorial 10
+            write_line factorial 10
             """;
 
         Assert.Equal("3628800\n", Run.Program(source));
@@ -27,7 +27,7 @@ public class InterpreterTests
         const string source = """
             function bool isEven int n if equal n 0 return true else return isOdd subtract n 1
             function bool isOdd int n if equal n 0 return false else return isEven subtract n 1
-            writeline isEven 10
+            write_line isEven 10
             """;
 
         Assert.Equal("true\n", Run.Program(source));
@@ -67,7 +67,7 @@ public class InterpreterTests
     [Fact]
     public void InitializerSeesTheOuterVariableItShadows()
     {
-        Assert.Equal("2\n1\n", Run.Program("def int x 1\nblock def int x add x 1 writeline x end\nwriteline x"));
+        Assert.Equal("2\n1\n", Run.Program("def int x 1\nblock def int x add x 1 write_line x end\nwrite_line x"));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class InterpreterTests
     {
         const string source = """
             function void greet string name
-                if not equal name "" writeline add "Hi " name
+                if not equal name "" write_line add "Hi " name
             greet ""
             greet "Ann"
             """;
@@ -93,13 +93,13 @@ public class InterpreterTests
                 while true
                 block
                     if equal i limit return void
-                    writeline i
+                    write_line i
                     set i add i 1
                 end
-                writeline "unreachable"
+                write_line "unreachable"
             end
             count 2
-            writeline "done"
+            write_line "done"
             """;
 
         Assert.Equal("0\n1\ndone\n", Run.Program(source));
@@ -108,37 +108,59 @@ public class InterpreterTests
     [Fact]
     public void ShortCircuitsLogicalOperations()
     {
-        Assert.Equal("false\ntrue\n", Run.Program("writeline and false equal divide 1 0 0\nwriteline or true equal divide 1 0 0"));
+        Assert.Equal("false\ntrue\n", Run.Program("write_line and false equal divide 1 0 0\nwrite_line or true equal divide 1 0 0"));
+    }
+
+    [Fact]
+    public void ComputesWithTheFull64BitRange()
+    {
+        Assert.Equal(
+            "9223372036854775807\n-9223372036854775808\n0\n-1\n",
+            Run.Program(
+                "write_line add 9223372036854775806 1\n" +
+                "write_line subtract -9223372036854775807 1\n" +
+                "write_line modulo -9223372036854775808 -1\n" +
+                "write_line modulo -9223372036854775807 2"));
     }
 
     [Fact]
     public void ReadsInputAndConverts()
     {
-        Assert.Equal("42\n", Run.Program("writeline add convert int read 1", " 41 \n"));
+        Assert.Equal("42\n", Run.Program("write_line add convert int read 1", " 41 \n"));
     }
 
     [Theory]
-    [InlineData("writeline convert string 3.0", "3.0\n")]
-    [InlineData("writeline convert float 2", "2.0\n")]
-    [InlineData("writeline convert int -3.9", "-3\n")]
-    [InlineData("writeline convert float \"1e3\"", "1000.0\n")]
-    [InlineData("writeline convert bool \" true \"", "true\n")]
-    [InlineData("writeline 0.1", "0.1\n")]
+    [InlineData("write_line convert string 3.0", "3.0\n")]
+    [InlineData("write_line convert float 2", "2.0\n")]
+    [InlineData("write_line convert int -3.9", "-3\n")]
+    [InlineData("write_line convert float \"1e3\"", "1000.0\n")]
+    [InlineData("write_line convert bool \" true \"", "true\n")]
+    [InlineData("write_line 0.1", "0.1\n")]
+    [InlineData("write_line convert int 3000000000.0", "3000000000\n")]
+    [InlineData("write_line convert int -9223372036854775808.0", "-9223372036854775808\n")]
+    [InlineData("write_line convert int \"9223372036854775807\"", "9223372036854775807\n")]
+    [InlineData("write_line convert float 9007199254740993", "9007199254740992.0\n")]
     public void ConvertsBetweenTypes(string source, string expected)
     {
         Assert.Equal(expected, Run.Program(source));
     }
 
     [Theory]
-    [InlineData("writeline divide 1 0", "Division by zero")]
-    [InlineData("writeline divide 1.0 0.0", "Division by zero")]
-    [InlineData("writeline add 2147483647 1", "Integer overflow")]
-    [InlineData("writeline multiply convert float \"1e308\" 10.0", "out of range")]
-    [InlineData("writeline convert int \"abc\"", "Cannot convert \"abc\" to int")]
-    [InlineData("writeline convert int 3000000000.0", "out of range for int")]
-    [InlineData("writeline read", "end of input")]
-    [InlineData("function int down int n return down add n 1\nwriteline down 0", "Call depth limit")]
-    [InlineData("function int get return late\nwriteline get\ndef int late 1", "does not exist yet")]
+    [InlineData("write_line divide 1 0", "Division by zero")]
+    [InlineData("write_line divide 1.0 0.0", "Division by zero")]
+    [InlineData("write_line add 9223372036854775807 1", "Integer overflow")]
+    [InlineData("write_line subtract -9223372036854775808 1", "Integer overflow")]
+    [InlineData("write_line multiply 4294967296 4294967296", "Integer overflow")]
+    [InlineData("write_line divide -9223372036854775808 -1", "Integer overflow")]
+    [InlineData("write_line modulo 1 0", "Division by zero")]
+    [InlineData("write_line multiply convert float \"1e308\" 10.0", "out of range")]
+    [InlineData("write_line convert int \"abc\"", "Cannot convert \"abc\" to int")]
+    [InlineData("write_line convert int \"9223372036854775808\"", "Cannot convert \"9223372036854775808\" to int")]
+    [InlineData("write_line convert int 9223372036854775807.0", "out of range for int")]
+    [InlineData("write_line convert int -9223372036854777856.0", "out of range for int")]
+    [InlineData("write_line read", "end of input")]
+    [InlineData("function int down int n return down add n 1\nwrite_line down 0", "Call depth limit")]
+    [InlineData("function int get return late\nwrite_line get\ndef int late 1", "does not exist yet")]
     [InlineData("function int get return late\ndef int late get", "does not exist yet")]
     public void ReportsRuntimeErrors(string source, string message)
     {

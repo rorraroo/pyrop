@@ -8,7 +8,7 @@ public abstract record Value
 
     public abstract string ToText();
 
-    public int AsInt() => ((IntValue)this).Value;
+    public long AsInt() => ((IntValue)this).Value;
 
     public double AsFloat() => ((FloatValue)this).Value;
 
@@ -17,7 +17,7 @@ public abstract record Value
     public bool AsBool() => ((BoolValue)this).Value;
 }
 
-public sealed record IntValue(int Value) : Value
+public sealed record IntValue(long Value) : Value
 {
     public override PyropType Type => PyropType.Int;
 

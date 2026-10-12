@@ -7,7 +7,7 @@ public static class ReturnPaths
 {
     public static bool AlwaysReturns(Statement statement) => statement switch
     {
-        ReturnStatement => true,
+        ReturnStatement or ExitStatement => true,
         BlockStatement block => block.Statements.Any(AlwaysReturns),
         IfStatement { Else: { } otherwise } conditional => AlwaysReturns(conditional.Then) && AlwaysReturns(otherwise),
         WhileStatement { Condition: LiteralExpression { Value: BoolValue { Value: true } } } loop => !BreaksOut(loop.Body),

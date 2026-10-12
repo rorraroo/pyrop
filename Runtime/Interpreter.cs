@@ -3,17 +3,33 @@ using Pyrop.Syntax;
 
 namespace Pyrop.Runtime;
 
-public sealed class Interpreter(TextReader input, IProgramOutput output)
+public sealed class Interpreter(LineInput input, IProgramOutput output, HostContext host)
 {
     public const int MaxCallDepth = 10_000;
+    public const int MaxExitCode = 255;
 
-    private readonly TextReader _input = input;
+    private readonly LineInput _input = input;
+    private readonly HostContext _host = host;
+    private readonly RandomSource _random = new();
     private readonly Scope _globals = new(null);
     private readonly Dictionary<string, FunctionStatement> _functions = new();
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
     private int _callDepth;
 
-    public void Execute(SyntaxTree tree, CheckResult check)
+    public int? Execute(SyntaxTree tree, CheckResult check)
+    {
+        try
+        {
+            ExecuteProgram(tree, check);
+            return null;
+        }
+        catch (ExitSignal exit)
+        {
+            return exit.Code;
+        }
+    }
+
+    private void ExecuteProgram(SyntaxTree tree, CheckResult check)
     {
         foreach (var function in tree.Functions)
         {
@@ -82,6 +98,8 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
                 var text = Evaluate(write.Value, scope).ToText();
                 output.Write(write.AppendNewLine ? text + "\n" : text);
                 return Completion.Normal;
+            case ExitStatement exit:
+                throw new ExitSignal(EvaluateExitCode(exit, scope));
             case BlockStatement block:
                 return ExecuteBlock(block, new Scope(scope));
             case CallStatement call:
@@ -158,6 +176,17 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         variable.Value = value;
     }
 
+    private int EvaluateExitCode(ExitStatement exit, Scope scope)
+    {
+        var code = Evaluate(exit.Code, scope).AsInt();
+        if (code < 0 || code > MaxExitCode)
+        {
+            throw Runtime($"Exit code {code} is out of range; it must be between 0 and {MaxExitCode}.", exit.Code.Position);
+        }
+
+        return (int)code;
+    }
+
     private bool EvaluateCondition(Expression condition, Scope scope) =>
         Evaluate(condition, scope) is BoolValue boolean
             ? boolean.Value
@@ -168,6 +197,10 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         if (call is FunctionCallExpression function)
         {
             CallFunction(function, scope);
+        }
+        else if (call is BuiltinCallExpression builtin)
+        {
+            CallBuiltin(builtin, scope);
         }
         else
         {
@@ -186,7 +219,8 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
                     ?? throw Runtime($"Variable '{variable.Name}' does not exist yet; its def has not run.", variable.Position);
                 return slot.Value;
             case BuiltinCallExpression call:
-                return CallBuiltin(call, scope);
+                return CallBuiltin(call, scope)
+                    ?? throw Internal($"Operation '{call.Operation.Name}' returned no value.", call.Position);
             case FunctionCallExpression call:
                 return CallFunction(call, scope)
                     ?? throw Internal($"Function '{call.Function.Name}' returned no value.", call.Position);
@@ -200,7 +234,7 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         }
     }
 
-    private Value CallBuiltin(BuiltinCallExpression call, Scope scope)
+    private Value? CallBuiltin(BuiltinCallExpression call, Scope scope)
     {
         if (!_overloads.TryGetValue(call, out var overload))
         {
@@ -267,8 +301,17 @@ public sealed class Interpreter(TextReader input, IProgramOutput output)
         public Value Argument(int index) =>
             _arguments[index] ??= interpreter.Evaluate(call.Arguments[index], scope);
 
-        public TextReader Input => interpreter._input;
+        public LineInput Input => interpreter._input;
+
+        public HostContext Host => interpreter._host;
+
+        public RandomSource Random => interpreter._random;
 
         public Exception Fail(string message) => Runtime(message, call.Position);
+    }
+
+    private sealed class ExitSignal(int code) : Exception
+    {
+        public int Code { get; } = code;
     }
 }

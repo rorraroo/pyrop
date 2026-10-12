@@ -91,6 +91,13 @@ public sealed class TypeChecker
             case WriteStatement write:
                 TypeOf(write.Value, scope);
                 break;
+            case ExitStatement exit:
+                if (TypeOf(exit.Code, scope) is { } codeType && codeType != PyropType.Int)
+                {
+                    Report($"The exit code must be int, found {codeType.Name}.", exit.Code.Position);
+                }
+
+                break;
             case BlockStatement block:
                 var blockScope = new SymbolScope(scope);
                 foreach (var inner in block.Statements)
@@ -200,7 +207,11 @@ public sealed class TypeChecker
                 var type = scope.Lookup(variable.Name);
                 if (type is null)
                 {
-                    Report($"Undeclared variable '{variable.Name}'.", variable.Position);
+                    Report(
+                        Keywords.UnderscoredSpelling(variable.Name) is { } spelling
+                            ? Keywords.UnderscoreHint(variable.Name, spelling)
+                            : $"Undeclared variable '{variable.Name}'.",
+                        variable.Position);
                 }
 
                 return type;

@@ -136,12 +136,15 @@ public sealed class Parser
             Keywords.Return => ParseReturn(),
             Keywords.Write => ParseWrite(appendNewLine: false),
             Keywords.WriteLine => ParseWrite(appendNewLine: true),
+            Keywords.Exit => ParseExit(),
             Keywords.Block => ParseNestedBlock(),
             Keywords.End => throw _cursor.Error("'end' without a matching 'block'."),
             Keywords.Else => throw _cursor.Error("'else' without a matching 'if'."),
             _ when Builtins.All.ContainsKey(token.Text) || _functions.Contains(token.Text) =>
                 new CallStatement(ParseCall(allowVoid: true), token.Position),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
+            _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
+                throw _cursor.Error(Keywords.UnderscoreHint(token.Text, spelling)),
             _ => throw StrayValue(token),
         };
     }
@@ -287,6 +290,12 @@ public sealed class Parser
         return new WriteStatement(ParseExpression(), appendNewLine, start.Position);
     }
 
+    private Statement ParseExit()
+    {
+        var start = _cursor.Advance();
+        return new ExitStatement(ParseExpression(), start.Position);
+    }
+
     private Statement ParseNestedBlock()
     {
         _nesting++;
@@ -328,7 +337,7 @@ public sealed class Parser
                 throw _cursor.Error("Expected an expression, found end of input.");
             case TokenKind.Integer:
                 _cursor.Advance();
-                return new LiteralExpression(new IntValue(int.Parse(token.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture)), token.Position);
+                return new LiteralExpression(new IntValue(long.Parse(token.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture)), token.Position);
             case TokenKind.Float:
                 _cursor.Advance();
                 return new LiteralExpression(new FloatValue(double.Parse(token.Text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture)), token.Position);
@@ -370,6 +379,11 @@ public sealed class Parser
         var token = _cursor.Advance();
         if (Builtins.All.TryGetValue(token.Text, out var operation))
         {
+            if (operation.ReturnsVoid && !allowVoid)
+            {
+                throw _cursor.Error($"Operation '{operation.Name}' returns void and cannot be used as a value.", token);
+            }
+
             return new BuiltinCallExpression(operation, ParseArguments(operation.Arity), token.Position);
         }
 

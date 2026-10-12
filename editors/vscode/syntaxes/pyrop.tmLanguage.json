@@ -86,11 +86,11 @@
       ]
     },
     "control": {
-      "match": "\\b(if|else|while|break|continue|return|block|end)\\b",
+      "match": "\\b(if|else|while|break|continue|return|exit|block|end)\\b",
       "name": "keyword.control.pyrop"
     },
     "keyword": {
-      "match": "\\b(write|writeline)\\b",
+      "match": "\\b(write|write_line)\\b",
       "name": "keyword.other.pyrop"
     },
     "type": {
@@ -102,7 +102,7 @@
       "name": "constant.language.boolean.pyrop"
     },
     "builtin": {
-      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read)\\b",
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|at_least|at_most|smaller|larger|abs|negate|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|char_at|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right)\\b",
       "name": "support.function.builtin.pyrop"
     },
     "identifier": {

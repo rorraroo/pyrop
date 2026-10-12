@@ -1,10 +1,11 @@
+using Pyrop.Runtime;
 using Spectre.Console;
 
 namespace Pyrop.Cli;
 
 public static class ScriptRunner
 {
-    public static int Run(string path)
+    public static int Run(string path, IReadOnlyList<string> arguments)
     {
         if (!File.Exists(path))
         {
@@ -14,11 +15,10 @@ public static class ScriptRunner
 
         var source = File.ReadAllText(path);
         var output = new ConsoleProgramOutput();
-        var session = new PyropSession(Console.In, output);
+        var session = new PyropSession(Console.In, output, HostContext.ForProcess(arguments));
         try
         {
-            session.Run(source, path);
-            return 0;
+            return session.Run(source, path) ?? 0;
         }
         catch (PyropException exception)
         {

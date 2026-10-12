@@ -6,15 +6,16 @@ public class TypeCheckerTests
     [InlineData("def int a 0\nset a \"text\"", "Cannot set int variable")]
     [InlineData("def int a \"text\"", "Cannot initialize int variable 'a' with a string value")]
     [InlineData("def int a add a 1", "Undeclared variable 'a'")]
-    [InlineData("writeline add 1 2.0", "'add' cannot take int float")]
-    [InlineData("writeline convert int true", "Cannot convert bool to int")]
-    [InlineData("if 1 writeline 1", "condition of 'if' must be bool")]
+    [InlineData("write_line add 1 2.0", "'add' cannot take int float")]
+    [InlineData("write_line convert int true", "Cannot convert bool to int")]
+    [InlineData("if 1 write_line 1", "condition of 'if' must be bool")]
     [InlineData("while \"x\" break", "condition of 'while' must be bool")]
-    [InlineData("writeline missing", "Undeclared variable 'missing'")]
+    [InlineData("write_line missing", "Undeclared variable 'missing'")]
     [InlineData("function int f return \"x\"", "must return int, found string")]
-    [InlineData("function int f int x return x\nwriteline f 1.5", "Argument 'x' of 'f' must be int")]
-    [InlineData("writeline later\ndef int later 1", "Undeclared variable 'later'")]
+    [InlineData("function int f int x return x\nwrite_line f 1.5", "Argument 'x' of 'f' must be int")]
+    [InlineData("write_line later\ndef int later 1", "Undeclared variable 'later'")]
     [InlineData("block def int inner 1 end\nfunction int f return inner", "Undeclared variable 'inner'")]
+    [InlineData("write_line argumentcount", "did you mean 'argument_count'?")]
     public void RejectsTypeErrors(string source, string message)
     {
         var error = Run.Failure(source);
@@ -29,7 +30,7 @@ public class TypeCheckerTests
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
 
-        var exception = Assert.Throws<PyropException>(() => session.Run("writeline 1\nwriteline add 1 true\nwriteline nope"));
+        var exception = Assert.Throws<PyropException>(() => session.Run("write_line 1\nwrite_line add 1 true\nwrite_line nope"));
 
         Assert.Equal(2, exception.Errors.Count);
         Assert.Equal("", output.ToString());
@@ -38,7 +39,7 @@ public class TypeCheckerTests
     [Fact]
     public void FunctionsSeeGlobalsDeclaredLaterInTheFile()
     {
-        Assert.Equal("5\n", Run.Program("function int get return value\ndef int value 5\nwriteline get"));
+        Assert.Equal("5\n", Run.Program("function int get return value\ndef int value 5\nwrite_line get"));
     }
 
     [Theory]
@@ -53,9 +54,9 @@ public class TypeCheckerTests
 
     [Theory]
     [InlineData("function int f int x if greater x 0 return 1 else if less x 0 return -1 else return 0")]
-    [InlineData("function int f block writeline 1 return 2 end")]
+    [InlineData("function int f block write_line 1 return 2 end")]
     [InlineData("function int f while true block while true break return 1 end")]
-    [InlineData("function void f writeline 1")]
+    [InlineData("function void f write_line 1")]
     public void AcceptsFunctionsThatAlwaysReturn(string source)
     {
         Run.Program(source);

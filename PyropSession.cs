@@ -13,18 +13,28 @@ public enum InputStatus
     AwaitingElse,
 }
 
-public sealed class PyropSession(TextReader input, IProgramOutput output)
+public sealed class PyropSession
 {
-    private readonly Interpreter _interpreter = new(input, output);
+    private readonly Interpreter _interpreter;
     private readonly Dictionary<string, string> _sources = new();
     private FunctionTable _functions = FunctionTable.Empty;
     private IReadOnlyDictionary<string, PyropType> _globals = new Dictionary<string, PyropType>();
     private HashSet<string> _included = new(SourceLoader.PathComparer);
     private string? _lastInput;
 
+    public PyropSession(LineInput input, IProgramOutput output, HostContext? host = null)
+    {
+        _interpreter = new Interpreter(input, output, host ?? HostContext.Isolated);
+    }
+
+    public PyropSession(TextReader input, IProgramOutput output, HostContext? host = null)
+        : this(new LineInput(input), output, host)
+    {
+    }
+
     public InputStatus Probe(string source) => LargeStack.Run(() => ProbeOnCurrentThread(source));
 
-    public void Run(string source, string? sourcePath = null) => LargeStack.Run(() => RunOnCurrentThread(source, sourcePath));
+    public int? Run(string source, string? sourcePath = null) => LargeStack.Run(() => RunOnCurrentThread(source, sourcePath));
 
     public string? SourceText(string? sourceName) =>
         sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
@@ -48,7 +58,7 @@ public sealed class PyropSession(TextReader input, IProgramOutput output)
         }
     }
 
-    private bool RunOnCurrentThread(string source, string? sourcePath)
+    private int? RunOnCurrentThread(string source, string? sourcePath)
     {
         if (sourcePath is null)
         {
@@ -66,14 +76,12 @@ public sealed class PyropSession(TextReader input, IProgramOutput output)
         _included = parsed.Included;
         try
         {
-            _interpreter.Execute(parsed.Tree, check);
+            return _interpreter.Execute(parsed.Tree, check);
         }
         catch (Exception exception) when (exception is not PyropException)
         {
             throw new PyropException(ErrorStage.Internal, exception.Message, new SourcePosition(0, 0));
         }
-
-        return true;
     }
 
     private sealed record ParsedInput(SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included);
