@@ -2,7 +2,7 @@
   "name": "pyrop",
   "displayName": "Pyrop",
   "description": "Syntax highlighting for the Pyrop language.",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "publisher": "radardev",
   "icon": "icons/pyrop-128.png",
   "engines": {

@@ -6,6 +6,8 @@ using Pyrop.Syntax;
 
 namespace Pyrop;
 
+public sealed record InspectedProgram(SyntaxTree? Tree, PyropException? Error);
+
 public enum InputStatus
 {
     Ready,
@@ -42,6 +44,8 @@ public sealed class PyropSession
     public IReadOnlyList<SourceFile> Check(string source, string sourcePath, string? sourceFullPath = null) =>
         LargeStack.Run(() => CheckOnCurrentThread(source, sourcePath, sourceFullPath));
 
+    public InspectedProgram Inspect(string source, string sourcePath) => LargeStack.Run(() => InspectOnCurrentThread(source, sourcePath));
+
     public string? SourceText(string? sourceName) =>
         sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
 
@@ -72,6 +76,35 @@ public sealed class PyropSession
         return parsed.Files;
     }
 
+    private InspectedProgram InspectOnCurrentThread(string source, string sourcePath)
+    {
+        _sources[sourcePath] = source;
+        ParsedInput parsed;
+        try
+        {
+            parsed = Parse(source, sourcePath, null, untilError: true);
+        }
+        catch (PyropException exception)
+        {
+            return new InspectedProgram(null, exception);
+        }
+
+        if (parsed.ParseError is { } parseError)
+        {
+            return new InspectedProgram(parsed.Tree, parseError);
+        }
+
+        try
+        {
+            TypeChecker.Check(parsed.Tree, _globals);
+            return new InspectedProgram(parsed.Tree, null);
+        }
+        catch (PyropException exception)
+        {
+            return new InspectedProgram(parsed.Tree, exception);
+        }
+    }
+
     private int? RunOnCurrentThread(string source, string? sourcePath, string? sourceFullPath)
     {
         if (sourcePath is null)
@@ -98,9 +131,10 @@ public sealed class PyropSession
         }
     }
 
-    private sealed record ParsedInput(SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included, IReadOnlyList<SourceFile> Files);
+    private sealed record ParsedInput(
+        SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included, IReadOnlyList<SourceFile> Files, PyropException? ParseError = null);
 
-    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath)
+    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath, bool untilError = false)
     {
         var included = new HashSet<string>(_included, SourceLoader.PathComparer);
         var baseDirectory = Environment.CurrentDirectory;
@@ -126,7 +160,13 @@ public sealed class PyropSession
             }
 
             var functions = _functions.With(signatures);
-            return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included, [.. loader.Files]);
+            if (!untilError)
+            {
+                return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included, [.. loader.Files]);
+            }
+
+            var (tree, error) = Parser.ParseUntilError(tokens, functions, includes);
+            return new ParsedInput(tree, functions, included, [.. loader.Files], error);
         }
         finally
         {

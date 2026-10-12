@@ -99,6 +99,26 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void TreePrintsTheStructureAndThenTheError()
+    {
+        var (output, errors, exitCode) = Pyrop("--tree", Script("write_line add 1 2\nset x multiply 2 3 4"));
+
+        Assert.Equal("write_line (add 1 2)\nset x (multiply 2 3)\n", output);
+        Assert.StartsWith("Parse error ", errors);
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public void TreeDoesNotRunTheProgram()
+    {
+        var (output, errors, exitCode) = Pyrop("-t", Script("write_line \"ran\"\nexit 3"));
+
+        Assert.Equal("write_line \"ran\"\nexit 3\n", output);
+        Assert.Equal("", errors);
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public void AScriptNamedBuildRuns()
     {
         var path = Path.Combine(_directory, "build");

@@ -28,15 +28,34 @@ public sealed class Parser
     public static SyntaxTree Parse(IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes = null) =>
         new Parser(tokens, functions, includes).ParseProgram(new HashSet<string>());
 
+    public static (SyntaxTree Tree, PyropException? Error) ParseUntilError(
+        IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes = null)
+    {
+        var statements = new List<Statement>();
+        try
+        {
+            new Parser(tokens, functions, includes).ParseInto(statements, new HashSet<string>());
+            return (new SyntaxTree(statements), null);
+        }
+        catch (PyropException exception)
+        {
+            return (new SyntaxTree(statements), exception);
+        }
+    }
+
     private SyntaxTree ParseProgram(HashSet<string> declared)
     {
         var statements = new List<Statement>();
+        ParseInto(statements, declared);
+        return new SyntaxTree(statements);
+    }
+
+    private void ParseInto(List<Statement> statements, HashSet<string> declared)
+    {
         while (!_cursor.IsAtEnd)
         {
             statements.Add(ParseListedStatement(declared, NoParameters));
         }
-
-        return new SyntaxTree(statements);
     }
 
     private Statement ParseListedStatement(HashSet<string> declared, IReadOnlySet<string> parameters)

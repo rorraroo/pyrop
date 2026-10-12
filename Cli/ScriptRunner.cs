@@ -7,26 +7,26 @@ namespace Pyrop.Cli;
 
 public static class ScriptRunner
 {
-    public static int Run(string path, IReadOnlyList<string> arguments)
+    public static int Run(string path, IReadOnlyList<string> arguments) =>
+        ReadScript(path) is { } source ? Execute(source, path, null, null, arguments) : 1;
+
+    public static string? ReadScript(string path)
     {
         if (!File.Exists(path))
         {
             Terminal.Errors.MarkupLine($"[red bold]Error[/] File '{Markup.Escape(path)}' was not found.");
-            return 1;
+            return null;
         }
 
-        string source;
         try
         {
-            source = File.ReadAllText(path);
+            return File.ReadAllText(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             Terminal.Errors.MarkupLine($"[red bold]Error[/] Cannot read '{Markup.Escape(path)}': {Markup.Escape(exception.Message)}");
-            return 1;
+            return null;
         }
-
-        return Execute(source, path, null, null, arguments);
     }
 
     public static int RunBundle(Bundle bundle, IReadOnlyList<string> arguments) =>

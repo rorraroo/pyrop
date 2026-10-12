@@ -35,6 +35,7 @@ return (plain ? args[1..] : args) switch
     ["--version" or "-v"] => ShowVersion(),
     ["--help" or "-h"] => ShowHelp(),
     ["--build" or "-b", .. var buildArguments] => BuildCommand.Run(buildArguments),
+    ["--tree" or "-t", .. var treeArguments] => TreeCommand.Run(treeArguments),
     [var path, .. var arguments] when !path.StartsWith('-') => ScriptRunner.Run(path, arguments),
     _ => ShowUsage(),
 };
@@ -65,6 +66,7 @@ static int ShowHelp()
     var options = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
     options.AddRow("[bold]file.prp[/] [grey][[arguments]][/]", "Run a script, passing it any further arguments. Exits with the code given to exit, 0 if the script finishes, or 1 on any error.");
     options.AddRow("[bold]-b[/], [bold]--build[/] [grey]file.prp [[-o output]][/]", "Build a standalone executable containing the script and its includes. Needs the standalone pyrop.");
+    options.AddRow("[bold]-t[/], [bold]--tree[/] [grey]file.prp[/]", "Show the program with brackets around every call, to see how the parser grouped it. Statements before a parse error are still shown.");
     options.AddRow("[grey](no arguments)[/]", "Start the interactive REPL.");
     options.AddRow("[bold]--plain[/]", "Write no colours, styles or prompt decorations. Also on when output is redirected or NO_COLOR is set.");
     options.AddRow("[bold]-h[/], [bold]--help[/]", "Show this help.");
@@ -90,5 +92,6 @@ static void WriteUsageLines(IAnsiConsole console)
 {
     console.MarkupLine("Usage: [bold]pyrop[/] [grey][[--plain]] [[file.prp [[arguments]]]][/]");
     console.MarkupLine("       [bold]pyrop[/] [grey]--build file.prp [[-o output]][/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey]--tree file.prp[/]");
     console.MarkupLine("       [bold]pyrop[/] [grey]--help | --version[/]");
 }
