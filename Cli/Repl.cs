@@ -21,8 +21,7 @@ public static class Repl
         }
         else
         {
-            AnsiConsole.Write(new FigletText("Pyrop").Color(Color.FromHex("#7A1C1C")));
-            AnsiConsole.Write(new Rule("[grey]v" + Version + "[/]").Centered().Justify(Justify.Left));
+            Banner.Write(Version);
         }
         AnsiConsole.MarkupLine("[bold]Pyrop[/] REPL. Type [grey]exit 0[/], or press [grey]Ctrl+Z[/] then [grey]Enter[/] (Windows) or [grey]Ctrl+D[/] to leave.");
         AnsiConsole.MarkupLine("[grey]Unfinished input continues on the next line; an empty line submits it.[/]");

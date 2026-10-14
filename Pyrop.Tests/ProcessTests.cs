@@ -89,6 +89,25 @@ public class ProcessTests
     }
 
     [Theory]
+    [InlineData("﻿first\n﻿second\n", "first", "﻿second")]
+    [InlineData("﻿\nnext\n", "", "next")]
+    public void AByteOrderMarkIsSkippedOnlyAtTheStartOfInput(string text, string first, string second)
+    {
+        var input = new LineInput(new StringReader(text));
+
+        Assert.False(input.HasEnded());
+        Assert.Equal(first, input.ReadLine());
+        Assert.Equal(second, input.ReadLine());
+        Assert.Null(input.ReadLine());
+    }
+
+    [Fact]
+    public void PipedInputStartingWithAByteOrderMarkRuns()
+    {
+        Assert.Equal("ok\n", Run.Program("write_line read", "﻿ok\n"));
+    }
+
+    [Theory]
     [InlineData("a\nb\n", "a\nb\n")]
     [InlineData("a\r\nb", "a\nb\n")]
     [InlineData("", "")]
