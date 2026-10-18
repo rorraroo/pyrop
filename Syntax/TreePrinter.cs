@@ -6,137 +6,296 @@ namespace Pyrop.Syntax;
 
 public static class TreePrinter
 {
-    private const string Indent = "    ";
-
-    public static string Print(SyntaxTree tree)
+    public static string Print(SyntaxTree tree, ModuleNamespace? names = null)
     {
         var builder = new StringBuilder();
+        var printer = new Printer(builder, names);
         foreach (var statement in tree.Statements)
         {
-            WriteStatement(builder, statement, 0);
+            printer.WriteStatement(statement, 0);
         }
 
         return builder.ToString();
     }
 
-    private static void WriteStatement(StringBuilder builder, Statement statement, int depth)
+    private sealed class Printer(StringBuilder output, ModuleNamespace? names)
     {
-        switch (statement)
-        {
-            case IfStatement conditional:
-                WriteIf(builder, conditional, depth, Keywords.If);
-                break;
-            case WhileStatement loop:
-                WriteHeaded(builder, depth, $"{Keywords.While} {Operand(loop.Condition)}", loop.Body);
-                break;
-            case WithStyleStatement styled:
-                WriteHeaded(builder, depth, $"{Keywords.WithStyle} {Operand(styled.Style)}", styled.Body);
-                break;
-            case FunctionStatement function:
-                WriteHeaded(builder, depth, Header(function.Signature), function.Body);
-                break;
-            case BlockStatement block:
-                WriteBlock(builder, depth, Keywords.Block, block);
-                break;
-            default:
-                Line(builder, depth, Simple(statement));
-                break;
-        }
-    }
+        private const string Indent = "    ";
 
-    private static void WriteIf(StringBuilder builder, IfStatement conditional, int depth, string keyword)
-    {
-        WriteHeaded(builder, depth, $"{keyword} {Operand(conditional.Condition)}", conditional.Then);
-        switch (conditional.Else)
+        public void WriteStatement(Statement statement, int depth)
         {
-            case null:
-                break;
-            case IfStatement chained:
-                WriteIf(builder, chained, depth, $"{Keywords.Else} {Keywords.If}");
-                break;
-            case var otherwise:
-                WriteHeaded(builder, depth, Keywords.Else, otherwise);
-                break;
-        }
-    }
-
-    private static void WriteHeaded(StringBuilder builder, int depth, string header, Statement body)
-    {
-        if (body is BlockStatement block)
-        {
-            WriteBlock(builder, depth, $"{header} {Keywords.Block}", block);
-            return;
+            switch (statement)
+            {
+                case IfStatement or IfSomeStatement:
+                    WriteIf(statement, depth, "");
+                    break;
+                case WhileStatement loop:
+                    WriteHeaded(depth, $"{Keywords.While} {Operand(loop.Condition)}", loop.Body);
+                    break;
+                case ForStatement loop:
+                    WriteHeaded(depth, $"{Keywords.For} {TypeText(loop.VariableType)} {loop.Variable} {Keywords.In} {Operand(loop.List)}", loop.Body);
+                    break;
+                case WithStyleStatement styled:
+                    WriteHeaded(depth, $"{Keywords.WithStyle} {Operand(styled.Style)}", styled.Body);
+                    break;
+                case FunctionStatement function:
+                    WriteHeaded(depth, Header(function.Signature), function.Body);
+                    break;
+                case BlockStatement block:
+                    WriteBlock(depth, Keywords.Block, block);
+                    break;
+                default:
+                    Line(depth, Simple(statement));
+                    break;
+            }
         }
 
-        Line(builder, depth, header);
-        WriteStatement(builder, body, depth + 1);
-    }
-
-    private static void WriteBlock(StringBuilder builder, int depth, string header, BlockStatement block)
-    {
-        Line(builder, depth, header);
-        foreach (var inner in block.Statements)
+        private void WriteIf(Statement statement, int depth, string prefix)
         {
-            WriteStatement(builder, inner, depth + 1);
+            var (header, then, otherwise) = statement switch
+            {
+                IfStatement conditional => ($"{Keywords.If} {Operand(conditional.Condition)}", conditional.Then, conditional.Else),
+                IfSomeStatement unwrap => (
+                    $"{Keywords.IfSome} {TypeText(unwrap.ValueType)} {unwrap.Name} {Operand(unwrap.Option)}", unwrap.Then, unwrap.Else),
+                _ => throw new InvalidOperationException($"Unknown conditional {statement.GetType().Name}."),
+            };
+            WriteHeaded(depth, prefix + header, then);
+            switch (otherwise)
+            {
+                case null:
+                    break;
+                case IfStatement or IfSomeStatement:
+                    WriteIf(otherwise, depth, $"{Keywords.Else} ");
+                    break;
+                default:
+                    WriteHeaded(depth, Keywords.Else, otherwise);
+                    break;
+            }
         }
 
-        Line(builder, depth, Keywords.End);
-    }
-
-    private static string Simple(Statement statement) => statement switch
-    {
-        DefStatement def => $"{Keywords.Def} {def.Type.Name} {def.Name} {Operand(def.Value)}",
-        SetStatement set => $"{Keywords.Set} {set.Name} {Operand(set.Value)}",
-        ReturnStatement { Value: null } => $"{Keywords.Return} {PyropType.Void.Name}",
-        ReturnStatement { Value: { } value } => $"{Keywords.Return} {Operand(value)}",
-        WriteStatement write => $"{(write.AppendNewLine ? Keywords.WriteLine : Keywords.Write)} {Operand(write.Value)}",
-        ExitStatement exit => $"{Keywords.Exit} {Operand(exit.Code)}",
-        BreakStatement => Keywords.Break,
-        ContinueStatement => Keywords.Continue,
-        CallStatement call => Bare(call.Call),
-        IncludeStatement include => $"{Keywords.Include} {Quote(include.Path)}",
-        _ => throw new InvalidOperationException($"Unknown statement {statement.GetType().Name}."),
-    };
-
-    private static string Header(FunctionSignature signature) =>
-        string.Join(' ', [
-            Keywords.Function,
-            signature.ReturnType.Name,
-            signature.Name,
-            .. signature.Parameters.SelectMany(parameter => new[] { parameter.Type.Name, parameter.Name }),
-        ]);
-
-    private static string Operand(Expression expression) => expression switch
-    {
-        BuiltinCallExpression { Arguments.Count: > 0 } or FunctionCallExpression { Arguments.Count: > 0 } or ConvertExpression =>
-            $"({Bare(expression)})",
-        _ => Bare(expression),
-    };
-
-    private static string Bare(Expression expression) => expression switch
-    {
-        LiteralExpression { Value: StringValue text } => Quote(text.Value),
-        LiteralExpression literal => literal.Value.ToText(),
-        VariableExpression variable => variable.Name,
-        BuiltinCallExpression call => Applied(call.Operation.Name, call.Arguments),
-        FunctionCallExpression call => Applied(call.Function.Name, call.Arguments),
-        ConvertExpression convert => $"{Keywords.Convert} {convert.Target.Name} {Operand(convert.Operand)}",
-        _ => throw new InvalidOperationException($"Unknown expression {expression.GetType().Name}."),
-    };
-
-    private static string Applied(string name, IReadOnlyList<Expression> arguments) =>
-        arguments.Count == 0 ? name : $"{name} {string.Join(' ', arguments.Select(Operand))}";
-
-    private static string Quote(string text) =>
-        $"\"{text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\t", "\\t")}\"";
-
-    private static void Line(StringBuilder builder, int depth, string text)
-    {
-        for (var level = 0; level < depth; level++)
+        private void WriteHeaded(int depth, string header, Statement body)
         {
-            builder.Append(Indent);
+            if (body is BlockStatement block)
+            {
+                WriteBlock(depth, $"{header} {Keywords.Block}", block);
+                return;
+            }
+
+            Line(depth, header);
+            WriteStatement(body, depth + 1);
         }
 
-        builder.Append(text).Append('\n');
+        private void WriteBlock(int depth, string header, BlockStatement block)
+        {
+            Line(depth, header);
+            foreach (var inner in block.Statements)
+            {
+                WriteStatement(inner, depth + 1);
+            }
+
+            Line(depth, Keywords.End);
+        }
+
+        private string Simple(Statement statement) => statement switch
+        {
+            DefStatement def => $"{Keywords.Def} {TypeText(def.Type)} {def.Name} {Operand(def.Value)}",
+            SetStatement set => $"{Keywords.Set} {set.Name} {Operand(set.Value)}",
+            ReturnStatement { Value: null } => $"{Keywords.Return} {PyropType.Void.Name}",
+            ReturnStatement { Value: { } value } => $"{Keywords.Return} {Operand(value)}",
+            WriteStatement write => $"{WriteKeyword(write)} {Operand(write.Value)}",
+            ExitStatement exit => $"{Keywords.Exit} {Operand(exit.Code)}",
+            BreakStatement => Keywords.Break,
+            ContinueStatement => Keywords.Continue,
+            CallStatement call => Bare(call.Call),
+            UseStatement use => $"{Keywords.Use} {use.Name} {TextForm.Quote(use.Path)}",
+            ImportStatement import => $"{Keywords.Import} {Keywords.From} {import.Module} {import.Name}",
+            RecordStatement record => RecordHeader(record.Record),
+            ChoiceStatement choice => ChoiceHeader(choice.Choice),
+            _ => throw new InvalidOperationException($"Unknown statement {statement.GetType().Name}."),
+        };
+
+        private static string WriteKeyword(WriteStatement write) => (write.ToStandardError, write.AppendNewLine) switch
+        {
+            (false, false) => Keywords.Write,
+            (false, true) => Keywords.WriteLine,
+            (true, false) => Keywords.WriteError,
+            (true, true) => Keywords.WriteErrorLine,
+        };
+
+        private string Header(FunctionSignature signature) =>
+            string.Join(' ', [
+                .. signature.IsExported ? [Keywords.Export] : Array.Empty<string>(),
+                Keywords.Function,
+                TypeText(signature.ReturnType),
+                signature.Name,
+                .. signature.Parameters.SelectMany(parameter => new[] { TypeText(parameter.Type), parameter.Name }),
+            ]);
+
+        private string RecordHeader(RecordType record) =>
+            string.Join(' ', [
+                .. record.IsExported ? [Keywords.Export] : Array.Empty<string>(),
+                Keywords.Record,
+                record.Name,
+                .. record.Fields.SelectMany(field => new[] { TypeText(field.Type), field.Name }),
+            ]);
+
+        private static string ChoiceHeader(ChoiceType choice) =>
+            string.Join(' ', [
+                .. choice.IsExported ? [Keywords.Export] : Array.Empty<string>(),
+                Keywords.Choice,
+                choice.Name,
+                .. choice.Variants.Select(variant => variant.Name),
+                Keywords.End,
+            ]);
+
+        private string TypeText(PyropType type)
+        {
+            if (!type.DeclaredTypes.Any())
+            {
+                return type.Name;
+            }
+
+            var builder = new StringBuilder();
+            AppendType(builder, type);
+            return builder.ToString();
+        }
+
+        private void AppendType(StringBuilder builder, PyropType type)
+        {
+            switch (type)
+            {
+                case DeclaredType declared:
+                    builder.Append(DeclaredText(declared));
+                    break;
+                case ConstructedType constructed:
+                    builder.Append(constructed.Constructor.Name);
+                    foreach (var argument in constructed.Arguments)
+                    {
+                        builder.Append(' ');
+                        AppendType(builder, argument);
+                    }
+
+                    break;
+                default:
+                    builder.Append(type.Name);
+                    break;
+            }
+        }
+
+        private string DeclaredText(DeclaredType declared)
+        {
+            if (names is null || declared.Module == names.Module || names.FindType(declared.Name) == declared)
+            {
+                return declared.Name;
+            }
+
+            var use = names.Uses.Values.FirstOrDefault(candidate => candidate.Target.Module == declared.Module);
+            return use is null ? declared.Name : $"{Keywords.From} {use.Name} {declared.Name}";
+        }
+
+        private string Operand(Expression expression)
+        {
+            var builder = new StringBuilder();
+            AppendOperand(builder, expression);
+            return builder.ToString();
+        }
+
+        private string Bare(Expression expression)
+        {
+            var builder = new StringBuilder();
+            AppendBare(builder, expression);
+            return builder.ToString();
+        }
+
+        private void AppendOperand(StringBuilder builder, Expression expression)
+        {
+            if (expression is BuiltinCallExpression { Arguments.Count: > 0 } or FunctionCallExpression { Arguments.Count: > 0 }
+                or ConstructExpression { Arguments.Count: > 0 } or ConvertExpression or EmptyExpression or ListOfExpression
+                or GetFieldExpression or WithFieldExpression or AttemptExpression or NoneExpression)
+            {
+                builder.Append('(');
+                AppendBare(builder, expression);
+                builder.Append(')');
+                return;
+            }
+
+            AppendBare(builder, expression);
+        }
+
+        private void AppendBare(StringBuilder builder, Expression expression)
+        {
+            switch (expression)
+            {
+                case LiteralExpression { Value: StringValue text }:
+                    builder.Append(TextForm.Quote(text.Value));
+                    break;
+                case LiteralExpression literal:
+                    builder.Append(literal.Value.ToText());
+                    break;
+                case VariableExpression variable:
+                    builder.Append(variable.Name);
+                    break;
+                case BuiltinCallExpression call:
+                    AppendApplied(builder, call.Operation.Name, call.Arguments);
+                    break;
+                case FunctionCallExpression call:
+                    AppendApplied(builder, Callee(call.Module, call.Function.Name), call.Arguments);
+                    break;
+                case ConstructExpression construct:
+                    AppendApplied(builder, Callee(construct.Module, construct.Record.Name), construct.Arguments);
+                    break;
+                case ConvertExpression convert:
+                    builder.Append(Keywords.Convert).Append(' ').Append(TypeText(convert.Target)).Append(' ');
+                    AppendOperand(builder, convert.Operand);
+                    break;
+                case EmptyExpression empty:
+                    builder.Append(Keywords.Empty).Append(' ').Append(TypeText(empty.Type));
+                    break;
+                case ListOfExpression list:
+                    AppendApplied(builder, $"{Keywords.ListOf} {TypeText(list.ElementType)}", list.Items);
+                    builder.Append(' ').Append(Keywords.End);
+                    break;
+                case GetFieldExpression read:
+                    AppendApplied(builder, $"{Keywords.GetField} {read.Field}", [read.Record]);
+                    break;
+                case WithFieldExpression change:
+                    AppendApplied(builder, $"{Keywords.WithField} {change.Field}", [change.Record, change.Value]);
+                    break;
+                case VariantExpression variant:
+                    builder.Append(Callee(variant.Module, variant.Variant.Name));
+                    break;
+                case AttemptExpression attempt:
+                    AppendApplied(builder, Keywords.Attempt, [attempt.Operation]);
+                    break;
+                case NoneExpression none:
+                    builder.Append(Keywords.None).Append(' ').Append(TypeText(none.ContentType));
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown expression {expression.GetType().Name}.");
+            }
+        }
+
+        private static string Callee(string? module, string name) =>
+            module is null ? name : $"{Keywords.From} {module} {name}";
+
+        private void AppendApplied(StringBuilder builder, string name, IReadOnlyList<Expression> arguments)
+        {
+            builder.Append(name);
+            foreach (var argument in arguments)
+            {
+                builder.Append(' ');
+                AppendOperand(builder, argument);
+            }
+        }
+
+        private void Line(int depth, string text)
+        {
+            for (var level = 0; level < depth; level++)
+            {
+                output.Append(Indent);
+            }
+
+            output.Append(text).Append('\n');
+        }
     }
 }

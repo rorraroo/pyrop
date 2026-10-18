@@ -4,7 +4,7 @@ public class TypeCheckerTests
 {
     [Theory]
     [InlineData("def int a 0\nset a \"text\"", "Cannot set int variable")]
-    [InlineData("def int a \"text\"", "Cannot initialize int variable 'a' with a string value")]
+    [InlineData("def int a \"text\"", "Cannot initialize int variable 'a' with a value of type string")]
     [InlineData("def int a add a 1", "Undeclared variable 'a'")]
     [InlineData("write_line add 1 2.0", "'add' cannot take int float")]
     [InlineData("write_line convert int true", "Cannot convert bool to int")]

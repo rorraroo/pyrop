@@ -6,13 +6,16 @@ using Pyrop.Syntax;
 
 namespace Pyrop;
 
-public sealed record InspectedProgram(SyntaxTree? Tree, PyropException? Error);
+public sealed record InspectedProgram(SyntaxTree? Tree, PyropException? Error, string? Text);
+
+public sealed record AnalyzedSource(IReadOnlyList<Token> Tokens, ModuleNamespace Names, IReadOnlyList<Statement> Statements, SourcePosition? StoppedAt);
 
 public enum InputStatus
 {
     Ready,
     Incomplete,
     AwaitingElse,
+    AwaitingFields,
 }
 
 public sealed class PyropSession
@@ -20,9 +23,9 @@ public sealed class PyropSession
     private readonly Interpreter _interpreter;
     private readonly ISourceStore _store;
     private readonly Dictionary<string, string> _sources = new();
-    private FunctionTable _functions = FunctionTable.Empty;
+    private ModuleNamespace? _names;
     private IReadOnlyDictionary<string, PyropType> _globals = new Dictionary<string, PyropType>();
-    private HashSet<string> _included = new(SourceLoader.PathComparer);
+    private Dictionary<string, LoadedModule> _modules = new(SourceLoader.PathComparer);
     private string? _lastInput;
 
     public PyropSession(LineInput input, IProgramOutput output, HostContext? host = null, ISourceStore? store = null)
@@ -36,6 +39,18 @@ public sealed class PyropSession
     {
     }
 
+    internal int NestingLimit
+    {
+        get => _interpreter.NestingLimit;
+        set => _interpreter.NestingLimit = value;
+    }
+
+    internal int CollectionLimit
+    {
+        get => _interpreter.CollectionLimit;
+        set => _interpreter.CollectionLimit = value;
+    }
+
     public InputStatus Probe(string source) => LargeStack.Run(() => ProbeOnCurrentThread(source));
 
     public int? Run(string source, string? sourcePath = null, string? sourceFullPath = null) =>
@@ -46,6 +61,9 @@ public sealed class PyropSession
 
     public InspectedProgram Inspect(string source, string sourcePath) => LargeStack.Run(() => InspectOnCurrentThread(source, sourcePath));
 
+    public AnalyzedSource? Analyze(string source, string sourcePath, string? sourceFullPath = null) =>
+        LargeStack.Run(() => AnalyzeOnCurrentThread(source, sourcePath, sourceFullPath));
+
     public string? SourceText(string? sourceName) =>
         sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
 
@@ -53,9 +71,10 @@ public sealed class PyropSession
     {
         try
         {
-            var parsed = Parse(source, null, null);
-            return parsed.Tree.Statements.Count > 0 && EndsWithOpenIf(parsed.Tree.Statements[^1])
-                ? InputStatus.AwaitingElse
+            var statements = Parse(source, null, null).Program.Main.Tree.Statements;
+            return statements.Count == 0 ? InputStatus.Ready
+                : statements[^1] is RecordStatement ? InputStatus.AwaitingFields
+                : EndsWithOpenIf(statements[^1]) ? InputStatus.AwaitingElse
                 : InputStatus.Ready;
         }
         catch (PyropException exception) when (exception.IsIncompleteInput)
@@ -70,14 +89,35 @@ public sealed class PyropSession
 
     private IReadOnlyList<SourceFile> CheckOnCurrentThread(string source, string sourcePath, string? sourceFullPath)
     {
+        sourcePath = DisplayNameOf(sourcePath, sourceFullPath);
         _sources[sourcePath] = source;
         var parsed = Parse(source, sourcePath, sourceFullPath);
-        TypeChecker.Check(parsed.Tree, _globals);
+        TypeChecker.Check(parsed.Program, _globals);
         return parsed.Files;
     }
 
+    private AnalyzedSource? AnalyzeOnCurrentThread(string source, string sourcePath, string? sourceFullPath)
+    {
+        sourcePath = DisplayNameOf(sourcePath, sourceFullPath);
+        _sources[sourcePath] = source;
+        try
+        {
+            var tokens = Lexer.Tokenize(source, sourcePath);
+            var parsed = Parse(source, sourcePath, sourceFullPath, untilError: true, parsesModules: false);
+            return new AnalyzedSource(tokens, parsed.Names, parsed.Program.Main.Tree.Statements, parsed.ParseError?.Errors[0].Position);
+        }
+        catch (PyropException)
+        {
+            return null;
+        }
+    }
+
+    private static InspectedProgram Inspected(SyntaxTree tree, ModuleNamespace names, PyropException? error) =>
+        new(tree, error, TreePrinter.Print(tree, names));
+
     private InspectedProgram InspectOnCurrentThread(string source, string sourcePath)
     {
+        sourcePath = DisplayNameOf(sourcePath, null);
         _sources[sourcePath] = source;
         ParsedInput parsed;
         try
@@ -86,22 +126,23 @@ public sealed class PyropSession
         }
         catch (PyropException exception)
         {
-            return new InspectedProgram(null, exception);
+            return new InspectedProgram(null, exception, null);
         }
 
+        var tree = parsed.Program.Main.Tree;
         if (parsed.ParseError is { } parseError)
         {
-            return new InspectedProgram(parsed.Tree, parseError);
+            return Inspected(tree, parsed.Names, parseError);
         }
 
         try
         {
-            TypeChecker.Check(parsed.Tree, _globals);
-            return new InspectedProgram(parsed.Tree, null);
+            TypeChecker.Check(parsed.Program, _globals);
+            return Inspected(tree, parsed.Names, null);
         }
         catch (PyropException exception)
         {
-            return new InspectedProgram(parsed.Tree, exception);
+            return Inspected(tree, parsed.Names, exception);
         }
     }
 
@@ -113,17 +154,22 @@ public sealed class PyropSession
         }
         else
         {
+            sourcePath = DisplayNameOf(sourcePath, sourceFullPath);
             _sources[sourcePath] = source;
         }
 
         var parsed = Parse(source, sourcePath, sourceFullPath);
-        var check = TypeChecker.Check(parsed.Tree, _globals);
-        _functions = parsed.Functions;
+        var check = TypeChecker.Check(parsed.Program, _globals);
+        _names = parsed.Names;
         _globals = check.Globals;
-        _included = parsed.Included;
+        foreach (var module in parsed.Loaded)
+        {
+            _modules[module.Module.FullPath!] = module;
+        }
+
         try
         {
-            return _interpreter.Execute(parsed.Tree, check);
+            return _interpreter.Execute(parsed.Program, check);
         }
         catch (Exception exception) when (exception is not PyropException)
         {
@@ -132,41 +178,60 @@ public sealed class PyropSession
     }
 
     private sealed record ParsedInput(
-        SyntaxTree Tree, FunctionTable Functions, HashSet<string> Included, IReadOnlyList<SourceFile> Files, PyropException? ParseError = null);
+        ParsedProgram Program,
+        ModuleNamespace Names,
+        IReadOnlyList<LoadedModule> Loaded,
+        IReadOnlyList<SourceFile> Files,
+        PyropException? ParseError = null);
 
-    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath, bool untilError = false)
+    private string DisplayNameOf(string sourcePath, string? sourceFullPath)
     {
-        var included = new HashSet<string>(_included, SourceLoader.PathComparer);
+        try
+        {
+            return _store.DisplayNameOf(sourceFullPath ?? Path.GetFullPath(sourcePath));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+        {
+            return sourcePath;
+        }
+    }
+
+    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath, bool untilError = false, bool parsesModules = true)
+    {
         var baseDirectory = Environment.CurrentDirectory;
+        string? fullPath = null;
         if (sourcePath is not null)
         {
-            var fullPath = sourceFullPath ?? Path.GetFullPath(sourcePath);
-            included.Add(fullPath);
+            fullPath = sourceFullPath ?? Path.GetFullPath(sourcePath);
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
 
+        var existing = _names ?? ModuleNamespace.For(new Module(fullPath, sourcePath ?? "input"));
         var loader = new SourceLoader(_store);
-        var includes = new IncludeContext(loader, baseDirectory, included);
         try
         {
             var tokens = Lexer.Tokenize(source, sourcePath);
-            var signatures = SignatureScanner.Scan(tokens, _functions, includes);
-            foreach (var signature in signatures.Where(signature => _globals.ContainsKey(signature.Name)))
+            var scan = SignatureScanner.Scan(
+                tokens, existing, new ModuleLoading(loader, baseDirectory, _modules), _globals.Keys.ToHashSet());
+
+            PyropException? parseError = null;
+            SyntaxTree tree;
+            if (untilError)
             {
-                throw new PyropException(
-                    ErrorStage.Parse,
-                    $"'{signature.Name}' is already a global variable and cannot be used as a function name.",
-                    signature.Position);
+                (tree, parseError) = Parser.ParseUntilError(tokens, scan.Names);
+            }
+            else
+            {
+                tree = Parser.Parse(tokens, scan.Names);
             }
 
-            var functions = _functions.With(signatures);
-            if (!untilError)
-            {
-                return new ParsedInput(Parser.Parse(tokens, functions, includes), functions, included, [.. loader.Files]);
-            }
-
-            var (tree, error) = Parser.ParseUntilError(tokens, functions, includes);
-            return new ParsedInput(tree, functions, included, [.. loader.Files], error);
+            var modules = parseError is null && parsesModules
+                ? scan.Loaded
+                    .Select(module => new ModuleTree(module.Module, Parser.Parse(module.File.Tokens, module.Names, reportsIncompleteInput: false)))
+                    .ToList()
+                : [];
+            var program = new ParsedProgram(modules, new ModuleTree(scan.Names.Module, tree));
+            return new ParsedInput(program, scan.Names, scan.Loaded, [.. loader.Files], parseError);
         }
         finally
         {
@@ -181,7 +246,10 @@ public sealed class PyropSession
     {
         IfStatement { Else: null } => true,
         IfStatement { Else: { } otherwise } => EndsWithOpenIf(otherwise),
+        IfSomeStatement { Else: null } => true,
+        IfSomeStatement { Else: { } otherwise } => EndsWithOpenIf(otherwise),
         WhileStatement loop => EndsWithOpenIf(loop.Body),
+        ForStatement loop => EndsWithOpenIf(loop.Body),
         FunctionStatement function => EndsWithOpenIf(function.Body),
         WithStyleStatement styled => EndsWithOpenIf(styled.Body),
         _ => false,

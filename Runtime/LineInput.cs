@@ -8,6 +8,8 @@ public sealed class LineInput(TextReader reader)
     private bool _hasPending;
     private bool _started;
 
+    public bool HasPendingLine => _hasPending;
+
     public string? ReadLine()
     {
         if (!_hasPending)

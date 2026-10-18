@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Pyrop.Runtime;
 
 public sealed record TypeConstructor(string Name, int Arity);
@@ -45,14 +47,33 @@ public abstract class PyropType : IEquatable<PyropType>
                 return true;
             case ConstructedType pattern when actual is ConstructedType constructed && pattern.Constructor == constructed.Constructor:
                 return pattern.Arguments.Zip(constructed.Arguments).All(pair => pair.First.TryMatch(pair.Second, bindings));
+            case DeclaredType declared:
+                return declared == actual;
             default:
                 return false;
         }
     }
 
+    public IEnumerable<TypeParameter> TypeParameters => this switch
+    {
+        TypeParameter parameter => [parameter],
+        ConstructedType constructed => constructed.Arguments.SelectMany(argument => argument.TypeParameters),
+        _ => [],
+    };
+
+    public IEnumerable<DeclaredType> DeclaredTypes => this switch
+    {
+        DeclaredType declared => [declared],
+        ConstructedType constructed => constructed.Arguments.SelectMany(argument => argument.DeclaredTypes),
+        _ => [],
+    };
+
+    public virtual string NameQualifying(IReadOnlySet<DeclaredType> ambiguous) => Name;
+
     public PyropType Substitute(IReadOnlyDictionary<TypeParameter, PyropType> bindings) => this switch
     {
         TypeParameter parameter => bindings.GetValueOrDefault(parameter, parameter),
+        DeclaredType => this,
         ConstructedType { Arguments.Count: 0 } => this,
         ConstructedType constructed => new ConstructedType(
             constructed.Constructor,
@@ -82,13 +103,55 @@ public sealed class ConstructedType : PyropType
 
     public IReadOnlyList<PyropType> Arguments { get; }
 
-    public override string Name =>
-        Arguments.Count == 0 ? Constructor.Name : $"{Constructor.Name} {string.Join(" ", Arguments.Select(argument => argument.Name))}";
+    public override string Name
+    {
+        get
+        {
+            if (Arguments.Count == 0)
+            {
+                return Constructor.Name;
+            }
+
+            return NameQualifying(NoAmbiguity);
+        }
+    }
+
+    private static readonly IReadOnlySet<DeclaredType> NoAmbiguity = new HashSet<DeclaredType>();
+
+    public override string NameQualifying(IReadOnlySet<DeclaredType> ambiguous)
+    {
+        if (Arguments.Count == 0)
+        {
+            return Constructor.Name;
+        }
+
+        var builder = new StringBuilder();
+        AppendName(builder, ambiguous);
+        return builder.ToString();
+    }
+
+    private void AppendName(StringBuilder builder, IReadOnlySet<DeclaredType> ambiguous)
+    {
+        builder.Append(Constructor.Name);
+        foreach (var argument in Arguments)
+        {
+            builder.Append(' ');
+            if (argument is ConstructedType constructed)
+            {
+                constructed.AppendName(builder, ambiguous);
+            }
+            else
+            {
+                builder.Append(argument.NameQualifying(ambiguous));
+            }
+        }
+    }
 
     public override bool IsConcrete => Arguments.All(argument => argument.IsConcrete);
 
     public override bool Equals(PyropType? other) =>
-        other is ConstructedType constructed
+        ReferenceEquals(this, other)
+        || other is ConstructedType constructed
         && Constructor == constructed.Constructor
         && Arguments.SequenceEqual(constructed.Arguments);
 
@@ -121,11 +184,54 @@ public static class PyropTypes
     public static IReadOnlyList<PyropType> ValueTypes { get; } =
         [PyropType.Int, PyropType.Float, PyropType.String, PyropType.Bool];
 
+    public static TypeConstructor List { get; } = new("list", 1);
+
+    public static TypeConstructor Map { get; } = new("map", 2);
+
+    public static TypeConstructor Option { get; } = new("option", 1);
+
+    public static IReadOnlyList<PyropType> MapKeyTypes { get; } = [PyropType.Int, PyropType.String, PyropType.Bool];
+
     public static IReadOnlyDictionary<string, TypeConstructor> ValueConstructors { get; } =
-        ValueTypes.Cast<ConstructedType>().Select(type => type.Constructor).ToDictionary(constructor => constructor.Name);
+        ValueTypes.Cast<ConstructedType>()
+            .Select(type => type.Constructor)
+            .Append(List)
+            .Append(Map)
+            .Append(Option)
+            .ToDictionary(constructor => constructor.Name);
 
     public static IEnumerable<string> Names => ValueConstructors.Keys.Append(PyropType.Void.Name);
 
-    public static string DescribeValueTypes(string conjunction) =>
-        $"{string.Join(", ", ValueTypes.SkipLast(1).Select(type => type.Name))} {conjunction} {ValueTypes[^1].Name}";
+    public static PyropType ListOf(PyropType element) => new ConstructedType(List, [element]);
+
+    public static PyropType MapOf(PyropType key, PyropType value) => new ConstructedType(Map, [key, value]);
+
+    public static PyropType OptionOf(PyropType content) => new ConstructedType(Option, [content]);
+
+    public static bool IsList(PyropType type) => type is ConstructedType constructed && constructed.Constructor == List;
+
+    public static bool IsMap(PyropType type) => type is ConstructedType constructed && constructed.Constructor == Map;
+
+    public static bool IsOption(PyropType type) => type is ConstructedType constructed && constructed.Constructor == Option;
+
+    public static bool IsCollection(PyropType type) => IsList(type) || IsMap(type);
+
+    public static bool IsMapKey(PyropType type) => MapKeyTypes.Contains(type) || type is ChoiceType;
+
+    public static IReadOnlyList<string> NamesOf(params PyropType[] types)
+    {
+        var ambiguous = types
+            .SelectMany(type => type.DeclaredTypes)
+            .Distinct()
+            .GroupBy(declared => declared.Name)
+            .Where(group => group.Count() > 1)
+            .SelectMany(group => group)
+            .ToHashSet();
+        return types.Select(type => type.NameQualifying(ambiguous)).ToList();
+    }
+
+    public static string DescribeMapKeyTypes() => Describe([.. MapKeyTypes.Select(type => type.Name), "a choice"], "or");
+
+    private static string Describe(IReadOnlyList<string> names, string conjunction) =>
+        $"{string.Join(", ", names.SkipLast(1))} {conjunction} {names[^1]}";
 }

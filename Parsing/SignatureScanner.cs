@@ -3,61 +3,502 @@ using Pyrop.Runtime;
 
 namespace Pyrop.Parsing;
 
+public sealed record ScanResult(ModuleNamespace Names, IReadOnlyList<LoadedModule> Loaded);
+
 public static class SignatureScanner
 {
-    public static IReadOnlyList<FunctionSignature> Scan(IReadOnlyList<Token> tokens, FunctionTable existing, IncludeContext? includes = null)
+    public static ScanResult Scan(
+        IReadOnlyList<Token> tokens,
+        ModuleNamespace existing,
+        ModuleLoading? loading = null,
+        IReadOnlyCollection<string>? globals = null)
     {
-        var scan = new ScanState(existing, includes);
-        scan.ScanFile(tokens, includes?.BaseDirectory, reportsIncompleteInput: true);
-        return scan.Signatures;
+        var scan = new ScanState(loading);
+        var names = scan.ScanModule(tokens, existing, loading?.BaseDirectory, isUsedModule: false, globals ?? []);
+        return new ScanResult(names, scan.Loaded);
     }
 
-    private sealed class ScanState(FunctionTable existing, IncludeContext? includes)
+    private sealed class ScanState(ModuleLoading? loading)
     {
-        private readonly HashSet<string> _names = new();
-        private readonly HashSet<string> _visited = new(includes?.Included ?? [], SourceLoader.PathComparer);
+        private readonly List<Module> _inProgress = [];
+        private readonly Dictionary<string, LoadedModule> _scanned = new(SourceLoader.PathComparer);
 
-        public List<FunctionSignature> Signatures { get; } = new();
+        public List<LoadedModule> Loaded { get; } = [];
 
-        public void ScanFile(IReadOnlyList<Token> tokens, string? directory, bool reportsIncompleteInput)
+        public ModuleNamespace ScanModule(
+            IReadOnlyList<Token> tokens,
+            ModuleNamespace existing,
+            string? directory,
+            bool isUsedModule,
+            IReadOnlyCollection<string> globals)
         {
-            var cursor = new TokenCursor(tokens, reportsIncompleteInput);
+            var reportsIncompleteInput = !isUsedModule;
+            _inProgress.Add(existing.Module);
+            try
+            {
+                var failures = new ModuleFailures();
+                var uses = ScanUses(new TokenCursor(tokens, reportsIncompleteInput), existing, directory, failures);
+                var imports = ScanImports(
+                    new TokenCursor(tokens, reportsIncompleteInput), existing.With([], uses, []).WithFailures(failures), failures);
+                var (declarations, choiceDeclarations) = ScanTypeNames(new TokenCursor(tokens, reportsIncompleteInput), existing);
+                var records = declarations.Where(declaration => declaration.IsNew).Select(declaration => declaration.Record).ToList();
+                var choices = choiceDeclarations.Where(declaration => declaration.IsNew).Select(declaration => declaration.Choice).ToList();
+                var typeNames = existing.With([], uses, imports, records, choices).WithFailures(failures);
+                ScanRecordFields(new TokenCursor(tokens, reportsIncompleteInput), declarations, typeNames);
+                RecordDeclarations.CheckSelfContainment(records);
+                var functions = ScanHeaders(new TokenCursor(tokens, reportsIncompleteInput), typeNames);
+                if (isUsedModule)
+                {
+                    RecordDeclarations.CheckExposure(existing.Module, records, functions);
+                }
+
+                CheckClashes(existing, functions, records, choices, uses, imports, globals, failures);
+                return existing.With(functions, uses, imports, records, choices).WithFailures(failures);
+            }
+            finally
+            {
+                _inProgress.RemoveAt(_inProgress.Count - 1);
+            }
+        }
+
+        private List<ModuleUse> ScanUses(TokenCursor cursor, ModuleNamespace existing, string? directory, ModuleFailures failures)
+        {
+            var uses = new List<ModuleUse>();
+            var seen = new HashSet<string>();
             while (!cursor.IsAtEnd)
             {
                 var token = cursor.Advance();
-                if (token.IsWord(Keywords.Function))
+                if (!token.IsWord(Keywords.Use) || cursor.Current.Kind != TokenKind.Word || cursor.Peek(1).Kind != TokenKind.String)
                 {
-                    AddSignature(ReadHeader(cursor, existing));
+                    continue;
                 }
-                else if (includes is not null && directory is not null && token.IsWord(Keywords.Include) && cursor.Current.Kind == TokenKind.String)
+
+                if (loading is null || directory is null)
                 {
-                    var path = cursor.Advance();
-                    var file = includes.Loader.Load(path.Text, directory, path.Position);
-                    if (_visited.Add(file.FullPath))
+                    throw cursor.Error($"'{Keywords.Use}' is not available here.", token);
+                }
+
+                var nameToken = cursor.Advance();
+                var pathToken = cursor.Advance();
+                try
+                {
+                    if (Keywords.IsReserved(nameToken.Text))
                     {
-                        ScanFile(file.Tokens, file.Directory, reportsIncompleteInput: false);
+                        throw cursor.Error($"'{nameToken.Text}' is a reserved word and cannot be used as a module name.", nameToken);
                     }
+
+                    if (!seen.Add(nameToken.Text))
+                    {
+                        throw cursor.Error($"Module name '{nameToken.Text}' is already used in this file.", nameToken);
+                    }
+
+                    var target = Load(cursor, pathToken, directory);
+                    if (existing.Uses.TryGetValue(nameToken.Text, out var earlier))
+                    {
+                        if (earlier.Target.Module == target.Module)
+                        {
+                            continue;
+                        }
+
+                        throw cursor.Error(
+                            $"Module name '{nameToken.Text}' already names {earlier.Target.Module.DisplayName}.", nameToken);
+                    }
+
+                    uses.Add(new ModuleUse(nameToken.Text, target, nameToken.Position, token));
+                }
+                catch (PyropException error)
+                {
+                    failures.Add(token, nameToken.Text, error);
+                }
+            }
+
+            return uses;
+        }
+
+        private LoadedModule Load(TokenCursor cursor, Token pathToken, string directory)
+        {
+            var fullPath = SourceLoader.Resolve(pathToken.Text, directory, pathToken.Position);
+            if (loading!.Loaded.TryGetValue(fullPath, out var loaded) || _scanned.TryGetValue(fullPath, out loaded))
+            {
+                return loaded;
+            }
+
+            var cycleStart = _inProgress.FindIndex(module =>
+                module.FullPath is { } path && SourceLoader.PathComparer.Equals(path, fullPath));
+            if (cycleStart >= 0)
+            {
+                throw cursor.Error(CycleMessage(_inProgress[cycleStart..]), pathToken);
+            }
+
+            var file = loading.Loader.Load(pathToken.Text, directory, pathToken.Position);
+            var module = new Module(file.FullPath, file.DisplayName);
+            var names = ScanModule(file.Tokens, ModuleNamespace.For(module), file.Directory, isUsedModule: true, []);
+            var result = new LoadedModule(module, names, file);
+            _scanned[fullPath] = result;
+            Loaded.Add(result);
+            return result;
+        }
+
+        private static string CycleMessage(IReadOnlyList<Module> cycle)
+        {
+            var steps = cycle
+                .Select((module, index) => $"{module.DisplayName} uses {cycle[(index + 1) % cycle.Count].DisplayName}")
+                .ToList();
+            var described = steps.Count == 1 ? steps[0] : $"{string.Join(", ", steps.SkipLast(1))}, and {steps[^1]}";
+            return $"The modules use each other in a cycle: {described}. Move what they share into a module of its own.";
+        }
+
+        private sealed record RecordDeclaration(RecordType Record, Token Name, int FieldsStart, bool IsNew);
+
+        private sealed record ChoiceDeclaration(ChoiceType Choice, bool IsNew);
+
+        private static (List<RecordDeclaration> Records, List<ChoiceDeclaration> Choices) ScanTypeNames(
+            TokenCursor cursor, ModuleNamespace existing)
+        {
+            var records = new List<RecordDeclaration>();
+            var choices = new List<ChoiceDeclaration>();
+            Token? previous = null;
+            while (!cursor.IsAtEnd)
+            {
+                var token = cursor.Advance();
+                var exported = previous is not null && previous.IsWord(Keywords.Export);
+                var before = previous;
+                previous = token;
+                if (token.IsWord(Keywords.Record))
+                {
+                    RecordDeclarations.RejectKeywordAsName(token, cursor, RecordDeclarations.CanStartRecord(cursor));
+                    var nameToken = RecordDeclarations.ReadName(cursor);
+                    var name = nameToken.Text;
+                    CheckNewTypeName(nameToken, Keywords.Record, records, choices, existing, cursor);
+                    var earlier = existing.Records.GetValueOrDefault(name);
+                    var record = earlier ?? new RecordType(name, existing.Module, nameToken.Position, exported);
+                    records.Add(new RecordDeclaration(record, nameToken, cursor.Index, earlier is null));
+                }
+                else if (token.IsWord(Keywords.Choice))
+                {
+                    RecordDeclarations.RejectKeywordAsName(token, cursor, ChoiceDeclarations.CanStartChoice(cursor));
+                    var nameToken = ChoiceDeclarations.ReadName(cursor);
+                    CheckNewTypeName(nameToken, Keywords.Choice, records, choices, existing, cursor);
+                    var variants = ChoiceDeclarations.ReadVariants(cursor, token, nameToken.Text);
+                    choices.Add(DeclareChoice(nameToken, variants, exported, choices, existing, cursor));
+                    previous = null;
+                }
+            }
+
+            return (records, choices);
+        }
+
+        private static void CheckNewTypeName(
+            Token nameToken,
+            string kind,
+            List<RecordDeclaration> records,
+            List<ChoiceDeclaration> choices,
+            ModuleNamespace existing,
+            TokenCursor cursor)
+        {
+            var name = nameToken.Text;
+            var asRecord = records.Any(declaration => declaration.Record.Name == name);
+            var asChoice = choices.Any(declaration => declaration.Choice.Name == name);
+            if (kind == Keywords.Record ? asRecord : asChoice)
+            {
+                throw cursor.Error($"{(kind == Keywords.Record ? "Record" : "Choice")} '{name}' is already declared.", nameToken);
+            }
+
+            var other = kind == Keywords.Record
+                ? (asChoice || existing.Choices.ContainsKey(name) ? Keywords.Choice : null)
+                : (asRecord || existing.Records.ContainsKey(name) ? Keywords.Record : null);
+            if (other is not null)
+            {
+                throw cursor.Error($"'{name}' is already declared as a {other}.", nameToken);
+            }
+        }
+
+        private static ChoiceDeclaration DeclareChoice(
+            Token nameToken,
+            IReadOnlyList<Token> variants,
+            bool exported,
+            List<ChoiceDeclaration> choices,
+            ModuleNamespace existing,
+            TokenCursor cursor)
+        {
+            var name = nameToken.Text;
+            if (existing.Choices.GetValueOrDefault(name) is { } earlier)
+            {
+                if (!earlier.HasSameVariants(variants.Select(variant => variant.Text).ToList()))
+                {
+                    throw cursor.Error(
+                        $"Choice '{name}' was declared earlier in this session as {Keywords.Choice} {name} {earlier.DescribeVariants()} {Keywords.End}, and cannot be declared again with other variants.",
+                        nameToken);
+                }
+
+                return new ChoiceDeclaration(earlier, IsNew: false);
+            }
+
+            foreach (var variant in variants)
+            {
+                var owner = choices.Select(declaration => declaration.Choice.FindVariant(variant.Text)).FirstOrDefault(found => found is not null)
+                    ?? existing.OwnVariant(variant.Text);
+                if (owner is not null)
+                {
+                    throw cursor.Error($"Variant '{variant.Text}' already belongs to the choice '{owner.Choice.Name}'.", variant);
+                }
+            }
+
+            var choice = new ChoiceType(
+                name, existing.Module, nameToken.Position, exported, variants.Select(variant => (variant.Text, variant.Position)).ToList());
+            return new ChoiceDeclaration(choice, IsNew: true);
+        }
+
+        private static void ScanRecordFields(TokenCursor cursor, List<RecordDeclaration> declarations, ModuleNamespace names)
+        {
+            foreach (var declaration in declarations)
+            {
+                cursor.MoveTo(declaration.FieldsStart);
+                var record = declaration.Record;
+                var fields = RecordDeclarations.ReadFields(cursor, names, record.Name);
+                if (declaration.IsNew)
+                {
+                    record.Define(fields);
+                }
+                else if (!record.HasSameFields(fields))
+                {
+                    throw cursor.Error(
+                        $"Record '{record.Name}' was declared earlier in this session as {Keywords.Record} {record.Name} {record.DescribeFields()}, and cannot be declared again with other fields.",
+                        declaration.Name);
                 }
             }
         }
 
-        private void AddSignature(FunctionSignature signature)
+        private static List<FunctionSignature> ScanHeaders(TokenCursor cursor, ModuleNamespace names)
         {
-            if (existing.Contains(signature.Name) || !_names.Add(signature.Name))
+            var functions = new List<FunctionSignature>();
+            Token? previous = null;
+            while (!cursor.IsAtEnd)
             {
-                throw new PyropException(ErrorStage.Parse, $"Function '{signature.Name}' is already defined.", signature.Position);
+                var token = cursor.Advance();
+                var exported = previous is not null && previous.IsWord(Keywords.Export);
+                var before = previous;
+                previous = token;
+                if (!token.IsWord(Keywords.Function))
+                {
+                    continue;
+                }
+
+                RecordDeclarations.RejectKeywordAsName(token, cursor, cursor.Current.Kind == TokenKind.Word);
+
+                var signature = ReadHeader(cursor, names, exported);
+                if (names.Functions.Contains(signature.Name) || functions.Any(function => function.Name == signature.Name))
+                {
+                    throw new PyropException(ErrorStage.Parse, $"Function '{signature.Name}' is already defined.", signature.Position);
+                }
+
+                functions.Add(signature);
             }
 
-            Signatures.Add(signature);
+            return functions;
         }
+
+        private static List<ModuleImport> ScanImports(TokenCursor cursor, ModuleNamespace names, ModuleFailures failures)
+        {
+            var imports = new List<ModuleImport>();
+            var seen = new HashSet<string>();
+            while (!cursor.IsAtEnd)
+            {
+                var token = cursor.Advance();
+                if (!token.IsWord(Keywords.Import)
+                    || !cursor.Current.IsWord(Keywords.From)
+                    || cursor.Peek(1).Kind != TokenKind.Word
+                    || cursor.Peek(2).Kind != TokenKind.Word)
+                {
+                    continue;
+                }
+
+                var qualified = QualifiedNames.Read(cursor);
+                var name = qualified.Name.Text;
+                try
+                {
+                    var target = QualifiedNames.Resolve(names, qualified, cursor);
+                    if (target is ChoiceVariant variant)
+                    {
+                        throw cursor.Error(
+                            $"'{name}' is a variant of the choice '{variant.Choice.Name}'; import the choice with {Keywords.Import} {Keywords.From} {qualified.Module.Text} {variant.Choice.Name}, which imports all its variants.",
+                            qualified.Name);
+                    }
+
+                    if (!seen.Add(name))
+                    {
+                        throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
+                    }
+
+                    if (names.Imports.TryGetValue(name, out var earlier))
+                    {
+                        if (ReferenceEquals(earlier.Target, target))
+                        {
+                            continue;
+                        }
+
+                        throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
+                    }
+
+                    imports.Add(new ModuleImport(qualified.Module.Text, name, target, qualified.Name.Position, token));
+                }
+                catch (PyropException error)
+                {
+                    failures.Add(token, name, error);
+                }
+            }
+
+            return imports;
+        }
+
+        private static void CheckClashes(
+            ModuleNamespace existing,
+            List<FunctionSignature> functions,
+            List<RecordType> records,
+            List<ChoiceType> choices,
+            List<ModuleUse> uses,
+            List<ModuleImport> imports,
+            IReadOnlyCollection<string> globals,
+            ModuleFailures failures)
+        {
+            bool IsFunction(string name) => existing.Functions.Contains(name) || functions.Any(function => function.Name == name);
+            bool IsRecord(string name) => existing.Records.ContainsKey(name) || records.Any(record => record.Name == name);
+            bool IsChoice(string name) => existing.Choices.ContainsKey(name) || choices.Any(choice => choice.Name == name);
+            bool IsOwnVariant(string name) =>
+                existing.OwnVariant(name) is not null || choices.Any(choice => choice.FindVariant(name) is not null);
+            bool IsImportedVariant(string name) => existing.FindVariant(name) is { } variant && variant.Choice.Module != existing.Module;
+            bool IsModule(string name) => existing.Uses.ContainsKey(name) || uses.Any(use => use.Name == name);
+
+            foreach (var function in functions)
+            {
+                var message =
+                    existing.Uses.ContainsKey(function.Name) ? $"'{function.Name}' is a module name in this file and cannot also be a function name."
+                    : existing.Imports.ContainsKey(function.Name) || IsImportedVariant(function.Name) ? $"'{function.Name}' is imported in this file and cannot also be a function name."
+                    : existing.Records.ContainsKey(function.Name) ? $"'{function.Name}' is a record in this file and cannot also be a function name."
+                    : existing.Choices.ContainsKey(function.Name) ? $"'{function.Name}' is a choice in this file and cannot also be a function name."
+                    : existing.OwnVariant(function.Name) is not null ? $"'{function.Name}' is a variant in this file and cannot also be a function name."
+                    : globals.Contains(function.Name) ? $"'{function.Name}' is already a global variable and cannot be used as a function name."
+                    : null;
+                if (message is not null)
+                {
+                    throw Clash(message, function.Position);
+                }
+            }
+
+            foreach (var declared in records.Cast<DeclaredType>().Concat(choices))
+            {
+                var name = declared.Name;
+                var kind = declared is ChoiceType ? Keywords.Choice : Keywords.Record;
+                var message =
+                    IsFunction(name) ? $"'{name}' is a function of this file and cannot also name a {kind}."
+                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also name a {kind}."
+                    : existing.Imports.ContainsKey(name) || IsImportedVariant(name) ? $"'{name}' is imported in this file and cannot also name a {kind}."
+                    : existing.OwnVariant(name) is not null ? $"'{name}' is a variant in this file and cannot also name a {kind}."
+                    : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as a {kind} name."
+                    : null;
+                if (message is not null)
+                {
+                    throw Clash(message, declared.Position);
+                }
+            }
+
+            foreach (var variant in choices.SelectMany(choice => choice.Variants))
+            {
+                var name = variant.Name;
+                var message =
+                    IsFunction(name) ? $"'{name}' is a function of this file and cannot also be a variant."
+                    : IsRecord(name) ? $"'{name}' is a record of this file and cannot also be a variant."
+                    : IsChoice(name) ? $"'{name}' is a choice of this file and cannot also be a variant."
+                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also be a variant."
+                    : existing.Imports.ContainsKey(name) || IsImportedVariant(name) ? $"'{name}' is imported in this file and cannot also be a variant."
+                    : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as a variant."
+                    : null;
+                if (message is not null)
+                {
+                    throw Clash(message, variant.Position);
+                }
+            }
+
+            var importedNames = new HashSet<string>();
+            var importedVariants = new Dictionary<string, ChoiceVariant>();
+
+            string? ImportedVariantOwner(string name) =>
+                importedVariants.TryGetValue(name, out var variant) ? variant.Choice.Name
+                : IsImportedVariant(name) ? existing.FindVariant(name)?.Choice.Name
+                : null;
+
+            string? VariantClash(string name) =>
+                IsFunction(name) ? "a function of this file"
+                : IsRecord(name) ? "a record of this file"
+                : IsChoice(name) ? "a choice of this file"
+                : IsOwnVariant(name) ? "a variant of this file"
+                : IsModule(name) ? "a module name in this file"
+                : existing.Imports.ContainsKey(name) || importedNames.Contains(name) ? "already imported in this file"
+                : ImportedVariantOwner(name) is { } owner ? $"a variant of the imported choice '{owner}'"
+                : globals.Contains(name) ? "a global variable"
+                : null;
+
+            foreach (var import in imports)
+            {
+                var name = import.Name;
+                var message =
+                    IsFunction(name) ? $"'{name}' is a function of this file and cannot also be imported."
+                    : IsRecord(name) ? $"'{name}' is a record of this file and cannot also be imported."
+                    : IsChoice(name) ? $"'{name}' is a choice of this file and cannot also be imported."
+                    : IsOwnVariant(name) ? $"'{name}' is a variant of this file and cannot also be imported."
+                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also be imported."
+                    : ImportedVariantOwner(name) is { } owner ? $"'{name}' is a variant of the imported choice '{owner}' and cannot also be imported."
+                    : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as an imported name."
+                    : null;
+                var clashing = (import.Choice?.Variants ?? [])
+                    .Select(variant => (variant.Name, Reason: VariantClash(variant.Name)))
+                    .FirstOrDefault(found => found.Reason is not null);
+                if (message is null && clashing.Reason is not null)
+                {
+                    message = $"Importing '{name}' would also import its variant '{clashing.Name}', but '{clashing.Name}' is {clashing.Reason}.";
+                    failures.Add(import.Statement, clashing.Name, Clash(message, import.Position));
+                }
+
+                if (message is not null)
+                {
+                    failures.Add(import.Statement, name, Clash(message, import.Position));
+                    continue;
+                }
+
+                importedNames.Add(name);
+                foreach (var variant in import.Choice?.Variants ?? [])
+                {
+                    importedVariants[variant.Name] = variant;
+                }
+            }
+
+            foreach (var use in uses)
+            {
+                var message =
+                    IsFunction(use.Name) ? $"'{use.Name}' is a function of this file and cannot also name a module."
+                    : existing.Records.ContainsKey(use.Name) ? $"'{use.Name}' is a record of this file and cannot also name a module."
+                    : existing.Choices.ContainsKey(use.Name) ? $"'{use.Name}' is a choice of this file and cannot also name a module."
+                    : existing.OwnVariant(use.Name) is not null ? $"'{use.Name}' is a variant of this file and cannot also name a module."
+                    : existing.Imports.ContainsKey(use.Name) || IsImportedVariant(use.Name) ? $"'{use.Name}' is imported in this file and cannot also name a module."
+                    : globals.Contains(use.Name) ? $"'{use.Name}' is already a global variable and cannot be used as a module name."
+                    : null;
+                if (message is not null)
+                {
+                    failures.Add(use.Statement, use.Name, Clash(message, use.Position));
+                }
+            }
+        }
+
+        private static PyropException Clash(string message, SourcePosition position) =>
+            new(ErrorStage.Parse, message, position);
     }
 
-    public static FunctionSignature ReadHeader(TokenCursor cursor, FunctionTable functions)
+    public static FunctionSignature ReadHeader(TokenCursor cursor, ModuleNamespace names, bool isExported)
     {
-        var returnType = TypeReader.ReadReturnType(cursor);
+        var returnType = TypeReader.ReadReturnType(cursor, names);
 
         var nameToken = cursor.Current;
-        var name = cursor.ExpectIdentifier("function name", functions);
+        var name = cursor.ExpectIdentifier("function name", names);
 
         var parameters = new List<Parameter>();
         while (true)
@@ -67,14 +508,15 @@ public static class SignatureScanner
                 throw cursor.Error("A parameter cannot have type void.");
             }
 
-            if (!TypeReader.StartsValueType(cursor.Current))
+            if (!TypeReader.StartsValueType(cursor, names))
             {
                 break;
             }
 
-            var parameterType = TypeReader.ReadValueType(cursor, "parameter");
+            var parameterType = TypeReader.ReadValueType(cursor, names, "parameter");
+            RecordDeclarations.ExpectNameAfterRecordType(cursor, parameterType, "parameter");
             var parameterToken = cursor.Current;
-            var parameterName = cursor.ExpectIdentifier("parameter name", functions);
+            var parameterName = cursor.ExpectIdentifier("parameter name", names);
             if (parameterName == name)
             {
                 throw cursor.Error($"Parameter '{parameterName}' has the same name as its function.", parameterToken);
@@ -88,6 +530,6 @@ public static class SignatureScanner
             parameters.Add(new Parameter(parameterType, parameterName, parameterToken.Position));
         }
 
-        return new FunctionSignature(returnType, name, parameters, nameToken.Position);
+        return new FunctionSignature(returnType, name, parameters, nameToken.Position, names.Module, isExported);
     }
 }

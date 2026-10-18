@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using Pyrop.Checking;
+using Pyrop.Parsing;
 using Pyrop.Syntax;
 
 namespace Pyrop.Runtime;
@@ -13,16 +15,21 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     private readonly HostContext _host = host;
     private readonly RandomSource _random = new();
     private OutputStyle _style = OutputStyle.None;
-    private readonly Scope _globals = new(null);
-    private readonly Dictionary<string, FunctionStatement> _functions = new();
+    private readonly Dictionary<Module, Scope> _moduleScopes = new();
+    private readonly Dictionary<FunctionSignature, FunctionStatement> _functions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<AttemptExpression, PyropType> _attempts = new(ReferenceEqualityComparer.Instance);
     private int _callDepth;
 
-    public int? Execute(SyntaxTree tree, CheckResult check)
+    internal int CollectionLimit { get; set; } = CollectionOperations.MaxCount;
+
+    internal int NestingLimit { get; set; } = ValueEquality.MaxNesting;
+
+    public int? Execute(ParsedProgram program, CheckResult check)
     {
         try
         {
-            ExecuteProgram(tree, check);
+            ExecuteProgram(program, check);
             return null;
         }
         catch (ExitSignal exit)
@@ -31,11 +38,19 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         }
     }
 
-    private void ExecuteProgram(SyntaxTree tree, CheckResult check)
+    private void ExecuteProgram(ParsedProgram program, CheckResult check)
     {
-        foreach (var function in tree.Functions)
+        foreach (var module in program.All)
         {
-            _functions[function.Signature.Name] = function;
+            if (!_moduleScopes.ContainsKey(module.Module))
+            {
+                _moduleScopes[module.Module] = new Scope(null);
+            }
+
+            foreach (var function in module.Tree.Functions)
+            {
+                _functions[function.Signature] = function;
+            }
         }
 
         foreach (var (call, overload) in check.Overloads)
@@ -43,13 +58,22 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
             _overloads[call] = overload;
         }
 
-        _callDepth = 0;
-        foreach (var statement in tree.Statements)
+        foreach (var (attempt, type) in check.Attempts)
         {
-            var result = ExecuteStatement(statement, _globals);
-            if (result.Kind != CompletionKind.Normal)
+            _attempts[attempt] = type;
+        }
+
+        _callDepth = 0;
+        foreach (var module in program.All)
+        {
+            var scope = _moduleScopes[module.Module];
+            foreach (var statement in module.Tree.Statements)
             {
-                throw Internal($"'{result.Kind}' escaped to the top level.", statement.Position);
+                var result = ExecuteStatement(statement, scope);
+                if (result.Kind != CompletionKind.Normal)
+                {
+                    throw Internal($"'{result.Kind}' escaped to the top level.", statement.Position);
+                }
             }
         }
     }
@@ -84,21 +108,34 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 }
 
                 return conditional.Else is null ? Completion.Normal : ExecuteStatement(conditional.Else, scope);
+            case IfSomeStatement unwrap:
+                return ExecuteIfSome(unwrap, scope);
             case WhileStatement loop:
                 return ExecuteWhile(loop, scope);
+            case ForStatement loop:
+                return ExecuteFor(loop, scope);
             case BreakStatement:
                 return new Completion(CompletionKind.Break);
             case ContinueStatement:
                 return new Completion(CompletionKind.Continue);
-            case FunctionStatement:
+            case FunctionStatement or UseStatement or ImportStatement or RecordStatement or ChoiceStatement:
                 return Completion.Normal;
             case ReturnStatement returnStatement:
                 return new Completion(
                     CompletionKind.Return,
                     returnStatement.Value is null ? null : Evaluate(returnStatement.Value, scope));
             case WriteStatement write:
-                var text = Evaluate(write.Value, scope).ToText();
-                _output.Write(write.AppendNewLine ? text + "\n" : text, _style);
+                var text = TextForm.Of(Evaluate(write.Value, scope), message => Runtime(message, write.Position), NestingLimit);
+                var line = write.AppendNewLine ? text + "\n" : text;
+                if (write.ToStandardError)
+                {
+                    _output.WriteError(line, _style);
+                }
+                else
+                {
+                    _output.Write(line, _style);
+                }
+
                 return Completion.Normal;
             case ExitStatement exit:
                 throw new ExitSignal(EvaluateExitCode(exit, scope));
@@ -108,17 +145,6 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return ExecuteBlock(block, new Scope(scope));
             case CallStatement call:
                 EvaluateCall(call.Call, scope);
-                return Completion.Normal;
-            case IncludeStatement include:
-                foreach (var inner in include.Included?.Statements ?? [])
-                {
-                    var result = ExecuteStatement(inner, scope);
-                    if (result.Kind != CompletionKind.Normal)
-                    {
-                        return result;
-                    }
-                }
-
                 return Completion.Normal;
             default:
                 throw Internal($"Unknown statement {statement.GetType().Name}.", statement.Position);
@@ -154,11 +180,65 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         return Completion.Normal;
     }
 
+    private Completion ExecuteIfSome(IfSomeStatement unwrap, Scope scope)
+    {
+        if (Evaluate(unwrap.Option, scope) is not OptionValue option)
+        {
+            throw Internal("The expression of an if_some did not evaluate to an option.", unwrap.Option.Position);
+        }
+
+        if (option.Content is not { } value)
+        {
+            return unwrap.Else is null ? Completion.Normal : ExecuteStatement(unwrap.Else, scope);
+        }
+
+        if (value.Type != unwrap.ValueType)
+        {
+            throw Internal(
+                $"Type mismatch unwrapping {value.Type.Name} into {unwrap.ValueType.Name} value '{unwrap.Name}'.", unwrap.Position);
+        }
+
+        var valueScope = new Scope(scope);
+        valueScope.Declare(unwrap.Name, unwrap.ValueType, value);
+        return ExecuteStatement(unwrap.Then, valueScope);
+    }
+
     private Completion ExecuteWhile(WhileStatement loop, Scope scope)
     {
         while (EvaluateCondition(loop.Condition, scope))
         {
             var result = ExecuteStatement(loop.Body, scope);
+            switch (result.Kind)
+            {
+                case CompletionKind.Break:
+                    return Completion.Normal;
+                case CompletionKind.Return:
+                    return result;
+            }
+        }
+
+        return Completion.Normal;
+    }
+
+    private Completion ExecuteFor(ForStatement loop, Scope scope)
+    {
+        if (Evaluate(loop.List, scope) is not ListValue list)
+        {
+            throw Internal("The list of a for loop did not evaluate to a list.", loop.List.Position);
+        }
+
+        foreach (var item in list.Items)
+        {
+            if (item.Type != loop.VariableType)
+            {
+                throw Internal(
+                    $"Type mismatch walking {loop.VariableType.Name} loop variable '{loop.Variable}' over {item.Type.Name}.",
+                    loop.Position);
+            }
+
+            var iteration = new Scope(scope);
+            iteration.Declare(loop.Variable, loop.VariableType, item);
+            var result = ExecuteStatement(loop.Body, iteration);
             switch (result.Kind)
             {
                 case CompletionKind.Break:
@@ -247,20 +327,124 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return Conversions.Convert(
                     Evaluate(convert.Operand, scope),
                     convert.Target,
-                    message => Runtime(message, convert.Position));
+                    message => Runtime(message, convert.Position),
+                    NestingLimit);
+            case EmptyExpression empty:
+                return PyropTypes.IsMap(empty.Type) ? MapValue.Empty(empty.Type)
+                    : PyropTypes.IsList(empty.Type) ? ListValue.Empty(empty.Type)
+                    : throw Internal($"'empty' of the non-collection type {empty.Type.Name}.", empty.Position);
+            case ListOfExpression list:
+                return CollectionOperations.ListOf(
+                    list.ElementType,
+                    list.Items.Select(item => Evaluate(item, scope)).ToList(),
+                    CollectionLimit,
+                    message => Runtime(message, list.Position));
+            case ConstructExpression construct:
+                return Construct(construct, scope);
+            case GetFieldExpression read:
+                return ReadField(read, scope);
+            case WithFieldExpression change:
+                return ChangeField(change, scope);
+            case VariantExpression variant:
+                return variant.Variant.Choice.ValueOf(variant.Variant.Index);
+            case AttemptExpression attempt:
+                return Attempt(attempt, scope);
+            case NoneExpression none:
+                return OptionValue.None(PyropTypes.OptionOf(none.ContentType));
             default:
                 throw Internal($"Unknown expression {expression.GetType().Name}.", expression.Position);
         }
     }
 
-    private Value? CallBuiltin(BuiltinCallExpression call, Scope scope)
+    private RecordValue Construct(ConstructExpression construct, Scope scope)
     {
-        if (!_overloads.TryGetValue(call, out var overload))
+        var fields = construct.Record.Fields;
+        var values = ImmutableArray.CreateBuilder<Value>(fields.Count);
+        for (var index = 0; index < fields.Count; index++)
         {
-            throw Internal($"No overload was resolved for '{call.Operation.Name}'.", call.Position);
+            var value = Evaluate(construct.Arguments[index], scope);
+            if (value.Type != fields[index].Type)
+            {
+                throw Internal(
+                    $"Type mismatch constructing {construct.Record.Name}: field '{fields[index].Name}' is {fields[index].Type.Name}, found {value.Type.Name}.",
+                    construct.Arguments[index].Position);
+            }
+
+            values.Add(value);
         }
 
-        return overload.Implementation(new BuiltinInvocation(this, call, scope));
+        return new RecordValue(construct.Record, values.MoveToImmutable());
+    }
+
+    private Value ReadField(GetFieldExpression read, Scope scope)
+    {
+        var (record, index) = FieldOf(read.Record, read.Field, scope);
+        return record.Fields[index];
+    }
+
+    private RecordValue ChangeField(WithFieldExpression change, Scope scope)
+    {
+        var (record, index) = FieldOf(change.Record, change.Field, scope);
+        var value = Evaluate(change.Value, scope);
+        var field = record.Record.Fields[index];
+        if (value.Type != field.Type)
+        {
+            throw Internal($"Type mismatch setting {field.Type.Name} field '{field.Name}' to {value.Type.Name}.", change.Position);
+        }
+
+        return record.With(index, value);
+    }
+
+    private (RecordValue Record, int Index) FieldOf(Expression expression, string field, Scope scope)
+    {
+        if (Evaluate(expression, scope) is not RecordValue record || record.Record.IndexOf(field) is not (var index and >= 0))
+        {
+            throw Internal($"The field '{field}' was read from a value that has no such field.", expression.Position);
+        }
+
+        return (record, index);
+    }
+
+    private Value? CallBuiltin(BuiltinCallExpression call, Scope scope) =>
+        Overload(call).Implementation(new BuiltinInvocation(this, call, scope, null));
+
+    private BuiltinOverload Overload(BuiltinCallExpression call) =>
+        _overloads.TryGetValue(call, out var overload)
+            ? overload
+            : throw Internal($"No overload was resolved for '{call.Operation.Name}'.", call.Position);
+
+    private Value Attempt(AttemptExpression attempt, Scope scope)
+    {
+        if (!_attempts.TryGetValue(attempt, out var type))
+        {
+            throw Internal("No result type was resolved for an attempt.", attempt.Position);
+        }
+
+        var failure = new OperationFailure();
+        var operand = attempt.Operation is ConvertExpression converted ? Evaluate(converted.Operand, scope) : null;
+        Value? result;
+        try
+        {
+            result = attempt.Operation switch
+            {
+                BuiltinCallExpression call => Overload(call).Implementation(new BuiltinInvocation(this, call, scope, failure)),
+                ConvertExpression convert when operand is not null =>
+                    Conversions.Convert(
+                        operand, convert.Target, _ => new OperationFailed(failure), NestingLimit, message => Runtime(message, convert.Position)),
+                var other => throw Internal($"'attempt' of the unexpected expression {other.GetType().Name}.", other.Position),
+            };
+        }
+        catch (OperationFailed failed) when (failed.Failure == failure)
+        {
+            return type == PyropType.Bool ? BoolValue.False : OptionValue.None(type);
+        }
+
+        return result switch
+        {
+            null when type == PyropType.Bool => BoolValue.True,
+            { } value when PyropTypes.OptionOf(value.Type) == type => OptionValue.Some(value),
+            _ => throw Internal($"An attempt of type {type.Name} produced {result?.Type.Name ?? "no value"}.", attempt.Position),
+        };
     }
 
     private Value? CallFunction(FunctionCallExpression call, Scope scope)
@@ -273,12 +457,12 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
             throw Runtime($"Call depth limit of {MaxCallDepth} exceeded; check '{signature.Name}' for runaway recursion.", call.Position);
         }
 
-        if (!_functions.TryGetValue(signature.Name, out var function))
+        if (!_functions.TryGetValue(signature, out var function) || !_moduleScopes.TryGetValue(signature.Module, out var moduleScope))
         {
             throw Internal($"Function '{signature.Name}' is not registered.", call.Position);
         }
 
-        var functionScope = new Scope(_globals);
+        var functionScope = new Scope(moduleScope);
         for (var index = 0; index < arguments.Count; index++)
         {
             var parameter = signature.Parameters[index];
@@ -313,7 +497,8 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     private static PyropException Internal(string message, SourcePosition position) =>
         new(ErrorStage.Internal, message, position);
 
-    private sealed class BuiltinInvocation(Interpreter interpreter, BuiltinCallExpression call, Scope scope) : IBuiltinInvocation
+    private sealed class BuiltinInvocation(Interpreter interpreter, BuiltinCallExpression call, Scope scope, OperationFailure? failure)
+        : IBuiltinInvocation
     {
         private readonly Value?[] _arguments = new Value?[call.Arguments.Count];
 
@@ -330,7 +515,23 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
 
         public OutputStyle Style => interpreter._style;
 
-        public Exception Fail(string message) => Runtime(message, call.Position);
+        public int CollectionLimit => interpreter.CollectionLimit;
+
+        public int NestingLimit => interpreter.NestingLimit;
+
+        public bool IsAttempted => failure is not null;
+
+        public Exception Fail(string message) =>
+            failure is null ? Runtime(message, call.Position) : new OperationFailed(failure);
+
+        public Exception FailAtLimit(string message) => Runtime(message, call.Position);
+    }
+
+    private sealed class OperationFailure;
+
+    private sealed class OperationFailed(OperationFailure failure) : Exception
+    {
+        public OperationFailure Failure { get; } = failure;
     }
 
     private sealed class ExitSignal(int code) : Exception

@@ -16,7 +16,9 @@ public sealed class CliTests : IDisposable
         return path;
     }
 
-    private static (string Output, string Errors, int ExitCode) Pyrop(params string[] arguments)
+    private static (string Output, string Errors, int ExitCode) Pyrop(params string[] arguments) => PyropWithInput("", arguments);
+
+    private static (string Output, string Errors, int ExitCode) PyropWithInput(string input, params string[] arguments)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -32,11 +34,26 @@ public sealed class CliTests : IDisposable
 
         start.Environment.Remove("NO_COLOR");
         using var process = Process.Start(start)!;
+        process.StandardInput.Write(input);
         process.StandardInput.Close();
         var errors = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEnd();
         process.WaitForExit();
         return (output, errors.Result, process.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("if true write_line 1\n", "1\n")]
+    [InlineData("if true write_line 1", "1\n")]
+    [InlineData("write_line 7 record Point int x\n", "7\n")]
+    [InlineData("write_line add 1\n", "")]
+    public void TheReplRunsAnInputThatOnlyWaitsWhenInputEnds(string input, string expected)
+    {
+        var (output, errors, exitCode) = PyropWithInput(input, "--plain");
+
+        Assert.Equal("", errors);
+        Assert.Equal(0, exitCode);
+        Assert.EndsWith($"  ...> {expected}\n", output.Replace("\r\n", "\n"));
     }
 
     [Fact]
@@ -143,10 +160,89 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void ProgramErrorTextGoesToStandardErrorWithoutStyles()
+    {
+        var (output, errors, exitCode) = Pyrop(Script("write_line \"report\"\nwith_style \"danger\" write_error_line \"careful\"\nwrite_error \"x\""));
+
+        Assert.Equal("report\n", output);
+        Assert.Equal("careful\nx", errors);
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void PyropsMessagesFollowProgramErrorTextOnANewLine()
+    {
+        var (output, errors, exitCode) = Pyrop(Script("write \"partial\"\nwrite_error \"warn\"\nwrite_line divide 1 0"));
+
+        Assert.Equal("partial", output);
+        Assert.StartsWith("warn\nRuntime error ", errors);
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public void FinishedErrorLinesAreNotFollowedByABlankLine()
+    {
+        var (_, errors, _) = Pyrop(Script("write_error_line \"warn\"\nexit divide 1 0"));
+
+        Assert.StartsWith("warn\nRuntime error ", errors);
+    }
+
+    [Fact]
     public void RedirectedErrorsAreNotWrapped()
     {
         var (_, errors, _) = Pyrop(Script("with_style add 1 \"a\" write \"x\""));
 
         Assert.Contains("It accepts: int int, float float, string string.", errors.Split('\n')[0]);
+    }
+
+    [Fact]
+    public void ChooseWithPipedInputUsesTheNumberedForm()
+    {
+        var (output, errors, exitCode) = PyropWithInput(
+            "x\n2\n", Script("with_style \"info\" write_line choose \"Where?\" list_of string \"Hall\" \"Cellar\" end"));
+
+        Assert.Equal("", errors);
+        Assert.Equal("Where?\n1. Hall\n2. Cellar\nChoose a number from 1 to 2: Please choose a number from 1 to 2.\nChoose a number from 1 to 2: Cellar\n", output);
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void ChooseAtTheEndOfPipedInputIsARuntimeError()
+    {
+        var (output, errors, exitCode) = Pyrop(Script("write_line choose \"Where?\" list_of string \"Hall\" end"));
+
+        Assert.Equal("Where?\n1. Hall\nChoose number 1: ", output);
+        Assert.StartsWith("Runtime error ", errors);
+        Assert.Contains("'choose' reached the end of input.", errors);
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public void RedirectedWriteTablePadsColumns()
+    {
+        var (output, errors, exitCode) = Pyrop(
+            Script("with_style \"danger\" write_table list_of string \"Item\" \"Count\" end list_of list string list_of string \"lamp\" \"12\" end end"));
+
+        Assert.Equal("", errors);
+        Assert.Equal("Item  Count\nlamp  12\n", output);
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void TheLanguageServerAnswersOnStandardOutputOnly()
+    {
+        static string Framed(string body) => $"Content-Length: {body.Length}\r\n\r\n{body}";
+        var input =
+            Framed("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}""") +
+            Framed("""{"jsonrpc":"2.0","id":2,"method":"shutdown"}""") +
+            Framed("""{"jsonrpc":"2.0","method":"exit"}""");
+
+        var (output, errors, exitCode) = PyropWithInput(input, "--lsp");
+
+        Assert.Equal("", errors);
+        Assert.StartsWith("Content-Length: ", output);
+        Assert.Contains("\"serverInfo\":{\"name\":\"pyrop\"", output);
+        Assert.EndsWith("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":null}", output);
+        Assert.Equal(0, exitCode);
     }
 }

@@ -9,7 +9,7 @@ public class ParserTests
     private static SyntaxTree Parse(string source)
     {
         var tokens = Lexer.Tokenize(source);
-        return Parser.Parse(tokens, FunctionTable.Empty.With(SignatureScanner.Scan(tokens, FunctionTable.Empty)));
+        return Parser.Parse(tokens, SignatureScanner.Scan(tokens, ModuleNamespace.For(new Module(null, "test"))).Names);
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class ParserTests
     [Fact]
     public void FunctionParametersEndAtFirstNonType()
     {
-        var function = Assert.IsType<FunctionStatement>(Assert.Single(Parse("function string join string a string b return add a b").Statements));
+        var function = Assert.IsType<FunctionStatement>(Assert.Single(Parse("function string combine string a string b return add a b").Statements));
 
         Assert.Equal(["a", "b"], function.Signature.Parameters.Select(parameter => parameter.Name));
         Assert.IsType<ReturnStatement>(function.Body);

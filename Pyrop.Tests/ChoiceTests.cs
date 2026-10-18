@@ -1,0 +1,412 @@
+namespace Pyrop.Tests;
+
+public class ChoiceTests
+{
+    private const string Direction = "choice Direction north east south west end\n";
+
+    private static PyropError Failure(string source, ErrorStage stage, int line, int column)
+    {
+        var error = Run.Failure(source);
+        Assert.Equal(stage, error.Stage);
+        Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
+        return error;
+    }
+
+    private static string Tree(string source)
+    {
+        var inspected = new PyropSession(new StringReader(""), new StringOutput()).Inspect(source, "main.prp");
+        Assert.Null(inspected.Error);
+        return inspected.Text!;
+    }
+
+    [Fact]
+    public void VariantsAreValuesOfTheirChoice()
+    {
+        const string source = """
+            def Direction facing north
+            if equal facing west write_line "The sun sets ahead." else write_line facing
+            set facing west
+            if equal facing west write_line "The sun sets ahead."
+            write_line equal north south
+            choice Direction north east south west end
+            """;
+
+        Assert.Equal("north\nThe sun sets ahead.\nfalse\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void ChoicesWorkInFunctionsRecordsAndLoops()
+    {
+        const string source = """
+            choice Direction north east south west end
+            record Exit Direction way string target
+            function Direction opposite Direction d
+            block
+                if equal d north return south
+                if equal d south return north
+                if equal d east return west
+                return east
+            end
+            def list Exit exits list_of Exit Exit north "hall" Exit east "garden" end
+            for Exit door in exits block
+                write get_field target door
+                write " is back to the "
+                write_line opposite get_field way door
+            end
+            write_line contains list_of Direction north south end south
+            """;
+
+        Assert.Equal("hall is back to the south\ngarden is back to the west\ntrue\n", Run.Program(source));
+    }
+
+    [Theory]
+    [InlineData("north", "north")]
+    [InlineData("list_of Direction north east end", "[north, east]")]
+    [InlineData("put put empty map Direction string south \"cellar\" north \"hall\"", "{south: \"cellar\", north: \"hall\"}")]
+    [InlineData("put empty map string Direction \"way\" west", "{\"way\": west}")]
+    [InlineData("Exit north \"hall\"", "Exit way north target \"hall\"")]
+    [InlineData("Door Exit east \"yard\" true", "Door passage (Exit way east target \"yard\") open true")]
+    [InlineData("convert string south", "south")]
+    [InlineData("add convert string east \"!\"", "east!")]
+    public void WritesTheTextFormOfVariants(string expression, string expected)
+    {
+        const string declarations = Direction + "record Exit Direction way string target\nrecord Door Exit passage bool open\n";
+
+        Assert.Equal(expected + "\n", Run.Program(declarations + "write_line " + expression));
+    }
+
+    [Theory]
+    [InlineData("convert Direction \"east\"", "east")]
+    [InlineData("convert Direction \"  west\\t\"", "west")]
+    [InlineData("equal convert Direction \"south\" south", "true")]
+    [InlineData("convert Direction convert string north", "north")]
+    public void ConvertsTextToAVariant(string expression, string expected)
+    {
+        Assert.Equal(expected + "\n", Run.Program(Direction + "write_line " + expression));
+    }
+
+    [Theory]
+    [InlineData("write_line convert Direction \"up\"", "Cannot convert \"up\" to Direction; its variants are north, east, south and west.")]
+    [InlineData("write_line convert Direction \"North\"", "Cannot convert \"North\" to Direction; its variants are north, east, south and west.")]
+    [InlineData("write_line convert Direction \"\"", "Cannot convert \"\" to Direction; its variants are north, east, south and west.")]
+    [InlineData("write_line convert Direction \"north east\"", "Cannot convert \"north east\" to Direction; its variants are north, east, south and west.")]
+    [InlineData("choice Only one end\nwrite_line convert Only \"two\"", "Cannot convert \"two\" to Only; its only variant is one.")]
+    [InlineData("choice Pair yes no end\nwrite_line convert Pair \"maybe\"", "Cannot convert \"maybe\" to Pair; its variants are yes and no.")]
+    public void ATextThatNamesNoVariantIsARuntimeError(string statement, string message)
+    {
+        var error = Run.Failure(Direction + statement);
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal(message, error.Message);
+        Assert.Equal(12, error.Position.Column);
+    }
+
+    [Fact]
+    public void ChoicesAreMapKeys()
+    {
+        const string source = """
+            choice Direction north east south west end
+            def map Direction int steps empty map Direction int
+            set steps put steps east 2
+            set steps put steps north 1
+            set steps put steps east 3
+            write_line steps
+            write_line value_of steps east
+            write_line has_key steps west
+            write_line keys_of remove_key steps east
+            write_line equal steps put put empty map Direction int north 1 east 3
+            write_line value_of steps south
+            """;
+
+        var output = new StringOutput();
+        var error = Assert.Single(Assert.Throws<PyropException>(() => new PyropSession(new StringReader(""), output).Run(source)).Errors);
+
+        Assert.Equal("{east: 3, north: 1}\n3\nfalse\n[north]\ntrue\n", output.ToString());
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal("The map has no key south.", error.Message);
+    }
+
+    [Fact]
+    public void ChoicesCanBeUsedAboveTheirDeclaration()
+    {
+        const string source = """
+            record Room string name Direction way
+            function Room hall return Room "hall" up
+            write_line hall
+            choice Direction up down end
+            """;
+
+        Assert.Equal("Room name \"hall\" way up\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void VariantsMayBeNamedInAnyStyle()
+    {
+        const string source = """
+            choice Colour Red green DARK_blue end
+            def list Colour all list_of Colour Red green DARK_blue end
+            write_line all
+            write_line convert Colour "DARK_blue"
+            function void show Colour c write_line c
+            show Red
+            """;
+
+        Assert.Equal("[Red, green, DARK_blue]\nDARK_blue\nRed\n", Run.Program(source));
+    }
+
+    [Theory]
+    [InlineData("choice direction north end", 1, 8, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'direction'.")]
+    [InlineData("export choice d a end", 1, 15, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'd'.")]
+    [InlineData("choice direction end", 1, 8, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'direction'.")]
+    [InlineData("choice D end", 1, 10, "Choice 'D' needs at least one variant, such as choice D first end.")]
+    [InlineData("choice D a a end", 1, 12, "Variant 'a' is declared twice in choice 'D'.")]
+    [InlineData("choice D a add end", 1, 12, "'add' is a reserved word and cannot be used as a variant name.")]
+    [InlineData("choice D a from end", 1, 12, "'from' is a reserved word and cannot be used as a variant name.")]
+    [InlineData("choice D a int end", 1, 12, "'int' is a reserved word and cannot be used as a variant name.")]
+    [InlineData("choice D a\nwrite_line a", 2, 1, "Expected a variant name or 'end' to close the choice started at 1:1, found 'write_line'.")]
+    [InlineData("choice D a else end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found 'else'.")]
+    [InlineData("choice D a true end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found 'true'.")]
+    [InlineData("choice D a 5 end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found '5'.")]
+    [InlineData("choice D a \"b\" end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found string \"b\".")]
+    [InlineData("choice D a end\nchoice D b end", 2, 8, "Choice 'D' is already declared.")]
+    [InlineData("record D int x\nchoice D a end", 2, 8, "'D' is already declared as a record.")]
+    [InlineData("choice D a end\nrecord D int x", 2, 8, "'D' is already declared as a choice.")]
+    [InlineData("choice D a b end\nchoice E c b end", 2, 12, "Variant 'b' already belongs to the choice 'D'.")]
+    [InlineData("block choice D a end end", 1, 7, "Choices can only be declared at the top level.")]
+    [InlineData("function void f choice D a end", 1, 17, "Choices can only be declared at the top level.")]
+    [InlineData("if true choice D a end", 1, 9, "Choices can only be declared at the top level.")]
+    [InlineData("export def int x 1", 1, 8, "'export' must be followed by a function, record or choice definition, found 'def'.")]
+    public void RejectsInvalidChoiceDeclarations(string source, int line, int column, string message)
+    {
+        Assert.Equal(message, Failure(source, ErrorStage.Parse, line, column).Message);
+    }
+
+    [Theory]
+    [InlineData("function int a return 1\nchoice D a end", 2, 10, "'a' is a function of this file and cannot also be a variant.")]
+    [InlineData("choice D a end\nfunction int a return 1", 1, 10, "'a' is a function of this file and cannot also be a variant.")]
+    [InlineData("record R int x\nchoice D R end", 2, 10, "'R' is a record of this file and cannot also be a variant.")]
+    [InlineData("choice D D end", 1, 10, "'D' is a choice of this file and cannot also be a variant.")]
+    [InlineData("choice D a end\nchoice E D end", 2, 10, "'D' is a choice of this file and cannot also be a variant.")]
+    [InlineData("function int D return 1\nchoice D a end", 2, 8, "'D' is a function of this file and cannot also name a choice.")]
+    [InlineData("choice D a end\ndef int a 1", 2, 9, "'a' is a variant and cannot be used as a variable name.")]
+    [InlineData("choice D a end\ndef int D 1", 2, 9, "'D' is a choice and cannot be used as a variable name.")]
+    [InlineData("choice D a end\nset a 1", 2, 5, "'a' is a variant and cannot be used as a variable name.")]
+    [InlineData("choice D a end\nfunction void f int a write_line a", 2, 21, "'a' is a variant and cannot be used as a parameter name.")]
+    [InlineData("choice D a end\nfor int a in list_of int end write_line 1", 2, 9, "'a' is a variant and cannot be used as a loop variable name.")]
+    [InlineData("choice D a end\ndef int x 1\nfunction void f int y block\n    def int a 1\nend", 4, 13, "'a' is a variant and cannot be used as a variable name.")]
+    public void VariantsAndChoicesClashWithOtherNames(string source, int line, int column, string message)
+    {
+        Assert.Equal(message, Failure(source, ErrorStage.Parse, line, column).Message);
+    }
+
+    [Theory]
+    [InlineData("def D d D", 2, 9, "'D' is a choice, not a value; name one of its variants, such as a.")]
+    [InlineData("write_line D", 2, 12, "'D' is a choice, not a value; name one of its variants, such as a.")]
+    [InlineData("D", 2, 1, "A statement cannot start with the choice 'D': a choice is a type, and no statement may start with a type name. Use one of its variants as a value, as in def D <name> a.")]
+    [InlineData("a", 2, 1, "'a' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes.")]
+    [InlineData("write_line a b", 2, 14, "'b' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes.")]
+    [InlineData("def a x a", 2, 5, "'a' is a variant of the choice 'D', not a type.")]
+    [InlineData("def list D l empty D", 2, 20, "'empty' takes a list or map type, such as empty list string or empty map string int, found D.")]
+    [InlineData("def map Q int m 1", 2, 9, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
+    [InlineData("def map float D m 1", 2, 9, "A map key must be int, string, bool or a choice, found float.")]
+    public void RejectsChoicesAndVariantsInTheWrongPlace(string statement, int line, int column, string message)
+    {
+        Assert.Equal(message, Failure("choice D a b end\n" + statement, ErrorStage.Parse, line, column).Message);
+    }
+
+    [Theory]
+    [InlineData("def int x north", 2, 11, "Cannot initialize int variable 'x' with a value of type Direction.")]
+    [InlineData("choice Item sword end\ndef int i sword", 3, 11, "Cannot initialize int variable 'i' with a value of type Item.")]
+    [InlineData("def Direction d north\nset d \"east\"", 3, 7, "Cannot set Direction variable 'd' to a value of type string.")]
+    [InlineData("choice Turn left right end\nwrite_line equal north left", 3, 12, "'equal' cannot take Direction Turn. It accepts: T T (T stands for any type, the same wherever it appears).")]
+    [InlineData("write_line greater north south", 2, 12, "'greater' cannot take Direction Direction. It accepts: int int, float float, string string.")]
+    [InlineData("def int n convert int north", 2, 11, "Cannot convert Direction to int.")]
+    [InlineData("def Direction d convert Direction 1", 2, 17, "Cannot convert int to Direction.")]
+    [InlineData("choice Turn left right end\ndef Turn t convert Turn north", 3, 12, "Cannot convert Direction to Turn.")]
+    [InlineData("def bool b convert bool north", 2, 12, "Cannot convert Direction to bool.")]
+    [InlineData("def map Direction int m put empty map Direction int \"north\" 1", 2, 25, "'put' cannot take map Direction int string int. It accepts: map K V K V (K and V stand for any types, each the same wherever it appears).")]
+    public void ChecksChoiceTypes(string source, int line, int column, string message)
+    {
+        Assert.Equal(message, Failure(Direction + source, ErrorStage.Type, line, column).Message);
+    }
+
+    [Theory]
+    [InlineData("def int choice 1", 1, 9)]
+    [InlineData("write_line choice", 1, 12)]
+    [InlineData("def string choice \"x\"", 1, 12)]
+    [InlineData("set choice 1", 1, 5)]
+    [InlineData("for int choice in list_of int end write_line 1", 1, 9)]
+    [InlineData("def Direction choice north\nwrite_line choice", 1, 15)]
+    [InlineData("function void greet string n write_line n\ndef string name \"a\"\nwrite_line choice\ngreet name", 3, 12)]
+    [InlineData("def string answer \"x\"\ndef string choice answer", 2, 12)]
+    [InlineData("def list Direction l empty list Direction\nwrite_line convert Direction choice\nwrite_line l", 2, 30)]    [InlineData("choice add a end", 1, 1)]
+    [InlineData("choice", 1, 1)]
+    public void AChoiceKeywordThatCannotStartADeclarationIsReportedAsAReservedName(string source, int line, int column)
+    {
+        var program = Direction + source;
+        var error = Failure(program, ErrorStage.Parse, line + 1, column);
+
+        Assert.Equal("'choice' is a reserved word and cannot be used as a name.", error.Message);
+        Assert.Equal(InputStatus.Ready, new PyropSession(new StringReader(""), new StringOutput()).Probe(program));
+    }
+
+    [Fact]
+    public void PrintsChoicesInTheTree()
+    {
+        const string source = """
+            export choice Direction north east end
+            choice Mood calm end
+            def map Direction Mood moods put empty map Direction Mood north calm
+            function Direction turn Direction d return east
+            write_line turn north
+            """;
+
+        Assert.Equal(
+            "export choice Direction north east end\n" +
+            "choice Mood calm end\n" +
+            "def map Direction Mood moods (put (empty map Direction Mood) north calm)\n" +
+            "function Direction turn Direction d\n    return east\n" +
+            "write_line (turn north)\n",
+            Tree(source));
+    }
+
+    [Fact]
+    public void AnUnfinishedChoiceIsIncompleteInput()
+    {
+        var session = new PyropSession(new StringReader(""), new StringOutput());
+
+        Assert.Equal(InputStatus.Incomplete, session.Probe("choice Direction"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("choice Direction north"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("export choice Direction north east"));
+        Assert.Equal(InputStatus.Ready, session.Probe("choice Direction north end"));
+        Assert.Equal(InputStatus.Ready, session.Probe("choice"));
+        Assert.Equal(InputStatus.Ready, session.Probe("choice Direction north write_line 1"));
+        Assert.Equal(InputStatus.AwaitingElse, session.Probe("choice Direction north end\nif equal north north write_line 1"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("choice Direction north end\nwrite_line equal north"));
+    }
+
+    [Fact]
+    public void ChoicesPersistAcrossReplInputs()
+    {
+        var output = new StringOutput();
+        var session = new PyropSession(new StringReader(""), output);
+
+        session.Run("choice Direction north south end");
+        session.Run("def Direction d north");
+        session.Run("function Direction flip Direction x if equal x north return south else return north");
+        session.Run("choice Direction north south end");
+        session.Run("def map Direction int m put empty map Direction int d 1");
+        session.Run("write_line flip d");
+        session.Run("write_line equal d convert Direction \"north\"");
+        session.Run("write_line m");
+
+        Assert.Equal("south\ntrue\n{north: 1}\n", output.ToString());
+    }
+
+    [Theory]
+    [InlineData("choice Direction north end", "Choice 'Direction' was declared earlier in this session as choice Direction north south end, and cannot be declared again with other variants.")]
+    [InlineData("choice Direction south north end", "Choice 'Direction' was declared earlier in this session as choice Direction north south end, and cannot be declared again with other variants.")]
+    [InlineData("choice Direction north south up end", "Choice 'Direction' was declared earlier in this session as choice Direction north south end, and cannot be declared again with other variants.")]
+    public void AChoiceCannotBeRedeclaredWithOtherVariantsInTheRepl(string redeclaration, string message)
+    {
+        var session = new PyropSession(new StringReader(""), new StringOutput());
+        session.Run("choice Direction north south end");
+
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(redeclaration)).Errors);
+
+        Assert.Equal(ErrorStage.Parse, error.Stage);
+        Assert.Equal(message, error.Message);
+        Assert.Equal((1, 8), (error.Position.Line, error.Position.Column));
+    }
+
+    [Fact]
+    public void AFailedReplInputDeclaresNoChoice()
+    {
+        var output = new StringOutput();
+        var session = new PyropSession(new StringReader(""), output);
+        Assert.Throws<PyropException>(() => session.Run("choice Direction north end\nwrite_line add 1 true"));
+
+        session.Run("choice Direction up down end");
+        session.Run("def int north 1");
+        session.Run("write_line list_of Direction up down end");
+
+        Assert.Equal("[up, down]\n", output.ToString());
+    }
+
+    [Theory]
+    [InlineData("def int north 1", "choice Direction north end", "'north' is already a global variable and cannot be used as a variant.")]
+    [InlineData("def int Direction 1", "choice Direction north end", "'Direction' is already a global variable and cannot be used as a choice name.")]
+    [InlineData("choice Direction north end", "def int north 1", "'north' is a variant and cannot be used as a variable name.")]
+    [InlineData("choice Direction north end", "function int north return 1", "'north' is a variant in this file and cannot also be a function name.")]
+    [InlineData("choice Direction north end", "function int Direction return 1", "'Direction' is a choice in this file and cannot also be a function name.")]
+    [InlineData("function int north return 1", "choice Direction north end", "'north' is a function of this file and cannot also be a variant.")]
+    [InlineData("choice Direction north end", "choice Turn north end", "Variant 'north' already belongs to the choice 'Direction'.")]
+    [InlineData("choice Direction north end", "record Direction int x", "'Direction' is already declared as a choice.")]
+    [InlineData("record Direction int x", "choice Direction north end", "'Direction' is already declared as a record.")]
+    [InlineData("choice Direction north end", "choice Turn Direction end", "'Direction' is a choice of this file and cannot also be a variant.")]
+    [InlineData("choice Direction North end", "record North int x", "'North' is a variant in this file and cannot also name a record.")]
+    public void ReplChoicesClashWithEarlierNames(string first, string second, string message)
+    {
+        var session = new PyropSession(new StringReader(""), new StringOutput());
+        session.Run(first);
+
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(second)).Errors);
+
+        Assert.Equal(message, error.Message);
+    }
+
+    [Fact]
+    public void ADeclarationMayFollowAValueThatLooksLikeAType()
+    {
+        const string source = """
+            def list int l empty list int
+            choice Colour Red green end
+            def Colour c Red
+            record Paint Colour colour
+            def map string Colour m empty map string Colour
+            function void show Colour shown write_line shown
+            show c
+            """;
+
+        Assert.Equal("Red\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void AFieldMayBeNamedLikeAVariant()
+    {
+        const string source = Direction + """
+            record Exit Direction north string target
+            write_line get_field north Exit east "yard"
+            """;
+
+        Assert.Equal("east\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void AChoiceMayHaveManyVariantsSpreadOverLines()
+    {
+        var variants = string.Join("\n", Enumerable.Range(1, 5000).Select(index => $"v{index}"));
+        var source = $"choice Big\n{variants}\nend\nwrite_line convert Big \"v4999\"\nwrite_line equal v1 convert Big \"v1\"";
+
+        Assert.Equal("v4999\ntrue\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void ChoiceStatementsDoNotRun()
+    {
+        Assert.Equal("1\n", Run.Program("write_line 1\nchoice Direction north end"));
+    }
+
+    [Fact]
+    public void ARecordWithAChoiceFieldComparesStructurally()
+    {
+        const string source = Direction + """
+            record Exit Direction way string target
+            write_line equal Exit north "hall" Exit north "hall"
+            write_line equal Exit north "hall" Exit south "hall"
+            write_line with_field way Exit north "hall" west
+            """;
+
+        Assert.Equal("true\nfalse\nExit way west target \"hall\"\n", Run.Program(source));
+    }
+}

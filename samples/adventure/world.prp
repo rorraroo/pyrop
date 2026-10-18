@@ -1,0 +1,56 @@
+use items "items.prp"
+import from items ItemKind
+
+export choice Direction north east south west end
+export choice Place hall cellar library tower garden end
+
+export record Room
+    string title
+    string description
+    map Direction Place exits
+    list ItemKind items
+    bool dark
+    option ItemKind needs
+
+export function list Direction compass
+    return list_of Direction north east south west end
+
+export function map Place Room build_world block
+    def map Place Room rooms empty map Place Room
+    set rooms put rooms hall Room
+        "Great Hall"
+        "Dust lies thick on a long table. Doors lead north, south and east."
+        put put put empty map Direction Place north library south cellar east garden
+        empty list ItemKind
+        false
+        none ItemKind
+    set rooms put rooms library Room
+        "Library"
+        "Shelves of rotting books lean against each other. A narrow door leads east."
+        put put empty map Direction Place south hall east tower
+        list_of ItemKind lamp end
+        false
+        none ItemKind
+    set rooms put rooms cellar Room
+        "Cellar"
+        "Barrels and broken crates fill the damp cellar."
+        put empty map Direction Place north hall
+        list_of ItemKind key end
+        true
+        none ItemKind
+    set rooms put rooms tower Room
+        "Tower"
+        "Wind howls through the arrow slits of the round tower room."
+        put empty map Direction Place west library
+        list_of ItemKind crown end
+        false
+        some key
+    set rooms put rooms garden Room
+        "Garden"
+        "Sunlight falls on an overgrown garden. The gate to the world stands open."
+        put empty map Direction Place west hall
+        empty list ItemKind
+        false
+        none ItemKind
+    return rooms
+end

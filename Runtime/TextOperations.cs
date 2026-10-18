@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -91,6 +92,45 @@ public static class TextOperations
         }
 
         return builder.Append(text, copied, text.Length - copied).ToString();
+    }
+
+    public static ListValue Split(IBuiltinInvocation invocation, string text, string separator)
+    {
+        if (separator.Length == 0)
+        {
+            throw invocation.Fail("'split' cannot split at an empty separator.");
+        }
+
+        var pieces = ImmutableList.CreateBuilder<Value>();
+        var copied = 0;
+        foreach (var offset in AlignedMatches(text, separator, MapOf(text)))
+        {
+            if (offset < copied)
+            {
+                continue;
+            }
+
+            AddPiece(invocation, pieces, text[copied..offset]);
+            copied = offset + separator.Length;
+        }
+
+        AddPiece(invocation, pieces, text[copied..]);
+        return new ListValue(PyropTypes.ListOf(PyropType.String), pieces.ToImmutable());
+    }
+
+    public static string Join(IBuiltinInvocation invocation, ListValue items, string separator)
+    {
+        var length = (long)separator.Length * Math.Max(items.Count - 1, 0);
+        foreach (var item in items.Items)
+        {
+            length += item.AsString().Length;
+            if (length > MaxLength)
+            {
+                throw TooLong(invocation, "join");
+            }
+        }
+
+        return string.Join(separator, items.Items.Select(item => item.AsString()));
     }
 
     public static bool StartsWith(string text, string prefix) =>
@@ -197,6 +237,12 @@ public static class TextOperations
 
     private static CharacterMap MapOf(string text) =>
         text.Length < CachedFromLength ? CharacterMap.Of(text) : MapCache.GetValue(text, CharacterMap.Of);
+
+    private static void AddPiece(IBuiltinInvocation invocation, ImmutableList<Value>.Builder pieces, string piece)
+    {
+        CollectionOperations.CheckRoom(pieces.Count + 1, invocation.CollectionLimit, "list", invocation.Fail);
+        pieces.Add(new StringValue(piece));
+    }
 
     private static Exception TooLong(IBuiltinInvocation invocation, string name) =>
         invocation.Fail($"The result of '{name}' would exceed the largest allowed text size.");

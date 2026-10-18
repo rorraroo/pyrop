@@ -1,5 +1,4 @@
 using Pyrop.Runtime;
-using Pyrop.Syntax;
 using Spectre.Console;
 
 namespace Pyrop.Cli;
@@ -22,9 +21,9 @@ public static class TreeCommand
         var session = new PyropSession(TextReader.Null, new ConsoleProgramOutput(TextWriter.Null, plain: true));
         var inspected = session.Inspect(source, script);
         var output = Terminal.CreateProgramOutput();
-        if (inspected.Tree is { } tree)
+        if (inspected.Text is { } text)
         {
-            output.Write(TreePrinter.Print(tree), OutputStyle.None);
+            output.Write(text, OutputStyle.None);
         }
 
         if (inspected.Error is not { } error)

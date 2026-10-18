@@ -6,31 +6,50 @@ namespace Pyrop.Checking;
 
 public sealed record CheckResult(
     IReadOnlyDictionary<BuiltinCallExpression, BuiltinOverload> Overloads,
+    IReadOnlyDictionary<AttemptExpression, PyropType> Attempts,
     IReadOnlyDictionary<string, PyropType> Globals);
 
 public sealed class TypeChecker
 {
+    private static readonly IReadOnlyDictionary<string, PyropType> NoGlobals = new Dictionary<string, PyropType>();
+
     private readonly List<PyropError> _errors = [];
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<string, PyropType> _globals;
+    private readonly Dictionary<AttemptExpression, PyropType> _attempts = new(ReferenceEqualityComparer.Instance);
+    private Dictionary<string, PyropType> _globals = new();
     private FunctionSignature? _currentFunction;
 
-    private TypeChecker(IReadOnlyDictionary<string, PyropType> sessionGlobals)
+    private TypeChecker()
     {
-        _globals = new Dictionary<string, PyropType>(sessionGlobals);
     }
 
-    public static CheckResult Check(SyntaxTree tree, IReadOnlyDictionary<string, PyropType> sessionGlobals) =>
-        new TypeChecker(sessionGlobals).CheckProgram(tree, sessionGlobals);
-
-    private CheckResult CheckProgram(SyntaxTree tree, IReadOnlyDictionary<string, PyropType> sessionGlobals)
+    public static CheckResult Check(ParsedProgram program, IReadOnlyDictionary<string, PyropType> sessionGlobals)
     {
+        var checker = new TypeChecker();
+        foreach (var module in program.Modules)
+        {
+            checker.CheckModule(module.Tree, NoGlobals);
+        }
+
+        var globals = checker.CheckModule(program.Main.Tree, sessionGlobals);
+        if (checker._errors.Count > 0)
+        {
+            throw new PyropException(checker._errors);
+        }
+
+        return new CheckResult(checker._overloads, checker._attempts, globals);
+    }
+
+    private Dictionary<string, PyropType> CheckModule(SyntaxTree tree, IReadOnlyDictionary<string, PyropType> sessionGlobals)
+    {
+        _globals = new Dictionary<string, PyropType>(sessionGlobals);
         foreach (var global in tree.Globals)
         {
             if (sessionGlobals.TryGetValue(global.Name, out var existing) && existing != global.Type)
             {
+                var (earlierName, laterName) = Names(existing, global.Type);
                 Report(
-                    $"Global '{global.Name}' was declared as {existing.Name} earlier in this session and cannot be redeclared as {global.Type.Name}.",
+                    $"Global '{global.Name}' was declared as {earlierName} earlier in this session and cannot be redeclared as {laterName}.",
                     global.Position);
             }
 
@@ -48,12 +67,7 @@ public sealed class TypeChecker
             CheckStatement(statement, topLevel);
         }
 
-        if (_errors.Count > 0)
-        {
-            throw new PyropException(_errors);
-        }
-
-        return new CheckResult(_overloads, _globals);
+        return _globals;
     }
 
     private void Report(string message, SourcePosition position) =>
@@ -78,9 +92,15 @@ public sealed class TypeChecker
                 }
 
                 break;
+            case IfSomeStatement unwrap:
+                CheckIfSome(unwrap, scope);
+                break;
             case WhileStatement loop:
                 CheckCondition(loop.Condition, scope, "while");
                 CheckStatement(loop.Body, scope);
+                break;
+            case ForStatement loop:
+                CheckFor(loop, scope);
                 break;
             case FunctionStatement function:
                 CheckFunction(function);
@@ -113,14 +133,7 @@ public sealed class TypeChecker
             case CallStatement call:
                 TypeOf(call.Call, scope);
                 break;
-            case IncludeStatement include:
-                foreach (var inner in include.Included?.Statements ?? [])
-                {
-                    CheckStatement(inner, scope);
-                }
-
-                break;
-            case BreakStatement or ContinueStatement:
+            case BreakStatement or ContinueStatement or UseStatement or ImportStatement or RecordStatement or ChoiceStatement:
                 break;
             default:
                 throw new InvalidOperationException($"Unknown statement {statement.GetType().Name}.");
@@ -131,7 +144,8 @@ public sealed class TypeChecker
     {
         if (TypeOf(def.Value, scope) is { } actual && actual != def.Type)
         {
-            Report($"Cannot initialize {def.Type.Name} variable '{def.Name}' with a {actual.Name} value.", def.Value.Position);
+            var (declared, found) = Names(def.Type, actual);
+            Report($"Cannot initialize {declared} variable '{def.Name}' with a value of type {found}.", def.Value.Position);
         }
 
         scope.Declare(def.Name, def.Type);
@@ -148,7 +162,8 @@ public sealed class TypeChecker
 
         if (valueType is { } actual && actual != variableType)
         {
-            Report($"Cannot set {variableType.Name} variable '{set.Name}' to a {actual.Name} value.", set.Value.Position);
+            var (declared, found) = Names(variableType, actual);
+            Report($"Cannot set {declared} variable '{set.Name}' to a value of type {found}.", set.Value.Position);
         }
     }
 
@@ -158,6 +173,67 @@ public sealed class TypeChecker
         {
             Report($"The condition of '{owner}' must be bool, found {type.Name}.", condition.Position);
         }
+    }
+
+    private void CheckFor(ForStatement loop, SymbolScope scope)
+    {
+        var listType = TypeOf(loop.List, scope);
+        if (listType is not null && !PyropTypes.IsList(listType))
+        {
+            Report(
+                PyropTypes.IsMap(listType)
+                    ? $"'{Keywords.For}' walks a list, found {listType.Name}. Walk a map's keys with keys_of."
+                    : $"'{Keywords.For}' walks a list, found {listType.Name}.",
+                loop.List.Position);
+        }
+        else if (listType is ConstructedType { Arguments: [var elementType] } && elementType != loop.VariableType)
+        {
+            var (declared, found) = Names(loop.VariableType, elementType);
+            Report(
+                $"The loop variable '{loop.Variable}' is {declared}, but the list holds {found} items.",
+                loop.List.Position);
+        }
+
+        var loopScope = new SymbolScope(scope);
+        loopScope.Declare(loop.Variable, loop.VariableType);
+        CheckStatement(loop.Body, loopScope);
+    }
+
+    private void CheckIfSome(IfSomeStatement unwrap, SymbolScope scope)
+    {
+        var optionType = TypeOf(unwrap.Option, scope);
+        if (optionType is not null && !PyropTypes.IsOption(optionType))
+        {
+            Report($"'{Keywords.IfSome}' unwraps an option, found {optionType.Name}.", unwrap.Option.Position);
+        }
+        else if (optionType is ConstructedType { Arguments: [var contentType] } && contentType != unwrap.ValueType)
+        {
+            var (declared, found) = Names(unwrap.ValueType, contentType);
+            Report(
+                $"The {Keywords.IfSome} value '{unwrap.Name}' is {declared}, but the option holds {found}.",
+                unwrap.Option.Position);
+        }
+
+        var valueScope = new SymbolScope(scope);
+        valueScope.Declare(unwrap.Name, unwrap.ValueType);
+        CheckStatement(unwrap.Then, valueScope);
+        if (unwrap.Else is not null)
+        {
+            CheckStatement(unwrap.Else, scope);
+        }
+    }
+
+    private PyropType? TypeOfAttempt(AttemptExpression attempt, SymbolScope scope)
+    {
+        var result = TypeOf(attempt.Operation, scope);
+        if (result is null)
+        {
+            return attempt.Operation is BuiltinCallExpression { Operation.ReturnsVoid: true } ? PyropType.Bool : null;
+        }
+
+        var type = result == PyropType.Void ? PyropType.Bool : PyropTypes.OptionOf(result);
+        _attempts[attempt] = type;
+        return type;
     }
 
     private void CheckStyle(Expression style, SymbolScope scope)
@@ -207,8 +283,9 @@ public sealed class TypeChecker
 
         if (TypeOf(returnStatement.Value, scope) is { } type && type != _currentFunction.ReturnType)
         {
+            var (declared, found) = Names(_currentFunction.ReturnType, type);
             Report(
-                $"Function '{_currentFunction.Name}' must return {_currentFunction.ReturnType.Name}, found {type.Name}.",
+                $"Function '{_currentFunction.Name}' must return {declared}, found {found}.",
                 returnStatement.Value.Position);
         }
     }
@@ -239,10 +316,39 @@ public sealed class TypeChecker
             case ConvertExpression convert:
                 if (TypeOf(convert.Operand, scope) is { } from && !Conversions.IsAllowed(from, convert.Target))
                 {
-                    Report($"Cannot convert {from.Name} to {convert.Target.Name}.", convert.Position);
+                    var (source, target) = Names(from, convert.Target);
+                    Report($"Cannot convert {source} to {target}.", convert.Position);
                 }
 
                 return convert.Target;
+            case EmptyExpression empty:
+                return empty.Type;
+            case ListOfExpression list:
+                foreach (var item in list.Items)
+                {
+                    if (TypeOf(item, scope) is { } itemType && itemType != list.ElementType)
+                    {
+                        var (element, found) = Names(list.ElementType, itemType);
+                        Report(
+                            $"Every item of 'list_of {element}' must be {element}, found {found}.",
+                            item.Position);
+                    }
+                }
+
+                return PyropTypes.ListOf(list.ElementType);
+            case ConstructExpression construct:
+                CheckConstructArguments(construct, scope);
+                return construct.Record;
+            case GetFieldExpression read:
+                return FieldOf(Keywords.GetField, read.Field, read.FieldPosition, read.Record, TypeOf(read.Record, scope))?.Type;
+            case WithFieldExpression change:
+                return TypeOfWithField(change, scope);
+            case VariantExpression variant:
+                return variant.Variant.Choice;
+            case AttemptExpression attempt:
+                return TypeOfAttempt(attempt, scope);
+            case NoneExpression none:
+                return PyropTypes.OptionOf(none.ContentType);
             default:
                 throw new InvalidOperationException($"Unknown expression {expression.GetType().Name}.");
         }
@@ -261,9 +367,8 @@ public sealed class TypeChecker
         var known = argumentTypes.Select(type => type!).ToList();
         if (operation.FindOverload(known) is not { } match)
         {
-            var accepted = string.Join(", ", operation.Overloads.Select(candidate => candidate.DescribeParameters()));
             Report(
-                $"'{operation.Name}' cannot take {string.Join(" ", known.Select(type => type.Name))}. It accepts: {accepted}.",
+                $"'{operation.Name}' cannot take {string.Join(" ", PyropTypes.NamesOf([.. known]))}. It accepts: {operation.DescribeAccepted()}.",
                 call.Position);
             return null;
         }
@@ -279,10 +384,72 @@ public sealed class TypeChecker
             var parameter = call.Function.Parameters[index];
             if (TypeOf(call.Arguments[index], scope) is { } type && type != parameter.Type)
             {
+                var (declared, found) = Names(parameter.Type, type);
                 Report(
-                    $"Argument '{parameter.Name}' of '{call.Function.Name}' must be {parameter.Type.Name}, found {type.Name}.",
+                    $"Argument '{parameter.Name}' of '{call.Function.Name}' must be {declared}, found {found}.",
                     call.Arguments[index].Position);
             }
         }
+    }
+
+    private void CheckConstructArguments(ConstructExpression construct, SymbolScope scope)
+    {
+        for (var index = 0; index < construct.Arguments.Count; index++)
+        {
+            var field = construct.Record.Fields[index];
+            if (TypeOf(construct.Arguments[index], scope) is { } type && type != field.Type)
+            {
+                var (declared, found) = Names(field.Type, type);
+                Report(
+                    $"Field '{field.Name}' of '{construct.Record.Name}' must be {declared}, found {found}.",
+                    construct.Arguments[index].Position);
+            }
+        }
+    }
+
+    private RecordField? FieldOf(string form, string field, SourcePosition fieldPosition, Expression record, PyropType? recordType)
+    {
+        switch (recordType)
+        {
+            case null:
+                return null;
+            case RecordType known when known.FindField(field) is { } found:
+                return found;
+            case RecordType known:
+                var fields = known.Fields.Select(each => each.Name).ToList();
+                var listed = fields.Count == 1 ? fields[0] : $"{string.Join(", ", fields.SkipLast(1))} and {fields[^1]}";
+                Report(
+                    $"Record '{known.Name}' has no field '{field}'; its {(fields.Count == 1 ? "field is" : "fields are")} {listed}.",
+                    fieldPosition);
+                return null;
+            case var other:
+                Report($"'{form}' takes a record, found {other.Name}.", record.Position);
+                return null;
+        }
+    }
+
+    private PyropType? TypeOfWithField(WithFieldExpression change, SymbolScope scope)
+    {
+        var recordType = TypeOf(change.Record, scope);
+        var field = FieldOf(Keywords.WithField, change.Field, change.FieldPosition, change.Record, recordType);
+        var valueType = TypeOf(change.Value, scope);
+        if (field is null)
+        {
+            return null;
+        }
+
+        if (valueType is { } actual && actual != field.Type)
+        {
+            var (declared, found) = Names(field.Type, actual);
+            Report($"Cannot set {declared} field '{change.Field}' to a value of type {found}.", change.Value.Position);
+        }
+
+        return recordType;
+    }
+
+    private static (string First, string Second) Names(PyropType first, PyropType second)
+    {
+        var names = PyropTypes.NamesOf(first, second);
+        return (names[0], names[1]);
     }
 }

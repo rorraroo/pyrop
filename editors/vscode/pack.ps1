@@ -6,7 +6,7 @@ $root = $PSScriptRoot
 $manifest = Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
 $output = Join-Path $root "$($manifest.name)-$($manifest.version).vsix"
 
-$files = @('package.json', 'language-configuration.json', 'README.md') +
+$files = @('package.json', 'extension.js', 'language-configuration.json', 'README.md') +
     (Get-ChildItem (Join-Path $root 'syntaxes') -File | ForEach-Object { "syntaxes/$($_.Name)" }) +
     (Get-ChildItem (Join-Path $root 'icons') -File | ForEach-Object { "icons/$($_.Name)" })
 
@@ -36,6 +36,7 @@ $vsixManifest = @"
 $contentTypes = @"
 <?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension=".js" ContentType="application/javascript" />
   <Default Extension=".json" ContentType="application/json" />
   <Default Extension=".md" ContentType="text/markdown" />
   <Default Extension=".png" ContentType="image/png" />

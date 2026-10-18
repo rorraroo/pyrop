@@ -1,8 +1,8 @@
 {
   "name": "pyrop",
   "displayName": "Pyrop",
-  "description": "Syntax highlighting for the Pyrop language.",
-  "version": "0.8.4",
+  "description": "Pyrop language support: errors while you type, highlighting that knows functions, variables and imports.",
+  "version": "0.11.0",
   "publisher": "radardev",
   "icon": "icons/pyrop-128.png",
   "engines": {
@@ -11,6 +11,7 @@
   "categories": [
     "Programming Languages"
   ],
+  "main": "./extension.js",
   "contributes": {
     "languages": [
       {
@@ -35,6 +36,77 @@
         "scopeName": "source.pyrop",
         "path": "./syntaxes/pyrop.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Pyrop",
+      "properties": {
+        "pyrop.path": {
+          "type": "string",
+          "default": "pyrop",
+          "markdownDescription": "The `pyrop` executable that runs the language server. The default finds it on `Path`."
+        },
+        "pyrop.languageServer.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show errors while you type and colour words by what they are. Needs Pyrop 0.11.0 or later."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "pyrop.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "Pyrop"
+      }
+    ],
+    "semanticTokenModifiers": [
+      {
+        "id": "imported",
+        "description": "A name that comes from another module."
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "pyrop",
+        "scopes": {
+          "function.defaultLibrary": [
+            "keyword.other.builtin.pyrop"
+          ],
+          "function": [
+            "entity.name.function.pyrop"
+          ],
+          "variable": [
+            "variable.other.pyrop"
+          ],
+          "parameter": [
+            "variable.parameter.pyrop"
+          ],
+          "property": [
+            "variable.other.member.pyrop"
+          ],
+          "type": [
+            "entity.name.type.pyrop"
+          ],
+          "enumMember": [
+            "variable.other.enummember.pyrop"
+          ],
+          "namespace": [
+            "entity.name.namespace.pyrop"
+          ]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[pyrop]": {
+        "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "*.imported:pyrop": {
+            "italic": true
+          }
+        }
+      }
+    }
   }
 }

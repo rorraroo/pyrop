@@ -33,6 +33,12 @@ public static class Repl
             var line = input.ReadLine();
             if (line is null)
             {
+                var waiting = pending.ToString();
+                if (pending.Length > 0 && session.Probe(waiting) != InputStatus.Incomplete && Submit(session, output, waiting) is { } finalCode)
+                {
+                    return finalCode;
+                }
+
                 AnsiConsole.WriteLine();
                 return 0;
             }
@@ -51,19 +57,29 @@ public static class Repl
             }
 
             pending.Clear();
-            try
+            if (Submit(session, output, source) is { } exitCode)
             {
-                if (session.Run(source) is { } exitCode)
-                {
-                    output.EnsureLineStart();
-                    return exitCode;
-                }
-            }
-            catch (PyropException exception)
-            {
-                Terminal.SeparateErrorsFrom(output);
-                ErrorRenderer.Render(exception, "input", session.SourceText);
+                return exitCode;
             }
         }
+    }
+
+    private static int? Submit(PyropSession session, ConsoleProgramOutput output, string source)
+    {
+        try
+        {
+            if (session.Run(source) is { } exitCode)
+            {
+                output.EnsureLineStart();
+                return exitCode;
+            }
+        }
+        catch (PyropException exception)
+        {
+            Terminal.SeparateErrorsFrom(output);
+            ErrorRenderer.Render(exception, "input", session.SourceText);
+        }
+
+        return null;
     }
 }

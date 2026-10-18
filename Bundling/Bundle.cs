@@ -34,10 +34,10 @@ public sealed class Bundle
 
     public BundledFile Entry { get; }
 
-    public static IEnumerable<Bundle> Candidates(string entryFullPath, string entryText, IEnumerable<SourceFile> included)
+    public static IEnumerable<Bundle> Candidates(string entryFullPath, string entryText, IEnumerable<SourceFile> modules)
     {
         var texts = new Dictionary<string, string>(SourceLoader.PathComparer) { [entryFullPath] = entryText };
-        foreach (var file in included.Where(file => !SourceLoader.PathComparer.Equals(file.FullPath, entryFullPath)))
+        foreach (var file in modules.Where(file => !SourceLoader.PathComparer.Equals(file.FullPath, entryFullPath)))
         {
             texts[file.FullPath] = file.Text;
         }
@@ -188,4 +188,7 @@ public sealed class BundleSourceStore : ISourceStore
         _files.TryGetValue(fullPath, out var file)
             ? new StoredSource(file.Text, file.Name)
             : throw new FileNotFoundException($"The bundle contains no file at {fullPath}.", fullPath);
+
+    public string DisplayNameOf(string fullPath) =>
+        _files.TryGetValue(fullPath, out var file) ? file.Name : Path.GetRelativePath(Bundle.VirtualRoot, fullPath);
 }

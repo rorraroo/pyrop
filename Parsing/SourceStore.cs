@@ -5,17 +5,19 @@ public sealed record StoredSource(string Text, string DisplayName);
 public interface ISourceStore
 {
     StoredSource Read(string fullPath);
+
+    string DisplayNameOf(string fullPath);
 }
 
 public sealed class FileSourceStore : ISourceStore
 {
     public static FileSourceStore Instance { get; } = new();
 
-    public StoredSource Read(string fullPath)
+    public StoredSource Read(string fullPath) => new(File.ReadAllText(fullPath), DisplayNameOf(fullPath));
+
+    public string DisplayNameOf(string fullPath)
     {
-        var text = File.ReadAllText(fullPath);
         var relativePath = Path.GetRelativePath(Environment.CurrentDirectory, fullPath);
-        var displayName = relativePath.StartsWith("..") || Path.IsPathRooted(relativePath) ? fullPath : relativePath;
-        return new StoredSource(text, displayName);
+        return relativePath.StartsWith("..") || Path.IsPathRooted(relativePath) ? fullPath : relativePath;
     }
 }

@@ -8,7 +8,12 @@
     { "include": "#import" },
     { "include": "#string" },
     { "include": "#function-header" },
+    { "include": "#record-header" },
+    { "include": "#choice-header" },
     { "include": "#declaration" },
+    { "include": "#field-access" },
+    { "include": "#loop" },
+    { "include": "#unwrap" },
     { "include": "#assignment" },
     { "include": "#conversion" },
     { "include": "#number" },
@@ -17,6 +22,7 @@
     { "include": "#type" },
     { "include": "#boolean" },
     { "include": "#builtin" },
+    { "include": "#user-type" },
     { "include": "#identifier" }
   ],
   "repository": {
@@ -25,8 +31,35 @@
       "name": "comment.line.number-sign.pyrop"
     },
     "import": {
-      "match": "\\b(include)\\b",
-      "name": "keyword.control.import.pyrop"
+      "patterns": [
+        {
+          "match": "\\b(use)\\b(?:\\s+([^\\W\\d]\\w*))?",
+          "captures": {
+            "1": { "name": "keyword.control.import.pyrop" },
+            "2": { "name": "entity.name.namespace.pyrop" }
+          }
+        },
+        {
+          "match": "\\b(from)\\s+([^\\W\\d]\\w*)\\s+([A-Z]\\w*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.import.pyrop" },
+            "2": { "name": "entity.name.namespace.pyrop" },
+            "3": { "name": "entity.name.type.pyrop" }
+          }
+        },
+        {
+          "match": "\\b(from)\\b(?:\\s+([^\\W\\d]\\w*))?(?:\\s+([^\\W\\d]\\w*))?",
+          "captures": {
+            "1": { "name": "keyword.control.import.pyrop" },
+            "2": { "name": "entity.name.namespace.pyrop" },
+            "3": { "name": "entity.name.function.pyrop" }
+          }
+        },
+        {
+          "match": "\\b(import|export)\\b",
+          "name": "keyword.control.import.pyrop"
+        }
+      ]
     },
     "string": {
       "begin": "\"",
@@ -40,16 +73,16 @@
       ]
     },
     "function-header": {
-      "begin": "\\b(function)\\s+(?:(int|float|string|bool|void)\\s+)?([^\\W\\d]\\w*)?",
+      "begin": "\\b(function)\\s+(?:(void|(?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?([^\\W\\d]\\w*)?",
       "beginCaptures": {
         "1": { "name": "storage.type.function.pyrop" },
         "2": { "name": "storage.type.pyrop" },
         "3": { "name": "entity.name.function.pyrop" }
       },
-      "end": "(?!\\s*\\b(?:int|float|string|bool)\\b)",
+      "end": "(?!\\s*\\b(?:int|float|string|bool|list|map|option|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*)\\b)",
       "patterns": [
         {
-          "match": "\\b(int|float|string|bool)\\s+([^\\W\\d]\\w*)",
+          "match": "\\b((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+([^\\W\\d]\\w*)",
           "captures": {
             "1": { "name": "storage.type.pyrop" },
             "2": { "name": "variable.parameter.pyrop" }
@@ -57,10 +90,69 @@
         }
       ]
     },
+    "record-header": {
+      "begin": "\\b(record)\\b(?:\\s+([^\\W\\d]\\w*))?",
+      "beginCaptures": {
+        "1": { "name": "storage.type.record.pyrop" },
+        "2": { "name": "entity.name.type.pyrop" }
+      },
+      "end": "(?!\\s*\\b(?:int|float|string|bool|list|map|option|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*)\\b)",
+      "patterns": [
+        {
+          "match": "\\b((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+([^\\W\\d]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.pyrop" },
+            "2": { "name": "variable.other.member.pyrop" }
+          }
+        }
+      ]
+    },
+    "choice-header": {
+      "begin": "\\b(choice)\\b(?:\\s+([^\\W\\d]\\w*))?",
+      "beginCaptures": {
+        "1": { "name": "storage.type.choice.pyrop" },
+        "2": { "name": "entity.name.type.pyrop" }
+      },
+      "end": "\\b(end)\\b|(?=\\b(?:def|set|if|else|while|for|break|continue|block|function|return|write|write_line|write_error|write_error_line|exit|with_style|use|import|export|record|choice|if_some)\\b|[\"\\d])",
+      "endCaptures": {
+        "1": { "name": "keyword.control.pyrop" }
+      },
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "match": "\\b[^\\W\\d]\\w*\\b",
+          "name": "variable.other.enummember.pyrop"
+        }
+      ]
+    },
+    "field-access": {
+      "match": "\\b(get_field|with_field)\\b(?:\\s+([^\\W\\d]\\w*))?",
+      "captures": {
+        "1": { "name": "keyword.operator.field.pyrop" },
+        "2": { "name": "variable.other.member.pyrop" }
+      }
+    },
     "declaration": {
-      "match": "\\b(def)\\s+(?:(int|float|string|bool)\\s+)?([^\\W\\d]\\w*)?",
+      "match": "\\b(def)\\s+(?:((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?([^\\W\\d]\\w*)?",
       "captures": {
         "1": { "name": "storage.modifier.pyrop" },
+        "2": { "name": "storage.type.pyrop" },
+        "3": { "name": "variable.other.declaration.pyrop" }
+      }
+    },
+    "loop": {
+      "match": "\\b(for)\\s+(?:((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?(?!in\\b)([^\\W\\d]\\w*)?(?:\\s+(in)\\b)?",
+      "captures": {
+        "1": { "name": "keyword.control.pyrop" },
+        "2": { "name": "storage.type.pyrop" },
+        "3": { "name": "variable.other.declaration.pyrop" },
+        "4": { "name": "keyword.control.pyrop" }
+      }
+    },
+    "unwrap": {
+      "match": "\\b(if_some)\\s+(?:((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?([^\\W\\d]\\w*)?",
+      "captures": {
+        "1": { "name": "keyword.control.pyrop" },
         "2": { "name": "storage.type.pyrop" },
         "3": { "name": "variable.other.declaration.pyrop" }
       }
@@ -73,7 +165,7 @@
       }
     },
     "conversion": {
-      "match": "\\b(convert)\\s+(int|float|string|bool)?\\b",
+      "match": "\\b(convert|empty|list_of|none)\\b(?:\\s+((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\b)?",
       "captures": {
         "1": { "name": "keyword.operator.convert.pyrop" },
         "2": { "name": "storage.type.pyrop" }
@@ -86,15 +178,15 @@
       ]
     },
     "control": {
-      "match": "\\b(if|else|while|break|continue|return|exit|block|end)\\b",
+      "match": "\\b(if_some|if|else|while|for|in|break|continue|return|exit|block|end|attempt)\\b",
       "name": "keyword.control.pyrop"
     },
     "keyword": {
-      "match": "\\b(write|write_line|with_style)\\b",
+      "match": "\\b(write|write_line|write_error|write_error_line|with_style)\\b",
       "name": "keyword.other.pyrop"
     },
     "type": {
-      "match": "\\b(int|float|string|bool|void)\\b",
+      "match": "\\b(int|float|string|bool|void|list|map|option)\\b",
       "name": "storage.type.pyrop"
     },
     "boolean": {
@@ -102,8 +194,12 @@
       "name": "constant.language.boolean.pyrop"
     },
     "builtin": {
-      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|at_least|at_most|smaller|larger|abs|negate|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|char_at|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right)\\b",
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|read_lines|list_files|at_least|at_most|smaller|larger|abs|negate|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|char_at|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|item_at|push|replace_at|remove_at|contains|value_of|put|remove_key|has_key|keys_of|some|value_or)\\b",
       "name": "support.function.builtin.pyrop"
+    },
+    "user-type": {
+      "match": "\\b[A-Z]\\w*\\b",
+      "name": "entity.name.type.pyrop"
     },
     "identifier": {
       "match": "\\b[^\\W\\d]\\w*\\b",

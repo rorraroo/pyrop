@@ -16,8 +16,11 @@ end
 
 ## Features
 
+- **Errors while you type.** Syntax, parse and type errors are underlined as you write, in the file they are in, also when that is a module you have not saved yet. They are listed in the **Problems** panel too. Nothing is run.
+- **Highlighting that knows your program.** Built-in operations, your own functions, variables, parameters, record fields, types, variants and module names each get their own colour, and names imported from another module are shown in italics.
 - **Syntax highlighting** for `.prp` files: keywords, types, built-in operations, numbers, strings with escape sequences, and comments.
-- **Declarations stand out:** function names and parameters in `function` headers, and new variables in `def`.
+- **Declarations stand out:** function names and parameters in `function` headers, record names and fields in `record` declarations, choice names and variants in `choice` declarations, new variables in `def`, loop variables in `for`, and unwrapped values in `if_some`.
+- **Record and choice types stand out:** capitalised words such as `Point` or `Direction` are coloured as types, and field names after `get_field` and `with_field` as fields.
 - **Invalid escape sequences** such as `\q` are marked as errors.
 - **Editing helpers:**
   - `Ctrl+/` toggles `#` comments.
@@ -26,9 +29,20 @@ end
   - The line after `block` is indented automatically.
 - **File icon:** the Pyrop crystal appears next to `.prp` files in the explorer and on editor tabs.
 
+## Requirements
+
+Errors and the program-aware highlighting come from the `pyrop` command-line tool, version 0.11.0 or later, which the extension starts in the background with `pyrop --lsp`. The Windows installer puts `pyrop` on your `Path`; otherwise set **pyrop.path** to the executable. Without it, the extension still highlights `.prp` files from its grammar.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `pyrop.path` | `pyrop` | The `pyrop` executable to start |
+| `pyrop.languageServer.enabled` | `true` | Turn errors and program-aware highlighting on or off |
+
+The **Pyrop: Restart Language Server** command restarts it, for example after installing a new `pyrop`.
+
 ## Running Pyrop programs
 
-This extension adds editor support only. To run programs, install the `pyrop` command-line tool, then:
+To run programs, use the `pyrop` command-line tool:
 
 ```
 pyrop program.prp     # run a script
@@ -38,6 +52,8 @@ pyrop --help          # show all options
 
 ## Known limitations
 
-- Calls to your own functions are coloured like variables. In Pyrop, `square x` looks the same whether `square` is a function or a variable, and telling them apart needs the full program.
-- Errors are not shown in the editor yet. They are reported when the program is run.
+- Without `pyrop`, calls to your own functions are coloured like variables, and any capitalised word is coloured as a type: telling them apart needs the full program.
+- A file shows one parse error at a time: after the first one, the rest of the file cannot be read reliably. Type errors are all shown.
+- Untitled files are checked once they are saved.
+- Italics for imported names come from a default the extension sets in `editor.semanticTokenColorCustomizations`; if you set that setting yourself, add a rule for `*.imported:pyrop` to keep them.
 - The file icon shows with icon themes that have no icon of their own for `.prp`, including the default theme. The **Minimal** and **None** themes show no file icons at all.

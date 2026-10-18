@@ -4,7 +4,8 @@ namespace Pyrop.Parsing;
 
 public sealed record Parameter(PyropType Type, string Name, SourcePosition Position);
 
-public sealed record FunctionSignature(PyropType ReturnType, string Name, IReadOnlyList<Parameter> Parameters, SourcePosition Position)
+public sealed record FunctionSignature(
+    PyropType ReturnType, string Name, IReadOnlyList<Parameter> Parameters, SourcePosition Position, Module Module, bool IsExported)
 {
     public int Arity => Parameters.Count;
 }
@@ -23,6 +24,8 @@ public sealed class FunctionTable
     public FunctionSignature? Find(string name) => _functions.GetValueOrDefault(name);
 
     public bool Contains(string name) => _functions.ContainsKey(name);
+
+    public IEnumerable<FunctionSignature> Signatures => _functions.Values;
 
     public FunctionTable With(IEnumerable<FunctionSignature> signatures)
     {

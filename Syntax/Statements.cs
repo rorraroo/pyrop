@@ -11,7 +11,12 @@ public sealed record SetStatement(string Name, Expression Value, SourcePosition 
 
 public sealed record IfStatement(Expression Condition, Statement Then, Statement? Else, SourcePosition Position) : Statement(Position);
 
+public sealed record IfSomeStatement(
+    PyropType ValueType, string Name, Expression Option, Statement Then, Statement? Else, SourcePosition Position) : Statement(Position);
+
 public sealed record WhileStatement(Expression Condition, Statement Body, SourcePosition Position) : Statement(Position);
+
+public sealed record ForStatement(PyropType VariableType, string Variable, Expression List, Statement Body, SourcePosition Position) : Statement(Position);
 
 public sealed record BreakStatement(SourcePosition Position) : Statement(Position);
 
@@ -21,7 +26,7 @@ public sealed record FunctionStatement(FunctionSignature Signature, Statement Bo
 
 public sealed record ReturnStatement(Expression? Value, SourcePosition Position) : Statement(Position);
 
-public sealed record WriteStatement(Expression Value, bool AppendNewLine, SourcePosition Position) : Statement(Position);
+public sealed record WriteStatement(Expression Value, bool AppendNewLine, bool ToStandardError, SourcePosition Position) : Statement(Position);
 
 public sealed record ExitStatement(Expression Code, SourcePosition Position) : Statement(Position);
 
@@ -31,16 +36,24 @@ public sealed record BlockStatement(IReadOnlyList<Statement> Statements, SourceP
 
 public sealed record CallStatement(Expression Call, SourcePosition Position) : Statement(Position);
 
-public sealed record IncludeStatement(string Path, SyntaxTree? Included, SourcePosition Position) : Statement(Position);
+public sealed record UseStatement(string Name, string Path, SourcePosition Position) : Statement(Position);
+
+public sealed record ImportStatement(string Module, string Name, SourcePosition Position) : Statement(Position);
+
+public sealed record RecordStatement(RecordType Record, SourcePosition Position) : Statement(Position);
+
+public sealed record ChoiceStatement(ChoiceType Choice, SourcePosition Position) : Statement(Position);
 
 public sealed record SyntaxTree(IReadOnlyList<Statement> Statements)
 {
-    public IEnumerable<Statement> TopLevel =>
-        Statements.SelectMany(statement => statement is IncludeStatement { Included: { } included }
-            ? included.TopLevel
-            : [statement]);
+    public IEnumerable<FunctionStatement> Functions => Statements.OfType<FunctionStatement>();
 
-    public IEnumerable<FunctionStatement> Functions => TopLevel.OfType<FunctionStatement>();
+    public IEnumerable<DefStatement> Globals => Statements.OfType<DefStatement>();
+}
 
-    public IEnumerable<DefStatement> Globals => TopLevel.OfType<DefStatement>();
+public sealed record ModuleTree(Module Module, SyntaxTree Tree);
+
+public sealed record ParsedProgram(IReadOnlyList<ModuleTree> Modules, ModuleTree Main)
+{
+    public IEnumerable<ModuleTree> All => Modules.Append(Main);
 }

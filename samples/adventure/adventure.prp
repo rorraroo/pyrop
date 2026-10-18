@@ -1,0 +1,151 @@
+use items "items.prp"
+use world "world.prp"
+use state "state.prp"
+use saving "saving.prp"
+import from items ItemKind
+import from items item_description
+import from world Direction
+import from world Place
+import from world Room
+import from world compass
+import from world build_world
+import from state Player
+import from state new_player
+import from state carries
+import from state can_see
+import from state items_in
+import from saving save_game
+import from saving load_game
+
+choice Opening fresh_start saved_start leave_game end
+choice ActionKind go take show_inventory save quit end
+record Action ActionKind kind option Direction way option ItemKind item
+
+def string save_path "adventure.save"
+if greater argument_count 0 set save_path argument_at 0
+
+def map Place Room rooms build_world
+
+function list string names_of list ItemKind kinds block
+    def list string names empty list string
+    for ItemKind kind in kinds set names push names add "the " convert string kind
+    return names
+end
+
+function void describe Player player block
+    def Room room value_of rooms get_field place player
+    write_line ""
+    with_style "emphasis" write_line get_field title room
+    if not can_see room player block
+        write_line "It is pitch dark. You cannot see a thing."
+        return void
+    end
+    write_line get_field description room
+    def list ItemKind here items_in room player
+    if greater length_of here 0 write_line add "You see " add join names_of here " and " "."
+end
+
+function map string Action actions_for Player player block
+    def Room room value_of rooms get_field place player
+    def map Direction Place exits get_field exits room
+    def map string Action actions empty map string Action
+    for Direction way in compass
+        if has_key exits way
+            set actions put actions add "Go " convert string way Action go some way none ItemKind
+    if can_see room player
+        for ItemKind item in items_in room player
+            set actions put actions add "Take the " convert string item Action take none Direction some item
+    set actions put actions "Show the inventory" Action show_inventory none Direction none ItemKind
+    set actions put actions "Save the game" Action save none Direction none ItemKind
+    set actions put actions "Quit" Action quit none Direction none ItemKind
+    return actions
+end
+
+function Player walk Player player Direction way block
+    def Room here value_of rooms get_field place player
+    def Place target value_of get_field exits here way
+    def Player moved with_field moves player add get_field moves player 1
+    if_some ItemKind needed get_field needs value_of rooms target block
+        if not carries player needed block
+            write_line add "The door is locked. You need the " add convert string needed "."
+            return moved
+        end
+        write_line add "You unlock the door with the " add convert string needed "."
+    end
+    write_line add "You go " add convert string way "."
+    return with_field place moved target
+end
+
+function Player take_item Player player ItemKind item block
+    write_line add "You take the " add convert string item "."
+    def Player carrying with_field inventory player push get_field inventory player item
+    return with_field moves carrying add get_field moves carrying 1
+end
+
+function void show_inventory_of Player player block
+    def list ItemKind carried get_field inventory player
+    if equal length_of carried 0 block
+        write_line "You carry nothing."
+        return void
+    end
+    def list list string rows empty list list string
+    for ItemKind item in carried
+        set rows push rows list_of string convert string item item_description item end
+    write_table list_of string "Item" "Description" end rows
+end
+
+function void save_to string path Player player
+    if save_game path player with_style "success" write_line "The game is saved."
+    else with_style "warning" write_line "The game could not be saved."
+
+function Player restored string path block
+    if not file_exists path block
+        with_style "warning" write_line "There is no saved game yet, so a new game begins."
+        return new_player
+    end
+    if_some Player saved load_game path block
+        write_line add "Your saved game is restored after " add convert string get_field moves saved " moves."
+        return saved
+    end
+    with_style "warning" write_line "The saved game is damaged, so a new game begins."
+    return new_player
+end
+
+with_style "emphasis" write_line "The Crown of Pyrop"
+write_line "Find the lost crown and carry it out into the garden."
+
+def map string Opening openings put put put empty map string Opening
+    "Start a new game" fresh_start
+    "Load the saved game" saved_start
+    "Leave" leave_game
+def Opening opening value_of openings choose "How do you begin?" keys_of openings
+if equal opening leave_game exit 0
+
+def Player player new_player
+if equal opening saved_start set player restored save_path
+
+def bool playing true
+while playing block
+    describe player
+    if and equal get_field place player garden carries player crown block
+        with_style "success" write_line add "You carry the crown out into the sunlight. You won in " add convert string get_field moves player " moves."
+        break
+    end
+    def map string Action actions actions_for player
+    def Action action value_of actions choose "What do you do?" keys_of actions
+    def ActionKind kind get_field kind action
+    if equal kind go block
+        if_some Direction way get_field way action set player walk player way
+    end
+    else if equal kind take block
+        if_some ItemKind item get_field item action set player take_item player item
+    end
+    else if equal kind show_inventory show_inventory_of player
+    else if equal kind save save_to save_path player
+    else block
+        if confirm "Save before you leave?" save_to save_path player
+        write_line "Goodbye."
+        set playing false
+    end
+end
+read

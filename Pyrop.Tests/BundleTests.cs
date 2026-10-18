@@ -30,12 +30,12 @@ public sealed class BundleTests : IDisposable
 
     private void WriteProgram()
     {
-        Write(Path.Combine("lib", "text.prp"), "function string shout string text return add upper text \"!\"");
-        Write(Path.Combine("tools", "filter.prp"), "include \"../lib/text.prp\"\nwrite_line shout argument_at 0\nwrite_line divide 1 0");
+        Write(Path.Combine("lib", "text.prp"), "export function string shout string text return add upper text \"!\"");
+        Write(Path.Combine("tools", "filter.prp"), "use text \"../lib/text.prp\"\nwrite_line from text shout argument_at 0\nwrite_line divide 1 0");
     }
 
     [Fact]
-    public void BuildAppendsTheProgramAndItsIncludesToTheBaseExecutable()
+    public void BuildAppendsTheProgramAndItsModulesToTheBaseExecutable()
     {
         WriteProgram();
 
@@ -51,7 +51,7 @@ public sealed class BundleTests : IDisposable
     }
 
     [Fact]
-    public void ABundledProgramRunsWithItsIncludesAndNamesItsFilesInErrors()
+    public void ABundledProgramRunsWithItsModulesAndNamesItsFilesInErrors()
     {
         WriteProgram();
         var entry = PathOf(Path.Combine("tools", "filter.prp"));
@@ -116,20 +116,38 @@ public sealed class BundleTests : IDisposable
     }
 
     [Fact]
-    public void AnEntrySpelledDifferentlyFromItsCyclicIncludeIsBuilt()
+    public void AModuleUsedUnderTwoSpellingsIsBundledOnce()
     {
-        Write("lib.prp", "include \"main.prp\"\nfunction int twice int x return multiply x 2");
-        Write("main.prp", "include \"lib.prp\"\nwrite_line twice 2");
-        var differentCase = OperatingSystem.IsWindows() ? "MAIN.prp" : "main.prp";
+        Write("lib.prp", "export function int twice int x return multiply x 2\nwrite_line \"lib ready\"");
+        var otherSpelling = OperatingSystem.IsWindows() ? "LIB.prp" : "lib.prp";
+        Write("main.prp", $"use first \"lib.prp\"\nuse second \"{otherSpelling}\"\nwrite_line from first twice from second twice 2");
+        var entry = OperatingSystem.IsWindows() ? "MAIN.prp" : "main.prp";
 
-        Assert.Equal(0, BuildCommand.Build(PathOf(differentCase), PathOf("cyclic"), BaseExecutable()));
+        Assert.Equal(0, BuildCommand.Build(PathOf(entry), PathOf("spellings"), BaseExecutable()));
+
+        var bundle = Bundle.ReadFrom(PathOf(OperatingSystem.IsWindows() ? "spellings.exe" : "spellings"))!;
+        Assert.Equal(2, bundle.Files.Count);
+        var output = new StringOutput();
+        new PyropSession(new StringReader(""), output, store: new BundleSourceStore(bundle))
+            .Run(bundle.Entry.Text, bundle.EntryName, BundleSourceStore.FullPathOf(bundle.EntryName));
+        Assert.Equal("lib ready\n8\n", output.ToString());
     }
 
     [Fact]
-    public void ARelativeIncludeThroughTheParentDirectoryIsBuilt()
+    public void AUseCycleIsNotBuilt()
     {
-        Write(Path.Combine("tools", "a.prp"), "def int answer 42");
-        var script = Write(Path.Combine("tools", "e.prp"), "include \"../tools/a.prp\"\nwrite_line answer");
+        Write("lib.prp", "use main \"main.prp\"\nexport function int one return 1");
+        var script = Write("main.prp", "use lib \"lib.prp\"\nwrite_line from lib one");
+
+        Assert.Equal(1, BuildCommand.Build(script, PathOf("cyclic"), BaseExecutable()));
+        Assert.Empty(Directory.GetFiles(_directory, "cyclic*"));
+    }
+
+    [Fact]
+    public void ARelativeUseThroughTheParentDirectoryIsBuilt()
+    {
+        Write(Path.Combine("tools", "a.prp"), "export function int answer return 42");
+        var script = Write(Path.Combine("tools", "e.prp"), "use a \"../tools/a.prp\"\nwrite_line from a answer");
 
         Assert.Equal(0, BuildCommand.Build(script, PathOf("through-parent"), BaseExecutable()));
 
@@ -173,10 +191,10 @@ public sealed class BundleTests : IDisposable
     }
 
     [Fact]
-    public void AnAbsoluteIncludeIsNotBuilt()
+    public void AnAbsoluteUseIsNotBuilt()
     {
-        var library = Write("library.prp", "def int answer 42");
-        var script = Write("main.prp", $"include \"{library.Replace("\\", "/")}\"\nwrite_line answer");
+        var library = Write("library.prp", "export function int answer return 42");
+        var script = Write("main.prp", $"use library \"{library.Replace("\\", "/")}\"\nwrite_line from library answer");
 
         Assert.Equal(1, BuildCommand.Build(script, PathOf("main-built"), BaseExecutable()));
         Assert.Empty(Directory.GetFiles(_directory, "main-built*"));

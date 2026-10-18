@@ -14,7 +14,15 @@ public interface IBuiltinInvocation
 
     OutputStyle Style { get; }
 
+    int CollectionLimit { get; }
+
+    int NestingLimit { get; }
+
+    bool IsAttempted { get; }
+
     Exception Fail(string message);
+
+    Exception FailAtLimit(string message);
 }
 
 public delegate Value? BuiltinImplementation(IBuiltinInvocation invocation);
@@ -30,6 +38,23 @@ public sealed record OverloadMatch(BuiltinOverload Overload, PyropType Result);
 public sealed record BuiltinOperation(string Name, int Arity, IReadOnlyList<BuiltinOverload> Overloads)
 {
     public bool ReturnsVoid => Overloads.All(overload => overload.Result == PyropType.Void);
+
+    public string DescribeAccepted()
+    {
+        var accepted = string.Join(", ", Overloads.Select(overload => overload.DescribeParameters()));
+        var letters = Overloads
+            .SelectMany(overload => overload.Parameters)
+            .SelectMany(type => type.TypeParameters)
+            .Select(parameter => parameter.Name)
+            .Distinct()
+            .ToList();
+        return letters switch
+        {
+            [] => accepted,
+            [var letter] => $"{accepted} ({letter} stands for any type, the same wherever it appears)",
+            _ => $"{accepted} ({string.Join(", ", letters.SkipLast(1))} and {letters[^1]} stand for any types, each the same wherever it appears)",
+        };
+    }
 
     public OverloadMatch? FindOverload(IReadOnlyList<PyropType> argumentTypes)
     {
@@ -54,6 +79,12 @@ public static class Builtins
     private static readonly PyropType S = PyropType.String;
     private static readonly PyropType B = PyropType.Bool;
     private static readonly PyropType V = PyropType.Void;
+    private static readonly PyropType Item = new TypeParameter("T");
+    private static readonly PyropType Key = new TypeParameter("K");
+    private static readonly PyropType Stored = new TypeParameter("V");
+    private static readonly PyropType ListT = PyropTypes.ListOf(Item);
+    private static readonly PyropType MapKV = PyropTypes.MapOf(Key, Stored);
+    private static readonly PyropType OptionT = PyropTypes.OptionOf(Item);
 
     public static IReadOnlyDictionary<string, BuiltinOperation> All { get; } = new BuiltinOperation[]
     {
@@ -73,9 +104,8 @@ public static class Builtins
         Operation("modulo",
             Overload([I, I], I, c => new IntValue(Remainder(c.Argument(0).AsInt(), NonZero(c, c.Argument(1).AsInt()))))),
         Operation("equal",
-            PyropTypes.ValueTypes
-                .Select(type => Overload([type, type], B, c => BoolValue.Of(c.Argument(0) == c.Argument(1))))
-                .ToArray()),
+            Overload([Item, Item], B, c => BoolValue.Of(
+                ValueEquality.Equal(c.Argument(0), c.Argument(1), c.NestingLimit, () => CollectionOperations.TooDeep(c, "equal"))))),
         Operation("greater", Comparisons(order => order > 0)),
         Operation("less", Comparisons(order => order < 0)),
         Operation("at_least", Comparisons(order => order >= 0)),
@@ -92,6 +122,12 @@ public static class Builtins
             Overload([S], S, c => new StringValue(Ask(c, c.Argument(0).AsString())))),
         Operation("confirm",
             Overload([S], B, c => BoolValue.Of(Confirm(c, c.Argument(0).AsString())))),
+        Operation("choose",
+            Overload([S, PyropTypes.ListOf(S)], S, c => new StringValue(
+                TerminalOperations.Choose(c, c.Argument(0).AsString(), c.Argument(1).AsList())))),
+        Operation("write_table",
+            Overload([PyropTypes.ListOf(S), PyropTypes.ListOf(PyropTypes.ListOf(S))], V, c => TerminalOperations.WriteTable(
+                c, c.Argument(0).AsList(), c.Argument(1).AsList()))),
         Operation("input_ended",
             Overload([], B, c => BoolValue.Of(c.Input.HasEnded()))),
         Operation("argument_count",
@@ -108,8 +144,40 @@ public static class Builtins
             Overload([S, S], V, c => TextFiles.Write(c, c.Argument(0).AsString(), c.Argument(1).AsString(), append: true))),
         Operation("file_exists",
             Overload([S], B, c => BoolValue.Of(File.Exists(c.Argument(0).AsString())))),
+        Operation("read_lines",
+            Overload([S], PyropTypes.ListOf(S), c => TextFiles.ReadLines(c, c.Argument(0).AsString()))),
+        Operation("list_files",
+            Overload([S], PyropTypes.ListOf(S), c => TextFiles.ListFiles(c, c.Argument(0).AsString()))),
         Operation("length_of",
-            Overload([S], I, c => new IntValue(TextOperations.LengthOf(c.Argument(0).AsString())))),
+            Overload([S], I, c => new IntValue(TextOperations.LengthOf(c.Argument(0).AsString()))),
+            Overload([ListT], I, c => new IntValue(c.Argument(0).AsList().Count)),
+            Overload([MapKV], I, c => new IntValue(c.Argument(0).AsMap().Count))),
+        Operation("item_at",
+            Overload([ListT, I], Item, c => CollectionOperations.ItemAt(c, c.Argument(0).AsList(), c.Argument(1).AsInt()))),
+        Operation("push",
+            Overload([ListT, Item], ListT, c => CollectionOperations.Push(c, c.Argument(0).AsList(), c.Argument(1)))),
+        Operation("replace_at",
+            Overload([ListT, I, Item], ListT, c => CollectionOperations.ReplaceAt(
+                c, c.Argument(0).AsList(), c.Argument(1).AsInt(), c.Argument(2)))),
+        Operation("remove_at",
+            Overload([ListT, I], ListT, c => CollectionOperations.RemoveAt(c, c.Argument(0).AsList(), c.Argument(1).AsInt()))),
+        Operation("contains",
+            Overload([ListT, Item], B, c => BoolValue.Of(CollectionOperations.Contains(c, c.Argument(0).AsList(), c.Argument(1))))),
+        Operation("value_of",
+            Overload([MapKV, Key], Stored, c => CollectionOperations.ValueOf(c, c.Argument(0).AsMap(), c.Argument(1)))),
+        Operation("put",
+            Overload([MapKV, Key, Stored], MapKV, c => CollectionOperations.Put(
+                c, c.Argument(0).AsMap(), c.Argument(1), c.Argument(2)))),
+        Operation("remove_key",
+            Overload([MapKV, Key], MapKV, c => CollectionOperations.RemoveKey(c, c.Argument(0).AsMap(), c.Argument(1)))),
+        Operation("has_key",
+            Overload([MapKV, Key], B, c => BoolValue.Of(c.Argument(0).AsMap().ContainsKey(c.Argument(1))))),
+        Operation("keys_of",
+            Overload([MapKV], PyropTypes.ListOf(Key), c => CollectionOperations.KeysOf(c.Argument(0).AsMap()))),
+        Operation("some",
+            Overload([Item], OptionT, c => OptionValue.Some(c.Argument(0)))),
+        Operation("value_or",
+            Overload([OptionT, Item], Item, c => c.Argument(0).AsOption().Content ?? c.Argument(1))),
         Operation("substring",
             Overload([S, I, I], S, c => new StringValue(
                 TextOperations.Substring(c, c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsInt())))),
@@ -141,6 +209,11 @@ public static class Builtins
         Operation("pad_right",
             Overload([S, I, S], S, c => new StringValue(
                 TextOperations.Pad(c, "pad_right", c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsString(), left: false)))),
+        Operation("split",
+            Overload([S, S], PyropTypes.ListOf(S), c => TextOperations.Split(c, c.Argument(0).AsString(), c.Argument(1).AsString()))),
+        Operation("join",
+            Overload([PyropTypes.ListOf(S), S], S, c => new StringValue(
+                TextOperations.Join(c, c.Argument(0).AsList(), c.Argument(1).AsString())))),
         Operation("abs",
             Overload([I], I, c => Int(c, () => Math.Abs(c.Argument(0).AsInt()))),
             Overload([F], F, c => new FloatValue(Math.Abs(c.Argument(0).AsFloat())))),
@@ -324,7 +397,8 @@ public static class Builtins
             throw invocation.Fail($"\"{name}\" is not a valid environment variable name; it cannot contain '=' or control characters.");
         }
 
-        return invocation.Host.ReadEnvironment(name) ?? "";
+        return invocation.Host.ReadEnvironment(name)
+            ?? (invocation.IsAttempted ? throw invocation.Fail($"Environment variable \"{name}\" is not set.") : "");
     }
 
     private static long Remainder(long dividend, long divisor) => divisor == -1 ? 0 : dividend % divisor;

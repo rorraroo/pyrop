@@ -10,6 +10,7 @@ public static class ReturnPaths
         ReturnStatement or ExitStatement => true,
         BlockStatement block => block.Statements.Any(AlwaysReturns),
         IfStatement { Else: { } otherwise } conditional => AlwaysReturns(conditional.Then) && AlwaysReturns(otherwise),
+        IfSomeStatement { Else: { } otherwise } unwrap => AlwaysReturns(unwrap.Then) && AlwaysReturns(otherwise),
         WithStyleStatement styled => AlwaysReturns(styled.Body),
         WhileStatement { Condition: LiteralExpression { Value: BoolValue { Value: true } } } loop => !BreaksOut(loop.Body),
         _ => false,
@@ -20,6 +21,7 @@ public static class ReturnPaths
         BreakStatement => true,
         BlockStatement block => block.Statements.Any(BreaksOut),
         IfStatement conditional => BreaksOut(conditional.Then) || (conditional.Else is { } otherwise && BreaksOut(otherwise)),
+        IfSomeStatement unwrap => BreaksOut(unwrap.Then) || (unwrap.Else is { } otherwise && BreaksOut(otherwise)),
         WithStyleStatement styled => BreaksOut(styled.Body),
         _ => false,
     };

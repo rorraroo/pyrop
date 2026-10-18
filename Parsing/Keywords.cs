@@ -9,6 +9,8 @@ public static class Keywords
     public const string If = "if";
     public const string Else = "else";
     public const string While = "while";
+    public const string For = "for";
+    public const string In = "in";
     public const string Break = "break";
     public const string Continue = "continue";
     public const string Block = "block";
@@ -17,24 +19,40 @@ public static class Keywords
     public const string Return = "return";
     public const string Write = "write";
     public const string WriteLine = "write_line";
+    public const string WriteError = "write_error";
+    public const string WriteErrorLine = "write_error_line";
     public const string Convert = "convert";
-    public const string Include = "include";
+    public const string Empty = "empty";
+    public const string ListOf = "list_of";
     public const string Exit = "exit";
     public const string WithStyle = "with_style";
+    public const string Use = "use";
+    public const string Import = "import";
+    public const string Export = "export";
+    public const string From = "from";
+    public const string Record = "record";
+    public const string Choice = "choice";
+    public const string GetField = "get_field";
+    public const string WithField = "with_field";
+    public const string Attempt = "attempt";
+    public const string IfSome = "if_some";
+    public const string None = "none";
     public const string True = "true";
     public const string False = "false";
 
     private static readonly HashSet<string> Reserved =
     [
-        Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        Convert, Include, Exit, WithStyle, True, False,
+        Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
+        WriteError, WriteErrorLine, Convert, Empty, ListOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, GetField,
+        WithField, Attempt, IfSome, None, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
     ];
 
     private static readonly HashSet<string> Statements =
     [
-        Def, Set, If, Else, While, Break, Continue, Block, End, Function, Return, Write, WriteLine, Include, Exit, WithStyle,
+        Def, Set, If, Else, While, For, Break, Continue, Block, End, Function, Return, Write, WriteLine,
+        WriteError, WriteErrorLine, Exit, WithStyle, Use, Import, Export, Record, Choice, IfSome,
     ];
 
     public static bool IsReserved(string word) => Reserved.Contains(word);

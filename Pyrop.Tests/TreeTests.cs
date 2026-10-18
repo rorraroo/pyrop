@@ -68,16 +68,30 @@ public class TreeTests
     }
 
     [Fact]
-    public void ShowsReturnVoidAndIncludeAsWritten()
+    public void ShowsReturnVoidAndModulesAsWritten()
     {
-        var library = Path.Combine(Directory.CreateTempSubdirectory("pyrop-tree-").FullName, "lib.prp");
-        File.WriteAllText(library, "def int answer 42");
+        var directory = Directory.CreateTempSubdirectory("pyrop-tree-").FullName;
+        var library = Path.Combine(directory, "geometry.prp");
+        File.WriteAllText(
+            library,
+            "export function float distance float x float y return add x y\n" +
+            "export function int answer return 42\nexport function void greet write_line \"hi\"");
         var path = library.Replace('\\', '/');
+        const string program =
+            "import from geometry distance\nexport function void stop return void\n" +
+            "write_line from geometry distance 3.0 distance 1.0 2.0\nwrite_line from geometry answer\nfrom geometry greet";
 
-        Assert.Equal(
-            $"function void stop\n    return void\ninclude \"{path}\"\n",
-            Tree($"function void stop return void\ninclude \"{path}\""));
-        Directory.Delete(Path.GetDirectoryName(library)!, recursive: true);
+        try
+        {
+            Assert.Equal(
+                $"use geometry \"{path}\"\nimport from geometry distance\nexport function void stop\n    return void\n" +
+                "write_line (from geometry distance 3.0 (distance 1.0 2.0))\nwrite_line from geometry answer\nfrom geometry greet\n",
+                Tree($"use geometry \"{path}\"\n{program}"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -98,6 +112,38 @@ public class TreeTests
 
         Assert.Equal("write_line (add 1 \"a\")\nwrite_line 2\n", TreePrinter.Print(inspected.Tree!));
         Assert.Equal(ErrorStage.Type, Assert.Single(inspected.Error!.Errors).Stage);
+    }
+
+    [Fact]
+    public void BracketsCollectionFormsAndPrintsTypesInFull()
+    {
+        const string source =
+            "def map string list int m empty map string list int\n" +
+            "def list list int a list_of list int\n    list_of int 1 add 1 1 end\n    empty list int\nend\n" +
+            "function list string names map string list int scores return keys_of scores\n" +
+            "set m put m \"x\" item_at a 0\nwrite_line list_of string \"a\\\"b\" end";
+
+        Assert.Equal(
+            "def map string list int m (empty map string list int)\n" +
+            "def list list int a (list_of list int (list_of int 1 (add 1 1) end) (empty list int) end)\n" +
+            "function list string names map string list int scores\n    return (keys_of scores)\n" +
+            "set m (put m \"x\" (item_at a 0))\n" +
+            "write_line (list_of string \"a\\\"b\" end)\n",
+            Tree(source));
+    }
+
+    [Fact]
+    public void PrintsDeeplyNestedProgramsWithoutRunningOutOfStack()
+    {
+        const int depth = 20_000;
+        var source = $"write_line {string.Concat(Enumerable.Repeat("negate ", depth))}1\n" +
+            $"def int n length_of empty {string.Concat(Enumerable.Repeat("list ", depth))}int";
+
+        var inspected = Inspect(source);
+
+        Assert.Null(inspected.Error);
+        Assert.StartsWith("write_line (negate (negate ", inspected.Text);
+        Assert.EndsWith(" list int))\n", inspected.Text);
     }
 
     [Fact]

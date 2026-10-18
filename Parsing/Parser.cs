@@ -7,34 +7,34 @@ namespace Pyrop.Parsing;
 
 public sealed class Parser
 {
-    private static readonly IReadOnlySet<string> NoParameters = new HashSet<string>();
+    private static readonly IReadOnlySet<string> NoDeclarations = new HashSet<string>();
+    private static readonly OuterNames NoOuterNames = new(new HashSet<string>(), "parameter", GuardsBoundNames: false);
 
-    private readonly FunctionTable _functions;
-    private readonly IncludeContext? _includes;
-    private TokenCursor _cursor;
-    private string? _directory;
+    private readonly ModuleNamespace _names;
+    private readonly TokenCursor _cursor;
     private FunctionSignature? _currentFunction;
     private int _loopDepth;
     private int _nesting;
 
-    private Parser(IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes)
+    private Parser(IReadOnlyList<Token> tokens, ModuleNamespace names, bool reportsIncompleteInput)
     {
-        _cursor = new TokenCursor(tokens);
-        _functions = functions;
-        _includes = includes;
-        _directory = includes?.BaseDirectory;
+        _cursor = new TokenCursor(tokens, reportsIncompleteInput);
+        _names = names;
     }
 
-    public static SyntaxTree Parse(IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes = null) =>
-        new Parser(tokens, functions, includes).ParseProgram(new HashSet<string>());
+    public static SyntaxTree Parse(IReadOnlyList<Token> tokens, ModuleNamespace names, bool reportsIncompleteInput = true)
+    {
+        var statements = new List<Statement>();
+        new Parser(tokens, names, reportsIncompleteInput).ParseInto(statements);
+        return new SyntaxTree(statements);
+    }
 
-    public static (SyntaxTree Tree, PyropException? Error) ParseUntilError(
-        IReadOnlyList<Token> tokens, FunctionTable functions, IncludeContext? includes = null)
+    public static (SyntaxTree Tree, PyropException? Error) ParseUntilError(IReadOnlyList<Token> tokens, ModuleNamespace names)
     {
         var statements = new List<Statement>();
         try
         {
-            new Parser(tokens, functions, includes).ParseInto(statements, new HashSet<string>());
+            new Parser(tokens, names, reportsIncompleteInput: true).ParseInto(statements);
             return (new SyntaxTree(statements), null);
         }
         catch (PyropException exception)
@@ -43,73 +43,147 @@ public sealed class Parser
         }
     }
 
-    private SyntaxTree ParseProgram(HashSet<string> declared)
+    private void ParseInto(List<Statement> statements)
     {
-        var statements = new List<Statement>();
-        ParseInto(statements, declared);
-        return new SyntaxTree(statements);
-    }
-
-    private void ParseInto(List<Statement> statements, HashSet<string> declared)
-    {
+        var declared = new HashSet<string>();
         while (!_cursor.IsAtEnd)
         {
-            statements.Add(ParseListedStatement(declared, NoParameters));
+            statements.Add(ParseListedStatement(declared, NoOuterNames));
         }
     }
 
-    private Statement ParseListedStatement(HashSet<string> declared, IReadOnlySet<string> parameters)
+    private bool AtTopLevel => _nesting == 0 && _currentFunction is null;
+
+    private Statement ParseListedStatement(HashSet<string> declared, OuterNames outer)
     {
-        if (_cursor.Current.IsWord(Keywords.Def))
+        var token = _cursor.Current;
+        if (token.IsWord(Keywords.Def))
         {
-            return ParseDef(declared, parameters);
+            return ParseDef(declared, outer);
         }
 
-        if (_cursor.Current.IsWord(Keywords.Include) && _nesting == 0 && _currentFunction is null)
+        if (token.IsWord(Keywords.For))
         {
-            return ParseInclude(declared);
+            return ParseFor(declared, outer);
+        }
+
+        if (token.IsWord(Keywords.IfSome))
+        {
+            return ParseIfSome(declared, outer);
+        }
+
+        if (AtTopLevel && token.Kind == TokenKind.Word)
+        {
+            switch (token.Text)
+            {
+                case Keywords.Use:
+                    return ParseUse();
+                case Keywords.Import:
+                    return ParseImport();
+                case Keywords.Export:
+                    return ParseExport();
+                case Keywords.Record:
+                    return ParseRecord();
+                case Keywords.Choice:
+                    return ParseChoice();
+            }
         }
 
         return ParseStatement();
     }
 
-    private Statement ParseInclude(HashSet<string> globals)
+    private void ThrowIfFailed(Token statement)
     {
-        var start = _cursor.Advance();
-        var pathToken = _cursor.Current;
-        if (pathToken.Kind != TokenKind.String)
+        if (_names.Failures.OfStatement(statement) is { } failure)
         {
-            throw _cursor.Error($"'include' takes a string literal path, found {pathToken.Describe()}.");
-        }
-
-        _cursor.Advance();
-        if (_includes is null || _directory is null)
-        {
-            throw _cursor.Error("'include' is not available here.", start);
-        }
-
-        var file = _includes.Loader.Load(pathToken.Text, _directory, pathToken.Position);
-        if (!_includes.Included.Add(file.FullPath))
-        {
-            return new IncludeStatement(pathToken.Text, null, start.Position);
-        }
-
-        var outerCursor = _cursor;
-        var outerDirectory = _directory;
-        _cursor = new TokenCursor(file.Tokens, reportsIncompleteInput: false);
-        _directory = file.Directory;
-        try
-        {
-            return new IncludeStatement(pathToken.Text, ParseProgram(globals), start.Position);
-        }
-        finally
-        {
-            _cursor = outerCursor;
-            _directory = outerDirectory;
+            throw failure;
         }
     }
 
-    private Statement ParseBody(string owner, IReadOnlySet<string>? parameters = null)
+    private Statement ParseUse()
+    {
+        var start = _cursor.Advance();
+        ThrowIfFailed(start);
+        var nameToken = _cursor.ExpectWord($"a module name after '{Keywords.Use}'");
+        if (Keywords.IsReserved(nameToken.Text))
+        {
+            throw _cursor.Error($"'{nameToken.Text}' is a reserved word and cannot be used as a module name.", nameToken);
+        }
+
+        var pathToken = _cursor.Current;
+        if (pathToken.Kind != TokenKind.String)
+        {
+            throw _cursor.Error(
+                $"'{Keywords.Use}' takes a module name and then a string literal path: {Keywords.Use} {nameToken.Text} \"<path>\", found {pathToken.Describe()}.");
+        }
+
+        _cursor.Advance();
+        if (!_names.Uses.ContainsKey(nameToken.Text))
+        {
+            throw new InvalidOperationException($"Module '{nameToken.Text}' was not registered by the signature pre-pass.");
+        }
+
+        return new UseStatement(nameToken.Text, pathToken.Text, start.Position);
+    }
+
+    private Statement ParseImport()
+    {
+        var start = _cursor.Advance();
+        ThrowIfFailed(start);
+        if (!_cursor.Current.IsWord(Keywords.From))
+        {
+            throw _cursor.Error(
+                $"'{Keywords.Import}' takes a qualified name: {Keywords.Import} {Keywords.From} <module> <name>, found {_cursor.Current.Describe()}.");
+        }
+
+        var qualified = QualifiedNames.Read(_cursor);
+        QualifiedNames.Resolve(_names, qualified, _cursor);
+        return new ImportStatement(qualified.Module.Text, qualified.Name.Text, start.Position);
+    }
+
+    private Statement ParseExport()
+    {
+        _cursor.Advance();
+        if (_cursor.Current.IsWord(Keywords.Record))
+        {
+            return ParseRecord();
+        }
+
+        if (_cursor.Current.IsWord(Keywords.Choice))
+        {
+            return ParseChoice();
+        }
+
+        if (!_cursor.Current.IsWord(Keywords.Function))
+        {
+            throw _cursor.Error(
+                $"'{Keywords.Export}' must be followed by a function, record or choice definition, found {_cursor.Current.Describe()}.");
+        }
+
+        return ParseFunction();
+    }
+
+    private Statement ParseRecord()
+    {
+        var start = _cursor.Advance();
+        var name = RecordDeclarations.ReadName(_cursor).Text;
+        RecordDeclarations.ReadFields(_cursor, _names, name);
+        var record = _names.Records.GetValueOrDefault(name)
+            ?? throw new InvalidOperationException($"Record '{name}' was not registered by the signature pre-pass.");
+        return new RecordStatement(record, start.Position);
+    }
+
+    private Statement ParseChoice()
+    {
+        var start = _cursor.Advance();
+        var name = ChoiceDeclarations.ReadName(_cursor).Text;
+        ChoiceDeclarations.ReadVariants(_cursor, start, name);
+        var choice = _names.Choices.GetValueOrDefault(name)
+            ?? throw new InvalidOperationException($"Choice '{name}' was not registered by the signature pre-pass.");
+        return new ChoiceStatement(choice, start.Position);
+    }
+
+    private Statement ParseBody(string owner, OuterNames? outer = null)
     {
         if (_cursor.Current.IsWord(Keywords.Def))
         {
@@ -119,8 +193,18 @@ public sealed class Parser
         _nesting++;
         try
         {
-            return _cursor.Current.IsWord(Keywords.Block)
-                ? ParseBlock(parameters ?? NoParameters)
+            if (_cursor.Current.IsWord(Keywords.Block))
+            {
+                return ParseBlock(outer ?? NoOuterNames);
+            }
+
+            if (outer is { GuardsBoundNames: true } && _cursor.Current.IsWord(Keywords.For))
+            {
+                return ParseFor(NoDeclarations, outer);
+            }
+
+            return outer is { GuardsBoundNames: true } && _cursor.Current.IsWord(Keywords.IfSome)
+                ? ParseIfSome(NoDeclarations, outer)
                 : ParseStatement();
         }
         finally
@@ -145,23 +229,39 @@ public sealed class Parser
         return token.Text switch
         {
             Keywords.Def => throw _cursor.Error("A def cannot be used here; wrap it in block … end."),
-            Keywords.Include => throw _cursor.Error("'include' is only allowed at the top level."),
+            Keywords.Use or Keywords.Import or Keywords.Export =>
+                throw _cursor.Error($"'{token.Text}' is only allowed at the top level."),
+            Keywords.Record => throw _cursor.Error("Records can only be declared at the top level."),
+            Keywords.Choice => throw _cursor.Error("Choices can only be declared at the top level."),
             Keywords.Set => ParseSet(),
             Keywords.If => ParseIf(),
+            Keywords.IfSome => ParseIfSome(NoDeclarations, NoOuterNames),
+            Keywords.Attempt => throw _cursor.Error(
+                $"'{Keywords.Attempt}' cannot be a statement: its result tells whether the operation succeeded. " +
+                $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} write_file \"save.txt\" text …."),
             Keywords.While => ParseWhile(),
+            Keywords.For => ParseFor(NoDeclarations, NoOuterNames),
+            Keywords.In => throw _cursor.Error($"'{Keywords.In}' without a matching '{Keywords.For}'."),
             Keywords.Break => ParseLoopControl(isBreak: true),
             Keywords.Continue => ParseLoopControl(isBreak: false),
             Keywords.Function => ParseFunction(),
             Keywords.Return => ParseReturn(),
-            Keywords.Write => ParseWrite(appendNewLine: false),
-            Keywords.WriteLine => ParseWrite(appendNewLine: true),
+            Keywords.Write => ParseWrite(appendNewLine: false, toStandardError: false),
+            Keywords.WriteLine => ParseWrite(appendNewLine: true, toStandardError: false),
+            Keywords.WriteError => ParseWrite(appendNewLine: false, toStandardError: true),
+            Keywords.WriteErrorLine => ParseWrite(appendNewLine: true, toStandardError: true),
             Keywords.Exit => ParseExit(),
             Keywords.WithStyle => ParseWithStyle(),
             Keywords.Block => ParseNestedBlock(),
             Keywords.End => throw _cursor.Error("'end' without a matching 'block'."),
-            Keywords.Else => throw _cursor.Error("'else' without a matching 'if'."),
-            _ when Builtins.All.ContainsKey(token.Text) || _functions.Contains(token.Text) =>
+            Keywords.Else => throw _cursor.Error($"'else' without a matching 'if' or '{Keywords.IfSome}'."),
+            Keywords.From => new CallStatement(ParseQualified(allowVoid: true, asStatement: true), token.Position),
+            _ when Builtins.All.ContainsKey(token.Text) || _names.FindCallable(token.Text) is not null =>
                 new CallStatement(ParseCall(allowVoid: true), token.Position),
+            _ when _names.FindRecord(token.Text) is not null => throw ConstructorStatement(token, token.Text),
+            _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
+            _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
+            _ when _names.Uses.ContainsKey(token.Text) => throw ModuleUsedAsValue(token),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
             _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
                 throw _cursor.Error(Keywords.UnderscoreHint(token.Text, spelling)),
@@ -169,21 +269,45 @@ public sealed class Parser
         };
     }
 
-    private PyropException StrayValue(Token token) =>
+    private PyropException ModuleUsedAsValue(Token token) =>
         _cursor.Error(
-            $"{token.Describe()} cannot stand alone as a statement. " +
+            $"'{token.Text}' is a module; name one of its exported functions with {Keywords.From} {token.Text} <name>.",
+            token);
+
+    private PyropException ConstructorStatement(Token token, string written) =>
+        _cursor.Error(
+            $"A record constructor cannot be a statement: '{written} …' would make a record only to throw it away, " +
+            "and no statement may start with a type name, so that parameter and field lists know where they end. " +
+            $"Use the new record as a value, as in {Keywords.Def} {written} <name> {written} ….",
+            token);
+
+    private PyropException ChoiceStartingStatement(Token token, ChoiceType choice, string? module = null) =>
+        _cursor.Error(
+            $"A statement cannot start with the choice '{choice.Name}': a choice is a type, and no statement may start with a type name. " +
+            $"Use one of its variants as a value, as in {Keywords.Def} {Written(module, choice.Name)} <name> {Written(module, choice.Variants[0].Name)}.",
+            token);
+
+    private PyropException ChoiceAsValue(Token token, ChoiceType choice, string? module = null) =>
+        _cursor.Error(
+            $"'{choice.Name}' is a choice, not a value; name one of its variants, such as {Written(module, choice.Variants[0].Name)}.", token);
+
+    private static string Written(string? module, string name) => module is null ? name : $"{Keywords.From} {module} {name}";
+
+    private PyropException StrayValue(Token token, string? described = null) =>
+        _cursor.Error(
+            $"{described ?? token.Describe()} cannot stand alone as a statement. " +
             "This usually means the expression before it was given more arguments than its operation takes.",
             token);
 
-    private Statement ParseDef(HashSet<string> declared, IReadOnlySet<string> parameters)
+    private Statement ParseDef(HashSet<string> declared, OuterNames outer)
     {
         var start = _cursor.Advance();
-        var type = TypeReader.ReadValueType(_cursor, "variable");
+        var type = TypeReader.ReadValueType(_cursor, _names, "variable");
         var nameToken = _cursor.Current;
-        var name = _cursor.ExpectIdentifier("variable name", _functions);
-        if (parameters.Contains(name))
+        var name = _cursor.ExpectIdentifier("variable name", _names);
+        if (outer.Names.Contains(name))
         {
-            throw _cursor.Error($"Variable '{name}' would shadow the parameter of the same name.", nameToken);
+            throw _cursor.Error($"Variable '{name}' would shadow the {outer.Kind} of the same name.", nameToken);
         }
 
         if (!declared.Add(name))
@@ -202,7 +326,7 @@ public sealed class Parser
     private Statement ParseSet()
     {
         var start = _cursor.Advance();
-        var name = _cursor.ExpectIdentifier("variable name", _functions);
+        var name = _cursor.ExpectIdentifier("variable name", _names);
         return new SetStatement(name, ParseExpression(), start.Position);
     }
 
@@ -221,6 +345,42 @@ public sealed class Parser
         return new IfStatement(condition, then, otherwise, start.Position);
     }
 
+    private Statement ParseIfSome(IReadOnlySet<string> declared, OuterNames outer)
+    {
+        var start = _cursor.Advance();
+        if (_cursor.Current.IsWord(PyropType.Void.Name))
+        {
+            throw _cursor.Error(
+                $"'{Keywords.IfSome}' takes the type of the value it unwraps, such as {Keywords.IfSome} int age …; void has no values.");
+        }
+
+        var type = TypeReader.ReadValueType(_cursor, _names, "value");
+        var nameToken = _cursor.Current;
+        var name = _cursor.ExpectIdentifier("value name", _names);
+        if (declared.Contains(name))
+        {
+            throw _cursor.Error(
+                $"The {Keywords.IfSome} value '{name}' would shadow the variable of the same name declared earlier in this block.",
+                nameToken);
+        }
+
+        if (outer.GuardsBoundNames && outer.Names.Contains(name))
+        {
+            throw _cursor.Error($"The {Keywords.IfSome} value '{name}' would shadow the {outer.Kind} of the same name.", nameToken);
+        }
+
+        var option = ParseExpression();
+        var then = ParseBody($"an {Keywords.IfSome}", new OuterNames(new HashSet<string> { name }, $"{Keywords.IfSome} value", GuardsBoundNames: false));
+        Statement? otherwise = null;
+        if (_cursor.Current.IsWord(Keywords.Else))
+        {
+            _cursor.Advance();
+            otherwise = ParseBody("an else");
+        }
+
+        return new IfSomeStatement(type, name, option, then, otherwise, start.Position);
+    }
+
     private Statement ParseWhile()
     {
         var start = _cursor.Advance();
@@ -236,12 +396,50 @@ public sealed class Parser
         }
     }
 
+    private Statement ParseFor(IReadOnlySet<string> declared, OuterNames outer)
+    {
+        var start = _cursor.Advance();
+        var type = TypeReader.ReadValueType(_cursor, _names, "loop variable");
+        var variableToken = _cursor.Current;
+        var variable = _cursor.ExpectIdentifier("loop variable name", _names);
+        if (declared.Contains(variable))
+        {
+            throw _cursor.Error(
+                $"Loop variable '{variable}' would shadow the variable of the same name declared earlier in this block.",
+                variableToken);
+        }
+
+        if (outer.GuardsBoundNames && outer.Names.Contains(variable))
+        {
+            throw _cursor.Error($"Loop variable '{variable}' would shadow the {outer.Kind} of the same name.", variableToken);
+        }
+
+        if (!_cursor.Current.IsWord(Keywords.In))
+        {
+            throw _cursor.Error(
+                $"Expected '{Keywords.In}' after the loop variable: {Keywords.For} {type.Name} {variable} {Keywords.In} <list> <statement>, found {_cursor.Current.Describe()}.");
+        }
+
+        _cursor.Advance();
+        var list = ParseExpression();
+        _loopDepth++;
+        try
+        {
+            var body = ParseBody("a for loop", new OuterNames(new HashSet<string> { variable }, "loop variable", GuardsBoundNames: false));
+            return new ForStatement(type, variable, list, body, start.Position);
+        }
+        finally
+        {
+            _loopDepth--;
+        }
+    }
+
     private Statement ParseLoopControl(bool isBreak)
     {
         var token = _cursor.Advance();
         if (_loopDepth == 0)
         {
-            throw _cursor.Error($"'{token.Text}' is only allowed inside a while loop.", token);
+            throw _cursor.Error($"'{token.Text}' is only allowed inside a while or for loop.", token);
         }
 
         return isBreak ? new BreakStatement(token.Position) : new ContinueStatement(token.Position);
@@ -255,8 +453,8 @@ public sealed class Parser
             throw _cursor.Error("Functions can only be defined at the top level.", start);
         }
 
-        var header = SignatureScanner.ReadHeader(_cursor, _functions);
-        var signature = _functions.Find(header.Name)
+        var header = SignatureScanner.ReadHeader(_cursor, _names, isExported: false);
+        var signature = _names.Functions.Find(header.Name)
             ?? throw new InvalidOperationException($"Function '{header.Name}' was not registered by the signature pre-pass.");
 
         var outerLoopDepth = _loopDepth;
@@ -265,7 +463,7 @@ public sealed class Parser
         try
         {
             var parameters = signature.Parameters.Select(parameter => parameter.Name).ToHashSet();
-            return new FunctionStatement(signature, ParseBody("a function", parameters), start.Position);
+            return new FunctionStatement(signature, ParseBody("a function", new OuterNames(parameters, "parameter", GuardsBoundNames: true)), start.Position);
         }
         finally
         {
@@ -304,10 +502,10 @@ public sealed class Parser
         return new ReturnStatement(ParseExpression(), start.Position);
     }
 
-    private Statement ParseWrite(bool appendNewLine)
+    private Statement ParseWrite(bool appendNewLine, bool toStandardError)
     {
         var start = _cursor.Advance();
-        return new WriteStatement(ParseExpression(), appendNewLine, start.Position);
+        return new WriteStatement(ParseExpression(), appendNewLine, toStandardError, start.Position);
     }
 
     private Statement ParseExit()
@@ -328,7 +526,7 @@ public sealed class Parser
         _nesting++;
         try
         {
-            return ParseBlock(NoParameters);
+            return ParseBlock(NoOuterNames);
         }
         finally
         {
@@ -336,7 +534,7 @@ public sealed class Parser
         }
     }
 
-    private BlockStatement ParseBlock(IReadOnlySet<string> parameters)
+    private BlockStatement ParseBlock(OuterNames outer)
     {
         var start = _cursor.Advance();
         var declared = new HashSet<string>();
@@ -348,7 +546,7 @@ public sealed class Parser
                 throw _cursor.Error($"Expected 'end' to close the block started at {start.Position}.");
             }
 
-            statements.Add(ParseListedStatement(declared, parameters));
+            statements.Add(ParseListedStatement(declared, outer));
         }
 
         _cursor.Advance();
@@ -383,13 +581,59 @@ public sealed class Parser
                 return new LiteralExpression(BoolValue.False, token.Position);
             case Keywords.Convert:
                 _cursor.Advance();
-                var target = TypeReader.ReadValueType(_cursor, "conversion target");
+                var target = TypeReader.ReadValueType(_cursor, _names, "conversion target");
                 return new ConvertExpression(target, ParseExpression(), token.Position);
+            case Keywords.Empty:
+                _cursor.Advance();
+                return new EmptyExpression(TypeReader.ReadCollectionType(_cursor, _names, Keywords.Empty), token.Position);
+            case Keywords.ListOf:
+                return ParseListOf();
+            case Keywords.Attempt:
+                return ParseAttempt();
+            case Keywords.None:
+                _cursor.Advance();
+                if (_cursor.Current.IsWord(PyropType.Void.Name))
+                {
+                    throw _cursor.Error($"'{Keywords.None}' takes the type of the missing value, such as {Keywords.None} int; void has no values.");
+                }
+
+                return new NoneExpression(TypeReader.ReadValueType(_cursor, _names, "missing value"), token.Position);
+            case Keywords.GetField:
+                _cursor.Advance();
+                var read = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.GetField}'");
+                return new GetFieldExpression(read.Text, read.Position, ParseExpression(), token.Position);
+            case Keywords.WithField:
+                _cursor.Advance();
+                var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.WithField}'");
+                var record = ParseExpression();
+                return new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), token.Position);
         }
 
-        if (Builtins.All.ContainsKey(token.Text) || _functions.Contains(token.Text))
+        if (token.IsWord(Keywords.From))
+        {
+            return ParseQualified(allowVoid: false, asStatement: false);
+        }
+
+        if (Builtins.All.ContainsKey(token.Text) || _names.FindCallable(token.Text) is not null)
         {
             return ParseCall(allowVoid: false);
+        }
+
+        if (_names.FindRecord(token.Text) is { } constructed)
+        {
+            _cursor.Advance();
+            return ParseConstruct(constructed, token, null);
+        }
+
+        if (_names.FindVariant(token.Text) is { } variant)
+        {
+            _cursor.Advance();
+            return new VariantExpression(variant, token.Position);
+        }
+
+        if (_names.FindChoice(token.Text) is { } choice)
+        {
+            throw ChoiceAsValue(token, choice);
         }
 
         if (Keywords.IsReserved(token.Text))
@@ -397,8 +641,68 @@ public sealed class Parser
             throw _cursor.Error($"Expected an expression, found keyword '{token.Text}'.");
         }
 
+        if (_names.Failures.OfName(token.Text) is { } failure)
+        {
+            throw failure;
+        }
+
+        if (_names.Uses.ContainsKey(token.Text))
+        {
+            throw ModuleUsedAsValue(token);
+        }
+
         _cursor.Advance();
         return new VariableExpression(token.Text, token.Position);
+    }
+
+    private Expression ParseAttempt()
+    {
+        var start = _cursor.Advance();
+        var operand = _cursor.Current;
+        if (operand.IsWord(Keywords.Convert))
+        {
+            return new AttemptExpression(ParseExpression(), start.Position);
+        }
+
+        if (operand.Kind == TokenKind.Word && Builtins.All.ContainsKey(operand.Text))
+        {
+            return new AttemptExpression(ParseCall(allowVoid: true), start.Position);
+        }
+
+        var found = operand.Kind == TokenKind.Word && _names.FindCallable(operand.Text) is not null
+            ? $"the function '{operand.Text}'; a function's own failures are runtime errors, so that a bug in it is never mistaken for bad input"
+            : operand.IsWord(Keywords.From)
+            ? $"the qualified name starting at '{Keywords.From}'; only built-in operations can follow '{Keywords.Attempt}'"
+            : operand.Describe();
+        throw _cursor.Error(
+            $"'{Keywords.Attempt}' takes a built-in operation or a convert, such as {Keywords.Attempt} {Keywords.Convert} int read " +
+            $"or {Keywords.Attempt} read_file \"notes.txt\"; found {found}.",
+            operand);
+    }
+
+    private Expression ParseListOf()
+    {
+        var start = _cursor.Advance();
+        var elementType = TypeReader.ReadValueType(_cursor, _names, "list item");
+        var items = new List<Expression>();
+        while (!_cursor.Current.IsWord(Keywords.End))
+        {
+            if (_cursor.IsAtEnd)
+            {
+                throw _cursor.Error($"Expected 'end' to close the list_of started at {start.Position}.");
+            }
+
+            if (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text))
+            {
+                throw _cursor.Error(
+                    $"Expected a list item or 'end' to close the list_of started at {start.Position}, found '{_cursor.Current.Text}'.");
+            }
+
+            items.Add(ParseExpression());
+        }
+
+        _cursor.Advance();
+        return new ListOfExpression(elementType, items, start.Position);
     }
 
     private Expression ParseCall(bool allowVoid)
@@ -414,13 +718,36 @@ public sealed class Parser
             return new BuiltinCallExpression(operation, ParseArguments(operation.Arity), token.Position);
         }
 
-        var function = _functions.Find(token.Text)!;
+        return ParseFunctionCall(_names.FindCallable(token.Text)!, token, null, allowVoid);
+    }
+
+    private Expression ParseQualified(bool allowVoid, bool asStatement)
+    {
+        var qualified = QualifiedNames.Read(_cursor);
+        return QualifiedNames.Resolve(_names, qualified, _cursor) switch
+        {
+            RecordType when asStatement => throw ConstructorStatement(qualified.From, qualified.ToString()),
+            RecordType record => ParseConstruct(record, qualified.From, qualified.Module.Text),
+            ChoiceType choice when asStatement => throw ChoiceStartingStatement(qualified.From, choice, qualified.Module.Text),
+            ChoiceType choice => throw ChoiceAsValue(qualified.From, choice, qualified.Module.Text),
+            ChoiceVariant when asStatement => throw StrayValue(qualified.From, $"'{qualified}'"),
+            ChoiceVariant variant => new VariantExpression(variant, qualified.From.Position, qualified.Module.Text),
+            FunctionSignature function => ParseFunctionCall(function, qualified.From, qualified.Module.Text, allowVoid),
+            var other => throw new InvalidOperationException($"Unknown qualified target {other.GetType().Name}."),
+        };
+    }
+
+    private Expression ParseConstruct(RecordType record, Token start, string? module) =>
+        new ConstructExpression(record, ParseArguments(record.Fields.Count), start.Position, module);
+
+    private Expression ParseFunctionCall(FunctionSignature function, Token start, string? module, bool allowVoid)
+    {
         if (function.ReturnType == PyropType.Void && !allowVoid)
         {
-            throw _cursor.Error($"Function '{function.Name}' returns void and cannot be used as a value.", token);
+            throw _cursor.Error($"Function '{function.Name}' returns void and cannot be used as a value.", start);
         }
 
-        return new FunctionCallExpression(function, ParseArguments(function.Arity), token.Position);
+        return new FunctionCallExpression(function, ParseArguments(function.Arity), start.Position, module);
     }
 
     private IReadOnlyList<Expression> ParseArguments(int count)
@@ -433,4 +760,6 @@ public sealed class Parser
 
         return arguments;
     }
+
+    private sealed record OuterNames(IReadOnlySet<string> Names, string Kind, bool GuardsBoundNames);
 }

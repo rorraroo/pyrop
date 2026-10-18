@@ -8,6 +8,8 @@ public static class Terminal
 
     public static bool Plain { get; private set; }
 
+    public static bool ErrorsPlain { get; private set; } = true;
+
     public static IAnsiConsole Errors { get; private set; } = AnsiConsole.Console;
 
     public static void Configure(bool plainRequested)
@@ -23,7 +25,9 @@ public static class Terminal
             Plain = !AnsiConsole.Profile.Capabilities.Ansi;
         }
 
-        Errors = Create(Console.Error, plainRequested || noColor || Console.IsErrorRedirected, Console.IsErrorRedirected);
+        var errorsPlain = plainRequested || noColor || Console.IsErrorRedirected;
+        Errors = Create(Console.Error, errorsPlain, Console.IsErrorRedirected);
+        ErrorsPlain = errorsPlain || !Errors.Profile.Capabilities.Ansi;
     }
 
     public static ConsoleProgramOutput CreateProgramOutput() =>
@@ -31,15 +35,16 @@ public static class Terminal
             AnsiConsole.Profile.Out.Writer,
             Plain,
             inputEchoed: !Console.IsInputRedirected,
-            newLine: OperatingSystem.IsWindows() && !Console.IsOutputRedirected ? "\r\n" : "\n");
+            newLine: NewLineFor(Console.IsOutputRedirected),
+            errors: new ConsoleStream(
+                Errors.Profile.Out.Writer, ErrorsPlain, NewLineFor(Console.IsErrorRedirected), onScreen: !Console.IsErrorRedirected),
+            sharedScreen: !Console.IsOutputRedirected && !Console.IsErrorRedirected,
+            richConsole: Plain ? null : AnsiConsole.Console,
+            selectable: !Plain && !Console.IsInputRedirected && AnsiConsole.Profile.Capabilities.Interactive);
 
-    public static void SeparateErrorsFrom(ConsoleProgramOutput output)
-    {
-        if (!Console.IsOutputRedirected && !Console.IsErrorRedirected)
-        {
-            output.EnsureLineStart();
-        }
-    }
+    public static void SeparateErrorsFrom(ConsoleProgramOutput output) => output.BeginErrorMessage();
+
+    private static string NewLineFor(bool redirected) => OperatingSystem.IsWindows() && !redirected ? "\r\n" : "\n";
 
     private static IAnsiConsole Create(TextWriter writer, bool plain, bool redirected)
     {

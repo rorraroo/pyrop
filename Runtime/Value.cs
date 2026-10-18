@@ -15,6 +15,14 @@ public abstract record Value
     public string AsString() => ((StringValue)this).Value;
 
     public bool AsBool() => ((BoolValue)this).Value;
+
+    public ListValue AsList() => (ListValue)this;
+
+    public MapValue AsMap() => (MapValue)this;
+
+    public RecordValue AsRecord() => (RecordValue)this;
+
+    public OptionValue AsOption() => (OptionValue)this;
 }
 
 public sealed record IntValue(long Value) : Value

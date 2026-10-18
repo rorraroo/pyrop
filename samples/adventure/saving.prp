@@ -1,0 +1,60 @@
+use items "items.prp"
+use world "world.prp"
+use state "state.prp"
+import from items ItemKind
+import from world Place
+import from state Player
+
+def string header "pyrop adventure save 1"
+
+export function bool save_game string path Player player block
+    def list string lines list_of string
+        header
+        add "place " convert string get_field place player
+        add "moves " convert string get_field moves player
+    end
+    for ItemKind item in get_field inventory player
+        set lines push lines add "carrying " convert string item
+    return attempt write_file path add join lines "\n" "\n"
+end
+
+export function option Player load_game string path block
+    if_some list string lines attempt read_lines path block
+        if equal length_of lines 0 return none Player
+        if not equal item_at lines 0 header return none Player
+        def option Place place none Place
+        def option int moves none int
+        def list ItemKind inventory empty list ItemKind
+        for string line in remove_at lines 0 block
+            def list string parts split line " "
+            if not equal length_of parts 2 return none Player
+            def string label item_at parts 0
+            def string value item_at parts 1
+            if equal label "place" block
+                if not equal place none Place return none Player
+                if_some Place found attempt convert Place value set place some found
+                else return none Player
+            end
+            else if equal label "moves" block
+                if not equal moves none int return none Player
+                if_some int count attempt convert int value block
+                    if or less count 0 greater count 1000000 return none Player
+                    set moves some count
+                end
+                else return none Player
+            end
+            else if equal label "carrying" block
+                if_some ItemKind item attempt convert ItemKind value block
+                    if contains inventory item return none Player
+                    set inventory push inventory item
+                end
+                else return none Player
+            end
+            else return none Player
+        end
+        if_some Place found place
+            if_some int count moves
+                return some Player found count inventory
+    end
+    return none Player
+end

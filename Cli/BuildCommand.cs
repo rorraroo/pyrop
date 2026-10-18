@@ -62,10 +62,10 @@ public static class BuildCommand
         }
 
         var session = CheckingSession(null);
-        IReadOnlyList<SourceFile> included;
+        IReadOnlyList<SourceFile> modules;
         try
         {
-            included = session.Check(source, script);
+            modules = session.Check(source, script);
         }
         catch (PyropException exception)
         {
@@ -77,7 +77,7 @@ public static class BuildCommand
         (PyropException Error, PyropSession Session, string EntryName)? firstFailure = null;
         try
         {
-            foreach (var candidate in Bundle.Candidates(scriptFullPath, source, included))
+            foreach (var candidate in Bundle.Candidates(scriptFullPath, source, modules))
             {
                 var bundled = CheckingSession(new BundleSourceStore(candidate));
                 try
@@ -99,7 +99,7 @@ public static class BuildCommand
 
         if (bundle is null)
         {
-            Fail("The program cannot be bundled: an include path does not resolve to one of the program's files inside the executable. Absolute include paths cannot be bundled; use paths relative to the including file.");
+            Fail("The program cannot be bundled: a use path does not resolve to one of the program's files inside the executable. Absolute use paths cannot be bundled; use paths relative to the using file.");
             if (firstFailure is var (error, failedSession, entryName))
             {
                 ErrorRenderer.Render(error, entryName, failedSession.SourceText);
@@ -109,7 +109,7 @@ public static class BuildCommand
         }
 
         var outputPath = OutputPath(script, output);
-        if (Problem(outputPath, baseExecutable, included.Select(file => file.FullPath).Append(scriptFullPath)) is { } problem)
+        if (Problem(outputPath, baseExecutable, modules.Select(file => file.FullPath).Append(scriptFullPath)) is { } problem)
         {
             return Fail(problem);
         }

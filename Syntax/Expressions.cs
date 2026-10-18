@@ -12,7 +12,30 @@ public sealed record VariableExpression(string Name, SourcePosition Position) : 
 public sealed record BuiltinCallExpression(BuiltinOperation Operation, IReadOnlyList<Expression> Arguments, SourcePosition Position)
     : Expression(Position);
 
-public sealed record FunctionCallExpression(FunctionSignature Function, IReadOnlyList<Expression> Arguments, SourcePosition Position)
+public sealed record FunctionCallExpression(
+    FunctionSignature Function, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null)
     : Expression(Position);
 
 public sealed record ConvertExpression(PyropType Target, Expression Operand, SourcePosition Position) : Expression(Position);
+
+public sealed record EmptyExpression(PyropType Type, SourcePosition Position) : Expression(Position);
+
+public sealed record ListOfExpression(PyropType ElementType, IReadOnlyList<Expression> Items, SourcePosition Position)
+    : Expression(Position);
+
+public sealed record ConstructExpression(
+    RecordType Record, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null)
+    : Expression(Position);
+
+public sealed record GetFieldExpression(string Field, SourcePosition FieldPosition, Expression Record, SourcePosition Position)
+    : Expression(Position);
+
+public sealed record WithFieldExpression(
+    string Field, SourcePosition FieldPosition, Expression Record, Expression Value, SourcePosition Position)
+    : Expression(Position);
+
+public sealed record VariantExpression(ChoiceVariant Variant, SourcePosition Position, string? Module = null) : Expression(Position);
+
+public sealed record AttemptExpression(Expression Operation, SourcePosition Position) : Expression(Position);
+
+public sealed record NoneExpression(PyropType ContentType, SourcePosition Position) : Expression(Position);

@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.IO.Enumeration;
 using System.Text;
 
 namespace Pyrop.Runtime;
@@ -14,9 +16,78 @@ public static class TextFiles
 
     private static readonly char[] Separators = [.. new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }.Distinct()];
 
+    private static readonly EnumerationOptions EveryEntry = new()
+    {
+        AttributesToSkip = 0,
+        IgnoreInaccessible = false,
+        RecurseSubdirectories = false,
+        ReturnSpecialDirectories = false,
+    };
+
+    public static ListValue ReadLines(IBuiltinInvocation invocation, string path)
+    {
+        var text = Read(invocation, path);
+        var lines = ImmutableList.CreateBuilder<Value>();
+        var start = 0;
+        while (start < text.Length)
+        {
+            var stop = text.IndexOf('\n', start);
+            if (stop < 0)
+            {
+                stop = text.Length;
+            }
+
+            CollectionOperations.CheckRoom(lines.Count + 1, invocation.CollectionLimit, "list", invocation.Fail);
+            lines.Add(new StringValue(text[start..stop]));
+            start = stop + 1;
+        }
+
+        return new ListValue(PyropTypes.ListOf(PyropType.String), lines.ToImmutable());
+    }
+
+    public static ListValue ListFiles(IBuiltinInvocation invocation, string path)
+    {
+        RequirePath(invocation, path, "directory");
+        if (File.Exists(path))
+        {
+            throw invocation.Fail($"\"{path}\" is a file, not a directory.");
+        }
+
+        var names = new List<string>();
+        try
+        {
+            var entries = new FileSystemEnumerable<string>(path, (ref FileSystemEntry entry) => entry.FileName.ToString(), EveryEntry)
+            {
+                ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+            };
+
+            foreach (var name in entries)
+            {
+                CollectionOperations.CheckRoom(names.Count + 1, invocation.CollectionLimit, "list", invocation.Fail);
+                names.Add(name);
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+            throw invocation.Fail($"Directory \"{path}\" does not exist.");
+        }
+        catch (Exception exception) when (IsFileSystemFailure(exception))
+        {
+            throw invocation.Fail(FileSystemFailure("list", path, exception, "directory"));
+        }
+
+        if (!names.All(IsValidText))
+        {
+            throw invocation.Fail($"Directory \"{path}\" holds a file whose name is not valid text.");
+        }
+
+        names.Sort(string.CompareOrdinal);
+        return new ListValue(PyropTypes.ListOf(PyropType.String), [.. names.Select(name => (Value)new StringValue(name))]);
+    }
+
     public static string Read(IBuiltinInvocation invocation, string path)
     {
-        RequireFilePath(invocation, path);
+        RequirePath(invocation, path, "file");
         try
         {
             var bytes = File.ReadAllBytes(path);
@@ -39,7 +110,7 @@ public static class TextFiles
 
     public static Value? Write(IBuiltinInvocation invocation, string path, string text, bool append)
     {
-        RequireFilePath(invocation, path);
+        RequirePath(invocation, path, "file");
         byte[] bytes;
         try
         {
@@ -73,21 +144,34 @@ public static class TextFiles
 
     private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
-    private static void RequireFilePath(IBuiltinInvocation invocation, string path)
+    private static void RequirePath(IBuiltinInvocation invocation, string path, string kind)
     {
         if (path.Length == 0)
         {
-            throw invocation.Fail("A file path cannot be empty.");
+            throw invocation.Fail($"A {kind} path cannot be empty.");
         }
 
         if (path.Any(char.IsControl))
         {
-            throw invocation.Fail($"\"{path}\" is not a valid file path; it contains a control character.");
+            throw invocation.Fail($"\"{path}\" is not a valid {kind} path; it contains a control character.");
         }
 
-        if (Directory.Exists(path))
+        if (kind == "file" && Directory.Exists(path))
         {
             throw invocation.Fail($"\"{path}\" is a directory, not a file.");
+        }
+    }
+
+    private static bool IsValidText(string name)
+    {
+        try
+        {
+            StrictUtf8.GetByteCount(name);
+            return true;
+        }
+        catch (EncoderFallbackException)
+        {
+            return false;
         }
     }
 
@@ -102,14 +186,14 @@ public static class TextFiles
     private static bool IsFileSystemFailure(Exception exception) =>
         exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
 
-    private static string FileSystemFailure(string verb, string path, Exception exception) => exception switch
+    private static string FileSystemFailure(string verb, string path, Exception exception, string kind = "file") => exception switch
     {
         UnauthorizedAccessException => $"Access to \"{path}\" was denied.",
-        PathTooLongException => $"\"{path}\" is too long to be a file path.",
+        PathTooLongException => $"\"{path}\" is too long to be a {kind} path.",
         IOException { HResult: SharingViolationResult or LockViolationResult } =>
             $"Cannot {verb} \"{path}\" because another process is using it.",
         IOException { HResult: InvalidNameResult } or ArgumentException or NotSupportedException =>
-            $"\"{path}\" is not a valid file path.",
+            $"\"{path}\" is not a valid {kind} path.",
         _ => $"Cannot {verb} \"{path}\"; the operating system reported an error.",
     };
 }

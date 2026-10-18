@@ -10,6 +10,10 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompl
 
     public bool IsAtEnd => Current.Kind == TokenKind.EndOfInput;
 
+    public Token Peek(int offset) => tokens[Math.Min(_index + offset, tokens.Count - 1)];
+
+    public Token? Behind(int offset) => _index - offset >= 0 ? tokens[_index - offset] : null;
+
     public Token Advance()
     {
         var token = Current;
@@ -41,17 +45,24 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompl
         return Advance();
     }
 
-    public string ExpectIdentifier(string role, FunctionTable functions)
+    public string ExpectIdentifier(string role, ModuleNamespace names)
     {
         var token = ExpectWord(role);
+        if (token.IsWord(Keywords.From))
+        {
+            throw Error(
+                $"A {role} must be a plain name; '{Keywords.From}' starts a qualified name, which can only name an exported function, record, choice or variant.",
+                token);
+        }
+
         if (Keywords.IsReserved(token.Text))
         {
             throw Error($"'{token.Text}' is a reserved word and cannot be used as a {role}.", token);
         }
 
-        if (role != "function name" && functions.Contains(token.Text))
+        if (role != "function name" && names.Describe(token.Text) is { } kind)
         {
-            throw Error($"'{token.Text}' is a function and cannot be used as a {role}.", token);
+            throw Error($"'{token.Text}' is {kind} and cannot be used as a {role}.", token);
         }
 
         return token.Text;
