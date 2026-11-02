@@ -46,11 +46,12 @@ public static class SignatureScanner
                 var choices = choiceDeclarations.Where(declaration => declaration.IsNew).Select(declaration => declaration.Choice).ToList();
                 var typeNames = existing.With([], uses, imports, records, choices).WithFailures(failures);
                 ScanRecordFields(new TokenCursor(tokens, reportsIncompleteInput), declarations, typeNames);
-                RecordDeclarations.CheckSelfContainment(records);
+                ScanChoiceData(new TokenCursor(tokens, reportsIncompleteInput), choiceDeclarations, typeNames);
+                RecordDeclarations.CheckSelfContainment(records, choices);
                 var functions = ScanHeaders(new TokenCursor(tokens, reportsIncompleteInput), typeNames);
                 if (isUsedModule)
                 {
-                    RecordDeclarations.CheckExposure(existing.Module, records, functions);
+                    RecordDeclarations.CheckExposure(existing.Module, records, choices, functions);
                 }
 
                 CheckClashes(existing, functions, records, choices, uses, imports, globals, failures);
@@ -151,7 +152,7 @@ public static class SignatureScanner
 
         private sealed record RecordDeclaration(RecordType Record, Token Name, int FieldsStart, bool IsNew);
 
-        private sealed record ChoiceDeclaration(ChoiceType Choice, bool IsNew);
+        private sealed record ChoiceDeclaration(ChoiceType Choice, Token Start, Token Name, int VariantsStart, bool IsNew);
 
         private static (List<RecordDeclaration> Records, List<ChoiceDeclaration> Choices) ScanTypeNames(
             TokenCursor cursor, ModuleNamespace existing, KnownTypes knownTypes)
@@ -180,8 +181,9 @@ public static class SignatureScanner
                     RecordDeclarations.RejectKeywordAsName(token, cursor, ChoiceDeclarations.CanStartChoice(cursor), knownTypes);
                     var nameToken = ChoiceDeclarations.ReadName(cursor);
                     CheckNewTypeName(nameToken, Keywords.Choice, records, choices, existing, cursor);
-                    var variants = ChoiceDeclarations.ReadVariants(cursor, token, nameToken.Text);
-                    choices.Add(DeclareChoice(nameToken, variants, exported, choices, existing, cursor));
+                    var variantsStart = cursor.Index;
+                    var variants = ChoiceDeclarations.ReadVariants(cursor, token, nameToken.Text, knownTypes);
+                    choices.Add(DeclareChoice(token, nameToken, variantsStart, variants, exported, choices, existing, cursor));
                     previous = null;
                 }
             }
@@ -215,8 +217,10 @@ public static class SignatureScanner
         }
 
         private static ChoiceDeclaration DeclareChoice(
+            Token start,
             Token nameToken,
-            IReadOnlyList<Token> variants,
+            int variantsStart,
+            IReadOnlyList<ChoiceDeclarations.ReadVariant> variants,
             bool exported,
             List<ChoiceDeclaration> choices,
             ModuleNamespace existing,
@@ -225,17 +229,17 @@ public static class SignatureScanner
             var name = nameToken.Text;
             if (existing.Choices.GetValueOrDefault(name) is { } earlier)
             {
-                if (!earlier.HasSameVariants(variants.Select(variant => variant.Text).ToList()))
+                if (!earlier.HasSameVariants(variants.Select(variant => variant.Declaration).ToList()))
                 {
                     throw cursor.Error(
                         $"Choice '{name}' was declared earlier in this session as {Keywords.Choice} {name} {earlier.DescribeVariants()} {Keywords.End}, and cannot be declared again with other variants.",
                         nameToken);
                 }
 
-                return new ChoiceDeclaration(earlier, IsNew: false);
+                return new ChoiceDeclaration(earlier, start, nameToken, variantsStart, IsNew: false);
             }
 
-            foreach (var variant in variants)
+            foreach (var variant in variants.Select(variant => variant.Name))
             {
                 var owner = choices.Select(declaration => declaration.Choice.FindVariant(variant.Text)).FirstOrDefault(found => found is not null)
                     ?? existing.OwnVariant(variant.Text);
@@ -246,8 +250,37 @@ public static class SignatureScanner
             }
 
             var choice = new ChoiceType(
-                name, existing.Module, nameToken.Position, exported, variants.Select(variant => (variant.Text, variant.Position)).ToList());
-            return new ChoiceDeclaration(choice, IsNew: true);
+                name, existing.Module, nameToken.Position, exported, variants.Select(variant => variant.Declaration).ToList());
+            return new ChoiceDeclaration(choice, start, nameToken, variantsStart, IsNew: true);
+        }
+
+        private static void ScanChoiceData(TokenCursor cursor, List<ChoiceDeclaration> declarations, ModuleNamespace names)
+        {
+            foreach (var declaration in declarations.Where(declaration => declaration.Choice.HasData))
+            {
+                cursor.MoveTo(declaration.VariantsStart);
+                var choice = declaration.Choice;
+                var variants = ChoiceDeclarations.ReadVariants(cursor, declaration.Start, choice.Name, names);
+                if (!choice.HasSameVariants(variants.Select(variant => variant.Declaration).ToList()))
+                {
+                    throw new InvalidOperationException($"The variants of choice '{choice.Name}' were read differently in the two passes.");
+                }
+
+                var data = variants.Select(variant => variant.Data).ToList();
+                if (declaration.IsNew)
+                {
+                    foreach (var (variant, types) in choice.Variants.Zip(data))
+                    {
+                        variant.Define(types);
+                    }
+                }
+                else if (!choice.HasSameData(data))
+                {
+                    throw cursor.Error(
+                        $"Choice '{choice.Name}' was declared earlier in this session as {Keywords.Choice} {choice.Name} {choice.DescribeVariants()} {Keywords.End}, and cannot be declared again with other variants.",
+                        declaration.Name);
+                }
+            }
         }
 
         private static void ScanRecordFields(TokenCursor cursor, List<RecordDeclaration> declarations, ModuleNamespace names)

@@ -19,7 +19,7 @@ public sealed class RecordModuleTests : IDisposable
         "export record Point float x float y\n" +
         "record Secret int code\n" +
         "export function Point origin return Point 0.0 0.0\n" +
-        "export function float sum Point p return add get_field x p get_field y p\n";
+        "export function float sum Point p return add the x of p the y of p\n";
 
     private string WriteFile(string relativePath, string text)
     {
@@ -62,7 +62,7 @@ public sealed class RecordModuleTests : IDisposable
             def Point a Point 1.0 2.0
             use geo "geo.prp"
             import from geo Point end
-            function Point twice Point p return Point multiply 2.0 get_field x p multiply 2.0 get_field y p
+            function Point twice Point p return Point multiply 2.0 the x of p multiply 2.0 the y of p
             write_line twice a
             write_line equal a from geo Point 1.0 2.0
             """;
@@ -206,7 +206,7 @@ public sealed class RecordModuleTests : IDisposable
             use geo "geo.prp"
             use other "other.prp"
             import from other Point end
-            function from geo Point flip Point p return from geo Point get_field y p get_field x p
+            function from geo Point flip Point p return from geo Point the y of p the x of p
             def list from geo Point all list_of from geo Point end
             """;
 
@@ -215,7 +215,7 @@ public sealed class RecordModuleTests : IDisposable
         Assert.Null(inspected.Error);
         Assert.Equal(
             "use geo \"geo.prp\"\nuse other \"other.prp\"\nimport from other Point end\n" +
-            "function from geo Point flip Point p\n    return (from geo Point (get_field y p) (get_field x p))\n" +
+            "function from geo Point flip Point p\n    return (from geo Point (the y of p) (the x of p))\n" +
             "def list from geo Point all (list_of from geo Point end)\n",
             inspected.Text);
     }

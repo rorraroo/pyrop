@@ -1,6 +1,8 @@
 export choice ItemKind lamp key crown end
 
 export function string item_description ItemKind kind
-    if equal kind lamp return "An oil lamp, still half full."
-    else if equal kind key return "A heavy iron key with a crown on its bow."
-    else return "The lost crown of Pyrop."
+    match kind
+        when lamp return "An oil lamp, still half full."
+        when key return "A heavy iron key with a crown on its bow."
+        when crown return "The lost crown of Pyrop."
+    end

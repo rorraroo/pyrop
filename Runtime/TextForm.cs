@@ -8,7 +8,7 @@ public static class TextForm
     public static string Of(
         Value value, Func<string, Exception> fail, int nestingLimit = ValueEquality.MaxNesting, Func<string, Exception>? tooDeep = null)
     {
-        if (value is not (ListValue or MapValue or RecordValue or OptionValue))
+        if (value is not (ListValue or MapValue or RecordValue or OptionValue or ChoiceValue { HasData: true }))
         {
             return value.ToText();
         }
@@ -30,7 +30,7 @@ public static class TextForm
     private static void Append(
         StringBuilder builder, Value value, Func<string, Exception> fail, Func<string, Exception> tooDeep, int limit, int depth)
     {
-        if (value is ListValue or MapValue or RecordValue or OptionValue && (depth >= limit || !RuntimeHelpers.TryEnsureSufficientExecutionStack()))
+        if (value is ListValue or MapValue or RecordValue or OptionValue or ChoiceValue { HasData: true } && (depth >= limit || !RuntimeHelpers.TryEnsureSufficientExecutionStack()))
         {
             throw tooDeep("This value is nested too deeply to be written as text.");
         }
@@ -46,6 +46,16 @@ public static class TextForm
                     CheckLength(builder.Length + (long)name.Length + 2, fail);
                     builder.Append(' ').Append(name).Append(' ');
                     AppendInner(builder, record.Fields[index], fail, tooDeep, limit, depth + 1);
+                }
+
+                break;
+            case ChoiceValue choice:
+                CheckLength(builder.Length + (long)choice.Name.Length, fail);
+                builder.Append(choice.Name);
+                foreach (var item in choice.Data)
+                {
+                    builder.Append(' ');
+                    AppendInner(builder, item, fail, tooDeep, limit, depth + 1);
                 }
 
                 break;
@@ -108,7 +118,7 @@ public static class TextForm
     private static void AppendInner(
         StringBuilder builder, Value value, Func<string, Exception> fail, Func<string, Exception> tooDeep, int limit, int depth)
     {
-        var bracketed = value is RecordValue;
+        var bracketed = value is RecordValue or ChoiceValue { HasData: true };
         builder.Append(bracketed ? "(" : "");
         Append(builder, value, fail, tooDeep, limit, depth);
         builder.Append(bracketed ? ")" : "");

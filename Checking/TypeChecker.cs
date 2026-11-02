@@ -95,6 +95,9 @@ public sealed class TypeChecker
             case IfSomeStatement unwrap:
                 CheckIfSome(unwrap, scope);
                 break;
+            case MatchStatement match:
+                CheckMatch(match, scope);
+                break;
             case WhileStatement loop:
                 CheckCondition(loop.Condition, scope, "while");
                 CheckStatement(loop.Body, scope);
@@ -223,6 +226,68 @@ public sealed class TypeChecker
         }
     }
 
+    private void CheckMatch(MatchStatement match, SymbolScope scope)
+    {
+        var valueType = TypeOf(match.Value, scope);
+        var choice = valueType as ChoiceType;
+        if (valueType is not null && choice is null)
+        {
+            Report($"'{Keywords.Match}' takes a choice, found {valueType.Name}.", match.Value.Position);
+        }
+
+        var handled = new HashSet<ChoiceVariant>();
+        foreach (var branch in match.Branches)
+        {
+            var variant = branch.Variant;
+            if (choice is not null && variant.Choice != choice)
+            {
+                var (expected, found) = Names(choice, variant.Choice);
+                Report(
+                    $"'{variant.Name}' is a variant of {found}, but this {Keywords.Match} is over {expected}.",
+                    branch.Position);
+            }
+            else if (!handled.Add(variant))
+            {
+                Report($"The variant '{variant.Name}' is handled twice in this {Keywords.Match}.", branch.Position);
+            }
+
+            var branchScope = new SymbolScope(scope);
+            foreach (var (name, type) in branch.Names.Zip(variant.Data))
+            {
+                branchScope.Declare(name, type);
+            }
+
+            CheckStatement(branch.Body, branchScope);
+        }
+
+        if (choice is not null && choice.Variants.Where(variant => !handled.Contains(variant)).Select(variant => variant.Name).ToList() is
+            { Count: > 0 } missing)
+        {
+            var listed = missing.Count == 1 ? missing[0] : $"{string.Join(", ", missing.SkipLast(1))} and {missing[^1]}";
+            Report(
+                $"This {Keywords.Match} does not handle the {(missing.Count == 1 ? "variant" : "variants")} {listed} of {choice.Name}; " +
+                $"a {Keywords.Match} needs a {Keywords.When} for every variant.",
+                match.Position);
+        }
+    }
+
+    private void CheckVariantArguments(VariantExpression variant, SymbolScope scope)
+    {
+        var data = variant.Variant.Data;
+        for (var index = 0; index < variant.Arguments.Count; index++)
+        {
+            if (TypeOf(variant.Arguments[index], scope) is { } type && type != data[index])
+            {
+                var (declared, found) = Names(data[index], type);
+                Report(
+                    data.Count == 1
+                        ? $"The variant '{variant.Variant.Name}' carries {declared}, found {found}."
+                        : $"Value {index + 1} of the variant '{variant.Variant.Name}' must be {declared}, found {found}.",
+                    variant.Arguments[index].Position);
+            }
+        }
+    }
+
     private PyropType? TypeOfAttempt(AttemptExpression attempt, SymbolScope scope)
     {
         var result = TypeOf(attempt.Operation, scope);
@@ -317,7 +382,11 @@ public sealed class TypeChecker
                 if (TypeOf(convert.Operand, scope) is { } from && !Conversions.IsAllowed(from, convert.Target))
                 {
                     var (source, target) = Names(from, convert.Target);
-                    Report($"Cannot convert {source} to {target}.", convert.Position);
+                    Report(
+                        convert.Target is ChoiceType { HasData: true } && from == PyropType.String
+                            ? $"Cannot convert {source} to {target}, because some of its variants carry data; only a choice whose variants carry none can be read from text."
+                            : $"Cannot convert {source} to {target}.",
+                        convert.Position);
                 }
 
                 return convert.Target;
@@ -346,10 +415,11 @@ public sealed class TypeChecker
                 CheckConstructArguments(construct, scope);
                 return construct.Record;
             case GetFieldExpression read:
-                return FieldOf(Keywords.GetField, read.Field, read.FieldPosition, read.Record, TypeOf(read.Record, scope))?.Type;
+                return FieldOf($"{Keywords.The} … {Keywords.Of}", read.Field, read.FieldPosition, read.Record, TypeOf(read.Record, scope))?.Type;
             case WithFieldExpression change:
                 return TypeOfWithField(change, scope);
             case VariantExpression variant:
+                CheckVariantArguments(variant, scope);
                 return variant.Variant.Choice;
             case AttemptExpression attempt:
                 return TypeOfAttempt(attempt, scope);
@@ -437,7 +507,7 @@ public sealed class TypeChecker
     private PyropType? TypeOfWithField(WithFieldExpression change, SymbolScope scope)
     {
         var recordType = TypeOf(change.Record, scope);
-        var field = FieldOf(Keywords.WithField, change.Field, change.FieldPosition, change.Record, recordType);
+        var field = FieldOf(Keywords.Copy, change.Field, change.FieldPosition, change.Record, recordType);
         var valueType = TypeOf(change.Value, scope);
         if (field is null)
         {

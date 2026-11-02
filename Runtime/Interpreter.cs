@@ -110,6 +110,8 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return conditional.Else is null ? Completion.Normal : ExecuteStatement(conditional.Else, scope);
             case IfSomeStatement unwrap:
                 return ExecuteIfSome(unwrap, scope);
+            case MatchStatement match:
+                return ExecuteMatch(match, scope);
             case WhileStatement loop:
                 return ExecuteWhile(loop, scope);
             case ForStatement loop:
@@ -201,6 +203,24 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         var valueScope = new Scope(scope);
         valueScope.Declare(unwrap.Name, unwrap.ValueType, value);
         return ExecuteStatement(unwrap.Then, valueScope);
+    }
+
+    private Completion ExecuteMatch(MatchStatement match, Scope scope)
+    {
+        if (Evaluate(match.Value, scope) is not ChoiceValue value)
+        {
+            throw Internal("The value of a match did not evaluate to a choice.", match.Value.Position);
+        }
+
+        var branch = match.Branches.FirstOrDefault(candidate => candidate.Variant.Choice == value.Choice && candidate.Variant.Index == value.Index)
+            ?? throw Internal($"The match has no branch for the variant '{value.Name}'.", match.Position);
+        var branchScope = new Scope(scope);
+        for (var index = 0; index < branch.Names.Count; index++)
+        {
+            branchScope.Declare(branch.Names[index], branch.Variant.Data[index], value.Data[index]);
+        }
+
+        return ExecuteStatement(branch.Body, branchScope);
     }
 
     private Completion ExecuteWhile(WhileStatement loop, Scope scope)
@@ -348,7 +368,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
             case WithFieldExpression change:
                 return ChangeField(change, scope);
             case VariantExpression variant:
-                return variant.Variant.Choice.ValueOf(variant.Variant.Index);
+                return MakeVariant(variant, scope);
             case AttemptExpression attempt:
                 return Attempt(attempt, scope);
             case NoneExpression none:
@@ -356,6 +376,31 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
             default:
                 throw Internal($"Unknown expression {expression.GetType().Name}.", expression.Position);
         }
+    }
+
+    private ChoiceValue MakeVariant(VariantExpression variant, Scope scope)
+    {
+        var declared = variant.Variant;
+        if (declared.Arity == 0)
+        {
+            return declared.Choice.ValueOf(declared.Index);
+        }
+
+        var data = ImmutableArray.CreateBuilder<Value>(declared.Arity);
+        for (var index = 0; index < declared.Arity; index++)
+        {
+            var value = Evaluate(variant.Arguments[index], scope);
+            if (value.Type != declared.Data[index])
+            {
+                throw Internal(
+                    $"Type mismatch making the variant '{declared.Name}': value {index + 1} is {declared.Data[index].Name}, found {value.Type.Name}.",
+                    variant.Arguments[index].Position);
+            }
+
+            data.Add(value);
+        }
+
+        return new ChoiceValue(declared.Choice, declared.Index, data.MoveToImmutable());
     }
 
     private RecordValue Construct(ConstructExpression construct, Scope scope)

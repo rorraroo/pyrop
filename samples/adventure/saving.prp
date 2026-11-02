@@ -10,10 +10,10 @@ def string header "pyrop adventure save 1"
 export function bool save_game string path Player player block
     def list string lines list_of string
         header
-        add "place " convert string get_field place player
-        add "moves " convert string get_field moves player
+        add "place " convert string the place of player
+        add "moves " convert string the moves of player
     end
-    for ItemKind item in get_field inventory player
+    for ItemKind item in the inventory of player
         set lines push lines add "carrying " convert string item
     return attempt write_file path add join lines "\n" "\n"
 end

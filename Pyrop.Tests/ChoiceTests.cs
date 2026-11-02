@@ -49,9 +49,9 @@ public class ChoiceTests
             end
             def list Exit exits list_of Exit Exit north "hall" Exit east "garden" end
             for Exit door in exits block
-                write get_field target door
+                write the target of door
                 write " is back to the "
-                write_line opposite get_field way door
+                write_line opposite the way of door
             end
             write_line has list_of Direction north south end south
             """;
@@ -159,7 +159,7 @@ public class ChoiceTests
     [InlineData("choice D a a end", 1, 12, "Variant 'a' is declared twice in choice 'D'.")]
     [InlineData("choice D a add end", 1, 12, "'add' is a reserved word and cannot be used as a variant name.")]
     [InlineData("choice D a from end", 1, 12, "'from' is a reserved word and cannot be used as a variant name.")]
-    [InlineData("choice D a int end", 1, 12, "'int' is a reserved word and cannot be used as a variant name.")]
+    [InlineData("choice D int a end", 1, 10, "'int' is a reserved word and cannot be used as a variant name.")]
     [InlineData("choice D a\nwrite_line a", 2, 1, "Expected a variant name or 'end' to close the choice started at 1:1, found 'write_line'.")]
     [InlineData("choice D a else end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found 'else'.")]
     [InlineData("choice D a true end", 1, 12, "Expected a variant name or 'end' to close the choice started at 1:1, found 'true'.")]
@@ -424,7 +424,7 @@ public class ChoiceTests
     {
         const string source = Direction + """
             record Exit Direction north string target
-            write_line get_field north Exit east "yard"
+            write_line the north of Exit east "yard"
             """;
 
         Assert.Equal("east\n", Run.Program(source));
@@ -452,7 +452,7 @@ public class ChoiceTests
             record Exit Direction way string target
             write_line equal Exit north "hall" Exit north "hall"
             write_line equal Exit north "hall" Exit south "hall"
-            write_line with_field way Exit north "hall" west
+            write_line copy Exit north "hall" with way west
             """;
 
         Assert.Equal("true\nfalse\nExit way west target \"hall\"\n", Run.Program(source));

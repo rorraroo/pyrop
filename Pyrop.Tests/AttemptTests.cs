@@ -290,11 +290,11 @@ public class AttemptTests
 
     private const string Deep =
         "def list list list list int deep list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n" +
-        "def list list list list int copy list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n";
+        "def list list list list int other list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n";
 
     [Theory]
-    [InlineData("write_line attempt equal deep copy", 20, "'equal' cannot compare values nested this deeply.")]
-    [InlineData("write_line attempt has list_of list list list list int deep end copy", 20, "'has' cannot compare values nested this deeply.")]
+    [InlineData("write_line attempt equal deep other", 20, "'equal' cannot compare values nested this deeply.")]
+    [InlineData("write_line attempt has list_of list list list list int deep end other", 20, "'has' cannot compare values nested this deeply.")]
     [InlineData("write_line attempt convert string deep", 20, "This value is nested too deeply to be written as text.")]
     [InlineData("write_line convert string deep", 12, "This value is nested too deeply to be written as text.")]
     public void TheNestingLimitIsNotCaughtByAttempt(string line, int column, string message)

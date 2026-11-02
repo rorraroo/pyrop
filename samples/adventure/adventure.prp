@@ -8,8 +8,7 @@ import from state Player new_player carries can_see items_in end
 import from saving save_game load_game end
 
 choice Opening fresh_start saved_start leave_game end
-choice ActionKind go take show_inventory save quit end
-record Action ActionKind kind option Direction way option ItemKind item
+choice Action go Direction take ItemKind show_inventory save quit end
 
 def string save_path "adventure.save"
 if greater argument_count 0 set save_path argument_at 0
@@ -18,62 +17,62 @@ def map Place Room rooms build_world
 
 function list string names_of list ItemKind kinds block
     def list string names list_of string end
-    for ItemKind kind in kinds set names push names add "the " convert string kind
+    for ItemKind kind in kinds set names push names fill "the {}" list_of ItemKind kind end
     return names
 end
 
 function void describe Player player block
-    def Room room get rooms get_field place player
+    def Room room get rooms the place of player
     write_line ""
-    with_style "emphasis" write_line get_field title room
+    with_style "emphasis" write_line the title of room
     if not can_see room player block
         write_line "It is pitch dark. You cannot see a thing."
         return void
     end
-    write_line get_field description room
+    write_line the description of room
     def list ItemKind here items_in room player
-    if greater length_of here 0 write_line add "You see " add join names_of here " and " "."
+    if greater length_of here 0 write_line fill "You see {}." list_of string join names_of here " and " end
 end
 
 function map string Action actions_for Player player block
-    def Room room get rooms get_field place player
-    def map Direction Place exits get_field exits room
+    def Room room get rooms the place of player
+    def map Direction Place exits the exits of room
     def map string Action actions map_of string Action end
     for Direction way in compass
         if has exits way
-            set actions put actions add "Go " convert string way Action go some way none ItemKind
+            set actions put actions fill "Go {}" list_of Direction way end go way
     if can_see room player
         for ItemKind item in items_in room player
-            set actions put actions add "Take the " convert string item Action take none Direction some item
-    set actions put actions "Show the inventory" Action show_inventory none Direction none ItemKind
-    set actions put actions "Save the game" Action save none Direction none ItemKind
-    set actions put actions "Quit" Action quit none Direction none ItemKind
+            set actions put actions fill "Take the {}" list_of ItemKind item end take item
+    set actions put actions "Show the inventory" show_inventory
+    set actions put actions "Save the game" save
+    set actions put actions "Quit" quit
     return actions
 end
 
 function Player walk Player player Direction way block
-    def Room here get rooms get_field place player
-    def Place target get get_field exits here way
-    def Player moved with_field moves player add get_field moves player 1
-    if_some ItemKind needed get_field needs get rooms target block
+    def Room here get rooms the place of player
+    def Place target get the exits of here way
+    def Player moved copy player with moves add the moves of player 1
+    if_some ItemKind needed the needs of get rooms target block
         if not carries player needed block
-            write_line add "The door is locked. You need the " add convert string needed "."
+            write_line fill "The door is locked. You need the {}." list_of ItemKind needed end
             return moved
         end
-        write_line add "You unlock the door with the " add convert string needed "."
+        write_line fill "You unlock the door with the {}." list_of ItemKind needed end
     end
-    write_line add "You go " add convert string way "."
-    return with_field place moved target
+    write_line fill "You go {}." list_of Direction way end
+    return copy moved with place target
 end
 
 function Player take_item Player player ItemKind item block
-    write_line add "You take the " add convert string item "."
-    def Player carrying with_field inventory player push get_field inventory player item
-    return with_field moves carrying add get_field moves carrying 1
+    write_line fill "You take the {}." list_of ItemKind item end
+    def Player carrying copy player with inventory push the inventory of player item
+    return copy carrying with moves add the moves of carrying 1
 end
 
 function void show_inventory_of Player player block
-    def list ItemKind carried get_field inventory player
+    def list ItemKind carried the inventory of player
     if equal length_of carried 0 block
         write_line "You carry nothing."
         return void
@@ -94,7 +93,7 @@ function Player restored string path block
         return new_player
     end
     if_some Player saved load_game path block
-        write_line add "Your saved game is restored after " add convert string get_field moves saved " moves."
+        write_line fill "Your saved game is restored after {} moves." list_of int the moves of saved end
         return saved
     end
     with_style "warning" write_line "The saved game is damaged, so a new game begins."
@@ -118,25 +117,22 @@ if equal opening saved_start set player restored save_path
 def bool playing true
 while playing block
     describe player
-    if and equal get_field place player garden carries player crown block
-        with_style "success" write_line add "You carry the crown out into the sunlight. You won in " add convert string get_field moves player " moves."
+    if and equal the place of player garden carries player crown block
+        with_style "success" write_line fill "You carry the crown out into the sunlight. You won in {} moves." list_of int the moves of player end
         break
     end
     def map string Action actions actions_for player
     def Action action get actions choose "What do you do?" keys_of actions
-    def ActionKind kind get_field kind action
-    if equal kind go block
-        if_some Direction way get_field way action set player walk player way
-    end
-    else if equal kind take block
-        if_some ItemKind item get_field item action set player take_item player item
-    end
-    else if equal kind show_inventory show_inventory_of player
-    else if equal kind save save_to save_path player
-    else block
-        if confirm "Save before you leave?" save_to save_path player
-        write_line "Goodbye."
-        set playing false
+    match action
+        when go way set player walk player way
+        when take item set player take_item player item
+        when show_inventory show_inventory_of player
+        when save save_to save_path player
+        when quit block
+            if confirm "Save before you leave?" save_to save_path player
+            write_line "Goodbye."
+            set playing false
+        end
     end
 end
 if not input_ended read

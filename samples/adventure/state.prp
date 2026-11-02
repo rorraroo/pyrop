@@ -9,14 +9,14 @@ export function Player new_player
     return Player hall 0 list_of ItemKind end
 
 export function bool carries Player player ItemKind item
-    return has get_field inventory player item
+    return has the inventory of player item
 
 export function bool can_see Room room Player player
-    return or not get_field dark room carries player lamp
+    return or not the dark of room carries player lamp
 
 export function list ItemKind items_in Room room Player player block
     def list ItemKind found list_of ItemKind end
-    for ItemKind item in get_field items room
+    for ItemKind item in the items of room
         if not carries player item set found push found item
     return found
 end

@@ -216,7 +216,7 @@ public static class PyropTypes
 
     public static bool IsCollection(PyropType type) => IsList(type) || IsMap(type);
 
-    public static bool IsMapKey(PyropType type) => MapKeyTypes.Contains(type) || type is ChoiceType;
+    public static bool IsMapKey(PyropType type) => MapKeyTypes.Contains(type) || type is ChoiceType { HasData: false };
 
     public static IReadOnlyList<string> NamesOf(params PyropType[] types)
     {

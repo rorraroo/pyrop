@@ -61,6 +61,13 @@ public static class TypeReader
     {
         var start = cursor.Current;
         var type = ReadValueType(cursor, names, TypeArgument);
+        if (type is ChoiceType { HasData: true } choice)
+        {
+            throw cursor.Error(
+                $"The choice '{choice.Name}' cannot be a map key, because some of its variants carry data; only a choice whose variants carry none can.",
+                start);
+        }
+
         if (!PyropTypes.IsMapKey(type))
         {
             throw cursor.Error($"A map key must be {PyropTypes.DescribeMapKeyTypes()}, found {type.Name}.", start);

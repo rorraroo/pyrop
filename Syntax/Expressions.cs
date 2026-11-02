@@ -37,7 +37,8 @@ public sealed record WithFieldExpression(
     string Field, SourcePosition FieldPosition, Expression Record, Expression Value, SourcePosition Position)
     : Expression(Position);
 
-public sealed record VariantExpression(ChoiceVariant Variant, SourcePosition Position, string? Module = null) : Expression(Position);
+public sealed record VariantExpression(
+    ChoiceVariant Variant, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null) : Expression(Position);
 
 public sealed record AttemptExpression(Expression Operation, SourcePosition Position) : Expression(Position);
 

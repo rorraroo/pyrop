@@ -59,32 +59,62 @@ public sealed class RecordType(string name, Module module, SourcePosition positi
         string.Join(" ", _fields.Select(field => $"{field.Type.Name} {field.Name}"));
 }
 
-public sealed record ChoiceVariant(ChoiceType Choice, string Name, int Index, SourcePosition Position);
+public sealed class ChoiceVariant(ChoiceType choice, string name, int index, SourcePosition position, int arity)
+{
+    private IReadOnlyList<PyropType> _data = [];
+
+    public ChoiceType Choice { get; } = choice;
+
+    public string Name { get; } = name;
+
+    public int Index { get; } = index;
+
+    public SourcePosition Position { get; } = position;
+
+    public int Arity { get; } = arity;
+
+    public IReadOnlyList<PyropType> Data => _data;
+
+    public void Define(IReadOnlyList<PyropType> data) => _data = data;
+
+    public string Example => Arity == 0 ? Name : $"{Name} …";
+
+    public string Describe() => string.Join(" ", _data.Select(type => type.Name).Prepend(Name));
+}
+
+public sealed record VariantDeclaration(string Name, SourcePosition Position, int Arity);
 
 public sealed class ChoiceType : DeclaredType
 {
-    private readonly ChoiceValue[] _values;
+    private readonly ChoiceValue?[] _values;
     private readonly Dictionary<string, ChoiceVariant> _byName;
 
     public ChoiceType(
-        string name, Module module, SourcePosition position, bool isExported, IReadOnlyList<(string Name, SourcePosition Position)> variants)
+        string name, Module module, SourcePosition position, bool isExported, IReadOnlyList<VariantDeclaration> variants)
         : base(name, module, position, isExported)
     {
-        Variants = variants.Select((variant, index) => new ChoiceVariant(this, variant.Name, index, variant.Position)).ToList();
-        _values = Variants.Select(variant => new ChoiceValue(this, variant.Index)).ToArray();
+        Variants = variants.Select((variant, index) => new ChoiceVariant(this, variant.Name, index, variant.Position, variant.Arity)).ToList();
+        _values = Variants.Select(variant => variant.Arity == 0 ? new ChoiceValue(this, variant.Index) : null).ToArray();
         _byName = Variants.ToDictionary(variant => variant.Name);
+        HasData = Variants.Any(variant => variant.Arity > 0);
     }
 
     public IReadOnlyList<ChoiceVariant> Variants { get; }
 
-    public ChoiceValue ValueOf(int index) => _values[index];
+    public bool HasData { get; }
+
+    public ChoiceValue ValueOf(int index) =>
+        _values[index] ?? throw new InvalidOperationException($"Variant '{Variants[index].Name}' carries data.");
 
     public ChoiceVariant? FindVariant(string name) => _byName.GetValueOrDefault(name);
 
-    public bool HasSameVariants(IReadOnlyList<string> names) =>
-        Variants.Select(variant => variant.Name).SequenceEqual(names);
+    public bool HasSameVariants(IReadOnlyList<VariantDeclaration> variants) =>
+        Variants.Select(variant => (variant.Name, variant.Arity)).SequenceEqual(variants.Select(variant => (variant.Name, variant.Arity)));
 
-    public string DescribeVariants() => string.Join(" ", Variants.Select(variant => variant.Name));
+    public bool HasSameData(IReadOnlyList<IReadOnlyList<PyropType>> data) =>
+        Variants.Zip(data).All(pair => pair.First.Data.SequenceEqual(pair.Second));
+
+    public string DescribeVariants() => string.Join(" ", Variants.Select(variant => variant.Describe()));
 
     public string ListVariants()
     {

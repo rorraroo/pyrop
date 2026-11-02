@@ -11,7 +11,7 @@ public static class Conversions
             return false;
         }
 
-        if (from == to || to == PyropType.String || (from == PyropType.String && to is ChoiceType))
+        if (from == to || to == PyropType.String || (from == PyropType.String && to is ChoiceType { HasData: false }))
         {
             return true;
         }

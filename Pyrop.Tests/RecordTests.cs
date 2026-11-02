@@ -28,9 +28,9 @@ public class RecordTests
             record Point float x float y
             record Hero string name int health Point position list string inventory
             def Hero hero Hero "Ann" 10 Point 1.5 2.0 list_of string "lamp" end
-            write_line get_field health hero
-            write_line get_field x get_field position hero
-            set hero with_field health hero subtract get_field health hero 3
+            write_line the health of hero
+            write_line the x of the position of hero
+            set hero copy hero with health subtract the health of hero 3
             write_line hero
             """;
 
@@ -82,12 +82,12 @@ public class RecordTests
             record Point float x float y
             function Point moved Point p
             block
-                set p with_field x p 9.0
+                set p copy p with x 9.0
                 return p
             end
             def Point a Point 1.0 2.0
             def Point b a
-            set b with_field y b 5.0
+            set b copy b with y 5.0
             def Point c moved a
             write_line a
             write_line b
@@ -102,7 +102,7 @@ public class RecordTests
     {
         const string source = """
             def Room hall Room "hall" list_of Exit Exit "north" "kitchen" end
-            write_line get_field target get get_field exits hall 0
+            write_line the target of get the exits of hall 0
             function Room make string name return Room name list_of Exit end
             write_line make "attic"
             record Room string name list Exit exits
@@ -119,8 +119,8 @@ public class RecordTests
             record Tree string label list Tree children map string Tree named
             def Tree leaf Tree "leaf" list_of Tree end map_of string Tree end
             def Tree root Tree "root" list_of Tree leaf end put map_of string Tree end "only" leaf
-            for Tree child in get_field children root write_line get_field label child
-            write_line get_field label get get_field named root "only"
+            for Tree child in the children of root write_line the label of child
+            write_line the label of get the named of root "only"
             """;
 
         Assert.Equal("leaf\nleaf\n", Run.Program(source));
@@ -131,7 +131,7 @@ public class RecordTests
     {
         const string source = Point + """
             def float total 0.0
-            for Point p in list_of Point Point 1.0 2.0 Point 3.0 4.0 end set total add total add get_field x p get_field y p
+            for Point p in list_of Point Point 1.0 2.0 Point 3.0 4.0 end set total add total add the x of p the y of p
             write_line total
             """;
 
@@ -145,11 +145,11 @@ public class RecordTests
             record point float x float y
             record čas int hodiny
             record _pair point first čas second
-            function point mirror point p return point get_field y p get_field x p
+            function point mirror point p return point the y of p the x of p
             def _pair pair _pair mirror point 1.0 2.0 čas 7
             write_line pair
-            for point p in list_of point get_field first pair end write_line p
-            if_some čas c some get_field second pair write_line get_field hodiny c
+            for point p in list_of point the first of pair end write_line p
+            if_some čas c some the second of pair write_line the hodiny of c
             """;
 
         Assert.Equal("_pair first (point x 2.0 y 1.0) second (čas hodiny 7)\npoint x 2.0 y 1.0\n7\n", Run.Program(source));
@@ -194,9 +194,9 @@ public class RecordTests
     [InlineData("record P int x\ndef map P int m map_of P int end", 2, 9, "A map key must be int, string, bool or a choice, found P.")]
     [InlineData("def Q q 1", 1, 5, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
     [InlineData("function Q f return 1", 1, 10, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
-    [InlineData("def int x get_field 5 y", 1, 21, "Expected a field name after 'get_field', found '5'.")]
-    [InlineData("def int x get_field add y", 1, 21, "'add' is a reserved word and cannot be used as a field name.")]
-    [InlineData("get_field x y", 1, 1, "'get_field' cannot start a statement.")]
+    [InlineData("def int x the 5 of y", 1, 15, "Expected a field name after 'the', found '5'.")]
+    [InlineData("def int x the add of y", 1, 15, "'add' is a reserved word and cannot be used as a field name.")]
+    [InlineData("the x of y", 1, 1, "'the' cannot start a statement.")]
     public void RejectsInvalidRecordDeclarationsAndForms(string source, int line, int column, string message)
     {
         Assert.Equal(message, Failure(source, ErrorStage.Parse, line, column).Message);
@@ -207,7 +207,7 @@ public class RecordTests
     [InlineData("write_line record", 1, 12, "record")]
     [InlineData("def string record \"Point\"", 1, 12, "record")]
     [InlineData("set record Point", 1, 5, "record")]
-    [InlineData("def Point p Point 1.0 2.0\nwrite_line get_field record p", 2, 22, "record")]
+    [InlineData("def Point p Point 1.0 2.0\nwrite_line the record of p", 2, 16, "record")]
     [InlineData("for int record in list_of int end write_line 1", 1, 9, "record")]
     [InlineData("def string answer \"x\"\ndef string record answer\ndef int x 1", 2, 12, "record")]
     [InlineData("write_line record\nwrite_line Point 1.0 2.0", 1, 12, "record")]
@@ -248,11 +248,11 @@ public class RecordTests
 
     [Theory]
     [InlineData("def Point p Point 1 2.0", 2, 19, "Field 'x' of 'Point' must be float, found int.")]
-    [InlineData("def Point p Point 1.0 2.0\nwrite_line get_field z p", 3, 22, "Record 'Point' has no field 'z'; its fields are x and y.")]
-    [InlineData("record One int only\nwrite_line get_field z One 1", 3, 22, "Record 'One' has no field 'z'; its field is only.")]
-    [InlineData("write_line get_field x 5", 2, 24, "'get_field' takes a record, found int.")]
-    [InlineData("write_line with_field x list_of int end 1.0", 2, 25, "'with_field' takes a record, found list int.")]
-    [InlineData("def Point p Point 1.0 2.0\nset p with_field x p \"far\"", 3, 22, "Cannot set float field 'x' to a value of type string.")]
+    [InlineData("def Point p Point 1.0 2.0\nwrite_line the z of p", 3, 16, "Record 'Point' has no field 'z'; its fields are x and y.")]
+    [InlineData("record One int only\nwrite_line the z of One 1", 3, 16, "Record 'One' has no field 'z'; its field is only.")]
+    [InlineData("write_line the x of 5", 2, 21, "'the … of' takes a record, found int.")]
+    [InlineData("write_line copy list_of int end with x 1.0", 2, 17, "'copy' takes a record, found list int.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p copy p with x \"far\"", 3, 21, "Cannot set float field 'x' to a value of type string.")]
     [InlineData("def Point p Point 1.0 2.0\ndef float x p", 3, 13, "Cannot initialize float variable 'x' with a value of type Point.")]
     [InlineData("def Point p Point 1.0 2.0\ndef int n convert int p", 3, 11, "Cannot convert Point to int.")]
     [InlineData("def Point p convert Point \"x 1.0 y 2.0\"", 2, 13, "Cannot convert string to Point.")]
@@ -265,7 +265,7 @@ public class RecordTests
     [Fact]
     public void ReportsEveryWrongFieldAccessOnce()
     {
-        var errors = Run.Failures(Point + "def Point p Point 1.0 2.0\nset p with_field z p add 1 true");
+        var errors = Run.Failures(Point + "def Point p Point 1.0 2.0\nset p copy p with z add 1 true");
 
         Assert.Equal(
             ["Record 'Point' has no field 'z'; its fields are x and y.", "'add' cannot take int bool. It accepts: int int, float float, string string."],
@@ -279,16 +279,16 @@ public class RecordTests
             export record Point float x float y
             record Hero string name Point position list Point trail
             def Hero hero Hero "Ann" Point 0.0 0.0 list_of Point end
-            set hero with_field position hero Point get_field x get_field position hero 1.0
-            function Point at Hero h return get_field position h
+            set hero copy hero with position Point the x of the position of hero 1.0
+            function Point at Hero h return the position of h
             """;
 
         Assert.Equal(
             "export record Point float x float y\n" +
             "record Hero string name Point position list Point trail\n" +
             "def Hero hero (Hero \"Ann\" (Point 0.0 0.0) (list_of Point end))\n" +
-            "set hero (with_field position hero (Point (get_field x (get_field position hero)) 1.0))\n" +
-            "function Point at Hero h\n    return (get_field position h)\n",
+            "set hero (copy hero with position (Point (the x of (the position of hero)) 1.0))\n" +
+            "function Point at Hero h\n    return (the position of h)\n",
             Tree(source));
     }
 
@@ -303,7 +303,7 @@ public class RecordTests
         Assert.Equal(InputStatus.Ready, session.Probe("record"));
         Assert.Equal(InputStatus.Incomplete, session.Probe("record Point float"));
         Assert.Equal(InputStatus.Ready, session.Probe("record Point float x\nwrite_line 1"));
-        Assert.Equal(InputStatus.Incomplete, session.Probe("record Point float x\nwrite_line get_field x"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("record Point float x\nwrite_line the x of"));
     }
 
     [Fact]
@@ -314,7 +314,7 @@ public class RecordTests
 
         session.Run("record Point float x float y");
         session.Run("def Point p Point 1.0 2.0");
-        session.Run("function float sum Point q return add get_field x q get_field y q");
+        session.Run("function float sum Point q return add the x of q the y of q");
         session.Run("record Point float x float y");
         session.Run("write_line sum p");
         session.Run("write_line equal p Point 1.0 2.0");
@@ -378,7 +378,7 @@ public class RecordTests
         const string source = """
             record Item string name int count
             record Shop list Item name
-            function string name Item item return get_field name item
+            function string name Item item return the name of item
             def int count 3
             write_line name Item "lamp" count
             """;
@@ -446,5 +446,56 @@ public class RecordTests
     public void RecordStatementsDoNotRun()
     {
         Assert.Equal("1\n", Run.Program("write_line 1\nrecord Point float x float y"));
+    }
+
+    [Fact]
+    public void FieldFormsNest()
+    {
+        const string source = """
+            record Person string name
+            record Item string label Person owner
+            def Item item Item "lamp" Person "Ann"
+            write_line the name of the owner of item
+            set item copy item with owner copy the owner of item with name "Bo"
+            write_line the name of the owner of item
+            write_line the label of copy item with label "rope"
+            """;
+
+        Assert.Equal("Ann\nBo\nrope\n", Run.Program(source));
+    }
+
+    [Theory]
+    [InlineData("def Point p Point 1.0 2.0\nwrite_line the x p", 3, 18, "Expected 'of' after the field name: the x of <record>, found 'p'.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p copy p x 1.0", 3, 14, "Expected 'with' after the record: copy <record> with <field> <value>, found 'x'.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p copy p with 1.0 1.0", 3, 19, "Expected a field name after 'with', found '1.0'.")]
+    [InlineData("def Point p Point 1.0 2.0\nwrite_line get_field x p", 3, 12, "'get_field' is no longer part of Pyrop; write the <field> of <record>.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p with_field x p 1.0", 3, 7, "'with_field' is no longer part of Pyrop; write copy <record> with <field> <value>.")]
+    [InlineData("def int the 1", 2, 9, "'the' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("def int of 1", 2, 9, "'of' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("def int copy 1", 2, 9, "'copy' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("def int with 1", 2, 9, "'with' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("write_line of", 2, 12, "Expected an expression, found keyword 'of'.")]
+    [InlineData("copy p with x 1.0", 2, 1, "'copy' cannot start a statement.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p copy p with x 2.0 with y 3.0", 3, 25,
+        "'with' cannot start a statement. A copy changes one field; to change two, copy the copy: copy copy <record> with <field> <value> with <field> <value>.")]
+    public void FieldFormErrors(string body, int line, int column, string message)
+    {
+        var error = Run.Failure(Point + body);
+
+        Assert.Equal(ErrorStage.Parse, error.Stage);
+        Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
+        Assert.Equal(message, error.Message);
+    }
+
+    [Fact]
+    public void AnUnfinishedFieldFormIsIncompleteInput()
+    {
+        var session = new PyropSession(new StringReader(""), new StringOutput());
+        session.Run(Point + "def Point p Point 1.0 2.0");
+
+        Assert.Equal(InputStatus.Incomplete, session.Probe("write_line the x"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("write_line the x of"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("set p copy p"));
+        Assert.Equal(InputStatus.Incomplete, session.Probe("set p copy p with x"));
     }
 }

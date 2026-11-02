@@ -18,7 +18,27 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
 & (Join-Path $root 'editors\vscode\pack.ps1')
 
-& $compiler "/DAppVersion=$version" "/DExtensionId=$($manifest.publisher).$($manifest.name)" (Join-Path $PSScriptRoot 'pyrop.iss')
-if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
+$setupName = "pyrop-setup-$version.exe"
+$staging = Join-Path ([IO.Path]::GetTempPath()) "pyrop-setup-$([guid]::NewGuid())"
+New-Item -ItemType Directory -Path $staging | Out-Null
+try {
+    $attempt = 0
+    do {
+        $attempt++
+        Remove-Item (Join-Path $staging '*') -Force -ErrorAction SilentlyContinue
+        & $compiler "/DAppVersion=$version" "/DExtensionId=$($manifest.publisher).$($manifest.name)" "/DOutputFolder=$staging" (Join-Path $PSScriptRoot 'pyrop.iss')
+        if ($LASTEXITCODE -ne 0 -and $attempt -lt 3) {
+            Write-Host "Inno Setup failed (attempt $attempt of 3), usually because an antivirus scanner held the file; trying again."
+            Start-Sleep -Seconds 2
+        }
+    } while ($LASTEXITCODE -ne 0 -and $attempt -lt 3)
+    if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
 
-Write-Host "Created $(Join-Path $root "publish\pyrop-setup-$version.exe")"
+    $target = Join-Path $root "publish\$setupName"
+    Move-Item (Join-Path $staging $setupName) $target -Force
+}
+finally {
+    Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "Created $target"

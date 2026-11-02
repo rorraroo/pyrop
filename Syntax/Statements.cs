@@ -14,6 +14,10 @@ public sealed record IfStatement(Expression Condition, Statement Then, Statement
 public sealed record IfSomeStatement(
     PyropType ValueType, string Name, Expression Option, Statement Then, Statement? Else, SourcePosition Position) : Statement(Position);
 
+public sealed record MatchBranch(ChoiceVariant Variant, IReadOnlyList<string> Names, Statement Body, SourcePosition Position, string? Module = null);
+
+public sealed record MatchStatement(Expression Value, IReadOnlyList<MatchBranch> Branches, SourcePosition Position) : Statement(Position);
+
 public sealed record WhileStatement(Expression Condition, Statement Body, SourcePosition Position) : Statement(Position);
 
 public sealed record ForStatement(PyropType VariableType, string Variable, Expression List, Statement Body, SourcePosition Position) : Statement(Position);

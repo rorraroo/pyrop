@@ -32,10 +32,14 @@ public static class Keywords
     public const string From = "from";
     public const string Record = "record";
     public const string Choice = "choice";
-    public const string GetField = "get_field";
-    public const string WithField = "with_field";
+    public const string The = "the";
+    public const string Of = "of";
+    public const string Copy = "copy";
+    public const string With = "with";
     public const string Attempt = "attempt";
     public const string IfSome = "if_some";
+    public const string Match = "match";
+    public const string When = "when";
     public const string None = "none";
     public const string True = "true";
     public const string False = "false";
@@ -52,13 +56,15 @@ public static class Keywords
         ["remove_key"] = "use remove <map> <key>",
         ["replace_at"] = "use put <list> <index> <item>",
         ["negate"] = "write subtract 0 <number>, or subtract 0.0 <number> for a float",
+        ["get_field"] = "write the <field> of <record>",
+        ["with_field"] = "write copy <record> with <field> <value>",
     };
 
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, GetField,
-        WithField, Attempt, IfSome, None, True, False,
+        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, The,
+        Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
         .. Retired.Keys,
@@ -67,7 +73,7 @@ public static class Keywords
     private static readonly HashSet<string> Statements =
     [
         Def, Set, If, Else, While, For, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Exit, WithStyle, Use, Import, Export, Record, Choice, IfSome,
+        WriteError, WriteErrorLine, Exit, WithStyle, Use, Import, Export, Record, Choice, IfSome, Match, When,
     ];
 
     public static bool IsReserved(string word) => Reserved.Contains(word);

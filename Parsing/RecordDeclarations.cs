@@ -36,13 +36,13 @@ public sealed record KnownTypes(ModuleNamespace Names, IReadOnlySet<string> Decl
 public static class RecordDeclarations
 {
     private static readonly HashSet<string> NamePositions =
-        [Keywords.Def, Keywords.Set, Keywords.For, Keywords.Use, Keywords.From, Keywords.GetField, Keywords.WithField];
+        [Keywords.Def, Keywords.Set, Keywords.For, Keywords.Use, Keywords.From, Keywords.The, Keywords.With, Keywords.When];
 
     private static readonly HashSet<string> ValuePositions =
     [
         Keywords.Write, Keywords.WriteLine, Keywords.WriteError, Keywords.WriteErrorLine, Keywords.Return, Keywords.Exit,
         Keywords.If, Keywords.While, Keywords.WithStyle, Keywords.In, Keywords.Convert, Keywords.ListOf, Keywords.MapOf,
-        Keywords.Attempt, Keywords.None, Keywords.IfSome,
+        Keywords.Attempt, Keywords.None, Keywords.IfSome, Keywords.Match, Keywords.Of, Keywords.Copy,
     ];
 
     public static void RejectKeywordAsName(Token keyword, TokenCursor cursor, bool startsDeclaration, KnownTypes types)
@@ -305,7 +305,42 @@ public static class RecordDeclarations
         return token;
     }
 
-    public static void CheckSelfContainment(IEnumerable<RecordType> records)
+    public static void CheckSelfContainment(IReadOnlyList<RecordType> records, IReadOnlyList<ChoiceType> choices)
+    {
+        CheckRecordChains(records);
+        var pending = new HashSet<DeclaredType>([.. records, .. choices]);
+        bool CanMake(PyropType type) => type is not DeclaredType declared || !pending.Contains(declared);
+        var progress = true;
+        while (progress)
+        {
+            progress = false;
+            foreach (var type in pending.ToList())
+            {
+                var makeable = type switch
+                {
+                    RecordType record => record.Fields.All(field => CanMake(field.Type)),
+                    ChoiceType choice => choice.Variants.Any(variant => variant.Data.All(CanMake)),
+                    _ => true,
+                };
+                if (makeable)
+                {
+                    pending.Remove(type);
+                    progress = true;
+                }
+            }
+        }
+
+        if (choices.FirstOrDefault(pending.Contains) is { } unmakeable)
+        {
+            throw new PyropException(
+                ErrorStage.Parse,
+                $"Choice '{unmakeable.Name}' contains itself: every variant carries data that cannot be made without a {unmakeable.Name}, so no {unmakeable.Name} could ever be made. " +
+                "Give it a variant that does not need one, such as a variant without data.",
+                unmakeable.Position);
+        }
+    }
+
+    private static void CheckRecordChains(IEnumerable<RecordType> records)
     {
         foreach (var record in records)
         {
@@ -349,8 +384,23 @@ public static class RecordDeclarations
         return null;
     }
 
-    public static void CheckExposure(Module module, IEnumerable<RecordType> records, IEnumerable<FunctionSignature> functions)
+    public static void CheckExposure(
+        Module module, IEnumerable<RecordType> records, IEnumerable<ChoiceType> choices, IEnumerable<FunctionSignature> functions)
     {
+        foreach (var choice in choices.Where(choice => choice.IsExported))
+        {
+            foreach (var variant in choice.Variants)
+            {
+                if (variant.Data.Select(type => Private(module, type)).FirstOrDefault(hidden => hidden is not null) is { } hidden)
+                {
+                    throw new PyropException(
+                        ErrorStage.Parse,
+                        $"Exported choice '{choice.Name}' uses the {Kind(hidden)} '{hidden.Name}' in its variant '{variant.Name}', but '{hidden.Name}' is not exported; export it too.",
+                        choice.Position);
+                }
+            }
+        }
+
         foreach (var record in records.Where(record => record.IsExported))
         {
             foreach (var field in record.Fields)

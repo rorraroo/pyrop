@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.13.0</Version>
+    <Version>0.15.1</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>pyrop</ToolCommandName>
     <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**</DefaultItemExcludes>
@@ -17,6 +17,10 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
     <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildProjectDirectory)\publish\</PublishDir>
   </PropertyGroup>
 

@@ -81,7 +81,7 @@ public static class SemanticClassifier
                 continue;
             }
 
-            if (index > 0 && (tokens[index - 1].IsWord(Keywords.GetField) || tokens[index - 1].IsWord(Keywords.WithField))
+            if (index > 0 && (tokens[index - 1].IsWord(Keywords.The) || tokens[index - 1].IsWord(Keywords.With))
                 || fields.Contains(At(token.Position)))
             {
                 classified.Add(Classified(token, SemanticKind.Field, SemanticModifiers.None));

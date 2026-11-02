@@ -302,6 +302,19 @@ public sealed class LanguageServerTests : IDisposable
     }
 
     [Fact]
+    public void SemanticTokensMarkFieldsAfterTheAndWith()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "record P int x\ndef P p P 1\ndef int x the x of p\nset p copy p with x x\n");
+        client.Diagnostics();
+
+        Assert.Equal(
+            ["type", "property", "type", "variable", "type", "variable", "property", "variable", "variable", "variable", "property", "variable"],
+            KindsOf(Tokens(client, uri)));
+    }
+
+    [Fact]
     public void SemanticTokensOfAFileThatCannotBeLexedAreNull()
     {
         using var client = Started();

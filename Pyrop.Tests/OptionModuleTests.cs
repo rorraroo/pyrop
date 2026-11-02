@@ -54,7 +54,7 @@ public sealed class OptionModuleTests : IDisposable
             write_line found
             write_line from geo parse_point "1.5"
             write_line from geo parse_point "a,b"
-            if_some from geo Point p found write_line get_field y p
+            if_some from geo Point p found write_line the y of p
             write_line equal none from geo Point from geo parse_point "x"
             """;
 

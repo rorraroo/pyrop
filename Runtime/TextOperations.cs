@@ -133,6 +133,65 @@ public static class TextOperations
         return string.Join(separator, items.Items.Select(item => item.AsString()));
     }
 
+    public static string Fill(IBuiltinInvocation invocation, string template, ListValue items)
+    {
+        var builder = new StringBuilder(template.Length);
+        var used = 0;
+        for (var index = 0; index < template.Length; index++)
+        {
+            var character = template[index];
+            var next = index + 1 < template.Length ? template[index + 1] : '\0';
+            if (character == '{' && next == '}')
+            {
+                if (used < items.Count)
+                {
+                    var text = TextForm.Of(items.Items[used], invocation.Fail, invocation.NestingLimit, invocation.FailAtLimit);
+                    if ((long)builder.Length + text.Length > MaxLength)
+                    {
+                        throw TooLong(invocation, "fill");
+                    }
+
+                    builder.Append(text);
+                }
+
+                used++;
+                index++;
+            }
+            else if ((character == '{' && next == '{') || (character == '}' && next == '}'))
+            {
+                builder.Append(character);
+                index++;
+            }
+            else if (character is '{' or '}')
+            {
+                throw invocation.Fail(
+                    $"The template of 'fill' has a lone '{character}' at position {TextPosition(template, index)}; write {{}} for an item, and {{{{ or }}}} for a brace of its own.");
+            }
+            else
+            {
+                builder.Append(character);
+            }
+
+            if (builder.Length > MaxLength)
+            {
+                throw TooLong(invocation, "fill");
+            }
+        }
+
+        if (used != items.Count)
+        {
+            throw invocation.Fail(
+                $"The template of 'fill' has {Count(used, "place", "places")} for items, but the list has {Count(items.Count, "item", "items")}.");
+        }
+
+        return builder.ToString();
+    }
+
+    private static long TextPosition(string text, int offset) => MapOf(text[..offset]).Count;
+
+    private static string Count(long count, string one, string many) =>
+        $"{count.ToString(CultureInfo.InvariantCulture)} {(count == 1 ? one : many)}";
+
     public static bool StartsWith(string text, string prefix) =>
         text.StartsWith(prefix, StringComparison.Ordinal) && MapOf(text).IsBoundary(prefix.Length);
 

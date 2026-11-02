@@ -16,7 +16,7 @@ public static class ValueEquality
             return true;
         }
 
-        if (left is not (ListValue or MapValue or RecordValue or OptionValue))
+        if (left is not (ListValue or MapValue or RecordValue or OptionValue or ChoiceValue { HasData: true }))
         {
             return left.Equals(right);
         }
@@ -67,6 +67,21 @@ public static class ValueEquality
                 for (var index = 0; index < first.Fields.Length; index++)
                 {
                     if (!Equal(first.Fields[index], second.Fields[index], nestingLimit, depth + 1, tooDeep))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            case (ChoiceValue first, ChoiceValue second):
+                if (first.Choice != second.Choice || first.Index != second.Index)
+                {
+                    return false;
+                }
+
+                for (var index = 0; index < first.Data.Length; index++)
+                {
+                    if (!Equal(first.Data[index], second.Data[index], nestingLimit, depth + 1, tooDeep))
                     {
                         return false;
                     }

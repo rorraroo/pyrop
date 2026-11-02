@@ -72,6 +72,11 @@ public sealed class Parser
             return ParseIfSome(declared, outer);
         }
 
+        if (token.IsWord(Keywords.Match))
+        {
+            return ParseMatch(declared, outer);
+        }
+
         if (AtTopLevel && token.Kind == TokenKind.Word)
         {
             switch (token.Text)
@@ -203,7 +208,7 @@ public sealed class Parser
     {
         var start = _cursor.Advance();
         var name = ChoiceDeclarations.ReadName(_cursor).Text;
-        ChoiceDeclarations.ReadVariants(_cursor, start, name);
+        ChoiceDeclarations.ReadVariants(_cursor, start, name, _names);
         var choice = _names.Choices.GetValueOrDefault(name)
             ?? throw new InvalidOperationException($"Choice '{name}' was not registered by the signature pre-pass.");
         return new ChoiceStatement(choice, start.Position);
@@ -227,6 +232,11 @@ public sealed class Parser
             if (outer is { GuardsBoundNames: true } && _cursor.Current.IsWord(Keywords.For))
             {
                 return ParseFor(NoDeclarations, outer);
+            }
+
+            if (outer is { GuardsBoundNames: true } && _cursor.Current.IsWord(Keywords.Match))
+            {
+                return ParseMatch(NoDeclarations, outer);
             }
 
             return outer is { GuardsBoundNames: true } && _cursor.Current.IsWord(Keywords.IfSome)
@@ -262,6 +272,11 @@ public sealed class Parser
             Keywords.Set => ParseSet(),
             Keywords.If => ParseIf(),
             Keywords.IfSome => ParseIfSome(NoDeclarations, NoOuterNames),
+            Keywords.Match => ParseMatch(NoDeclarations, NoOuterNames),
+            Keywords.When => throw _cursor.Error($"'{Keywords.When}' without a matching '{Keywords.Match}'."),
+            Keywords.With => throw _cursor.Error(
+                $"'{Keywords.With}' cannot start a statement. A {Keywords.Copy} changes one field; to change two, copy the copy: " +
+                $"{Keywords.Copy} {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>."),
             Keywords.Attempt => throw _cursor.Error(
                 $"'{Keywords.Attempt}' cannot be a statement: its result tells whether the operation succeeded. " +
                 $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} write_file \"save.txt\" text …."),
@@ -286,6 +301,7 @@ public sealed class Parser
                 new CallStatement(ParseCall(allowVoid: true), token.Position),
             _ when _names.FindRecord(token.Text) is not null => throw ConstructorStatement(token, token.Text),
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
+            _ when _names.FindVariant(token.Text) is { Arity: > 0 } variant => throw VariantStatement(token, variant.Name),
             _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
             _ when _names.Uses.ContainsKey(token.Text) => throw ModuleUsedAsValue(token),
             _ when Keywords.RetiredHint(token.Text) is { } retired => throw _cursor.Error(retired),
@@ -311,12 +327,18 @@ public sealed class Parser
     private PyropException ChoiceStartingStatement(Token token, ChoiceType choice, string? module = null) =>
         _cursor.Error(
             $"A statement cannot start with the choice '{choice.Name}': a choice is a type, and no statement may start with a type name. " +
-            $"Use one of its variants as a value, as in {Keywords.Def} {Written(module, choice.Name)} <name> {Written(module, choice.Variants[0].Name)}.",
+            $"Use one of its variants as a value, as in {Keywords.Def} {Written(module, choice.Name)} <name> {Written(module, choice.Variants[0].Example)}.",
             token);
 
     private PyropException ChoiceAsValue(Token token, ChoiceType choice, string? module = null) =>
         _cursor.Error(
-            $"'{choice.Name}' is a choice, not a value; name one of its variants, such as {Written(module, choice.Variants[0].Name)}.", token);
+            $"'{choice.Name}' is a choice, not a value; name one of its variants, such as {Written(module, choice.Variants[0].Example)}.", token);
+
+    private PyropException VariantStatement(Token token, string written) =>
+        _cursor.Error(
+            $"A variant that carries data cannot be a statement: '{written} …' would make a value only to throw it away. " +
+            $"Use it as a value, as in {Keywords.Set} <name> {written} ….",
+            token);
 
     private static string Written(string? module, string name) => module is null ? name : $"{Keywords.From} {module} {name}";
 
@@ -406,6 +428,108 @@ public sealed class Parser
         }
 
         return new IfSomeStatement(type, name, option, then, otherwise, start.Position);
+    }
+
+    private Statement ParseMatch(IReadOnlySet<string> declared, OuterNames outer)
+    {
+        var start = _cursor.Advance();
+        var value = ParseExpression();
+        var branches = new List<MatchBranch>();
+        while (!_cursor.Current.IsWord(Keywords.End))
+        {
+            if (_cursor.IsAtEnd)
+            {
+                throw _cursor.Error($"Expected '{Keywords.End}' to close the {Keywords.Match} started at {start.Position}.");
+            }
+
+            if (!_cursor.Current.IsWord(Keywords.When))
+            {
+                throw _cursor.Error(
+                    $"Expected '{Keywords.When}' or '{Keywords.End}' to close the {Keywords.Match} started at {start.Position}, found {_cursor.Current.Describe()}.");
+            }
+
+            branches.Add(ParseWhen(declared, outer));
+        }
+
+        if (branches.Count == 0)
+        {
+            throw _cursor.Error(
+                $"'{Keywords.Match}' needs a branch for each variant before '{Keywords.End}', such as {Keywords.When} <variant> <statement>.");
+        }
+
+        _cursor.Advance();
+        return new MatchStatement(value, branches, start.Position);
+    }
+
+    private MatchBranch ParseWhen(IReadOnlySet<string> declared, OuterNames outer)
+    {
+        var start = _cursor.Advance();
+        var (variant, module) = ReadMatchedVariant();
+        var names = new List<string>();
+        for (var index = 0; index < variant.Arity; index++)
+        {
+            var nameToken = _cursor.Current;
+            if (nameToken.Kind != TokenKind.Word || Keywords.IsStatement(nameToken.Text))
+            {
+                var data = variant.Arity == 1 ? "a value" : $"{variant.Arity} values";
+                throw _cursor.Error(
+                    $"The variant '{variant.Name}' carries {data} ({string.Join(" ", variant.Data.Select(type => type.Name))}), " +
+                    $"so '{Keywords.When} {variant.Name}' needs {(variant.Arity == 1 ? "a name for it" : "a name for each")}, " +
+                    $"as in {Keywords.When} {variant.Name} {string.Join(" ", Enumerable.Range(1, variant.Arity).Select(number => variant.Arity == 1 ? "value" : $"value{number}"))} …; found {nameToken.Describe()}.");
+            }
+
+            var name = _cursor.ExpectIdentifier($"{Keywords.When} value name", _names);
+            if (names.Contains(name))
+            {
+                throw _cursor.Error($"The {Keywords.When} value '{name}' is named twice.", nameToken);
+            }
+
+            if (declared.Contains(name))
+            {
+                throw _cursor.Error(
+                    $"The {Keywords.When} value '{name}' would shadow the variable of the same name declared earlier in this block.",
+                    nameToken);
+            }
+
+            if (outer.GuardsBoundNames && outer.Names.Contains(name))
+            {
+                throw _cursor.Error($"The {Keywords.When} value '{name}' would shadow the {outer.Kind} of the same name.", nameToken);
+            }
+
+            names.Add(name);
+        }
+
+        var body = ParseBody(
+            $"a {Keywords.When}", new OuterNames(names.ToHashSet(), $"{Keywords.When} value", GuardsBoundNames: false));
+        return new MatchBranch(variant, names, body, start.Position, module);
+    }
+
+    private (ChoiceVariant Variant, string? Module) ReadMatchedVariant()
+    {
+        var token = _cursor.Current;
+        if (token.IsWord(Keywords.From))
+        {
+            var qualified = QualifiedNames.Read(_cursor);
+            return QualifiedNames.Resolve(_names, qualified, _cursor) is ChoiceVariant found
+                ? (found, qualified.Module.Text)
+                : throw _cursor.Error($"Expected a variant after '{Keywords.When}', found '{qualified}'.", qualified.From);
+        }
+
+        if (token.Kind == TokenKind.Word && _names.FindVariant(token.Text) is { } variant)
+        {
+            _cursor.Advance();
+            return (variant, null);
+        }
+
+        if (token.Kind == TokenKind.Word && _names.Failures.OfName(token.Text) is { } failure)
+        {
+            throw failure;
+        }
+
+        throw _cursor.Error(
+            token.Kind == TokenKind.Word && _names.FindChoice(token.Text) is { } choice
+                ? $"'{choice.Name}' is a choice; '{Keywords.When}' names one of its variants, such as {Keywords.When} {choice.Variants[0].Example}."
+                : $"Expected a variant after '{Keywords.When}', found {token.Describe()}.");
     }
 
     private Statement ParseWhile()
@@ -624,14 +748,16 @@ public sealed class Parser
                 }
 
                 return new NoneExpression(TypeReader.ReadValueType(_cursor, _names, "missing value"), token.Position);
-            case Keywords.GetField:
+            case Keywords.The:
                 _cursor.Advance();
-                var read = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.GetField}'");
+                var read = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.The}'");
+                ExpectFiller(Keywords.Of, $"after the field name: {Keywords.The} {read.Text} {Keywords.Of} <record>");
                 return new GetFieldExpression(read.Text, read.Position, ParseExpression(), token.Position);
-            case Keywords.WithField:
+            case Keywords.Copy:
                 _cursor.Advance();
-                var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.WithField}'");
                 var record = ParseExpression();
+                ExpectFiller(Keywords.With, $"after the record: {Keywords.Copy} <record> {Keywords.With} <field> <value>");
+                var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
                 return new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), token.Position);
         }
 
@@ -654,7 +780,7 @@ public sealed class Parser
         if (_names.FindVariant(token.Text) is { } variant)
         {
             _cursor.Advance();
-            return new VariantExpression(variant, token.Position);
+            return new VariantExpression(variant, ParseArguments(variant.Arity), token.Position);
         }
 
         if (_names.FindChoice(token.Text) is { } choice)
@@ -684,6 +810,16 @@ public sealed class Parser
 
         _cursor.Advance();
         return new VariableExpression(token.Text, token.Position);
+    }
+
+    private void ExpectFiller(string word, string where)
+    {
+        if (!_cursor.Current.IsWord(word))
+        {
+            throw _cursor.Error($"Expected '{word}' {where}, found {_cursor.Current.Describe()}.");
+        }
+
+        _cursor.Advance();
     }
 
     private Expression ParseAttempt()
@@ -804,8 +940,10 @@ public sealed class Parser
             RecordType record => ParseConstruct(record, qualified.From, qualified.Module.Text),
             ChoiceType choice when asStatement => throw ChoiceStartingStatement(qualified.From, choice, qualified.Module.Text),
             ChoiceType choice => throw ChoiceAsValue(qualified.From, choice, qualified.Module.Text),
+            ChoiceVariant { Arity: > 0 } when asStatement => throw VariantStatement(qualified.From, qualified.ToString()),
             ChoiceVariant when asStatement => throw StrayValue(qualified.From, $"'{qualified}'"),
-            ChoiceVariant variant => new VariantExpression(variant, qualified.From.Position, qualified.Module.Text),
+            ChoiceVariant variant => new VariantExpression(
+                variant, ParseArguments(variant.Arity), qualified.From.Position, qualified.Module.Text),
             FunctionSignature function => ParseFunctionCall(function, qualified.From, qualified.Module.Text, allowVoid),
             var other => throw new InvalidOperationException($"Unknown qualified target {other.GetType().Name}."),
         };

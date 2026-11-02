@@ -195,4 +195,53 @@ public sealed class ChoiceModuleTests : IDisposable
             "use items \"items.prp\"\ndef from items Item a from items sword\nwrite_line (equal a from items lamp)\n",
             inspected.Text);
     }
+
+    [Fact]
+    public void VariantsWithDataWorkAcrossModules()
+    {
+        WriteFile("moves.prp", "use items \"items.prp\"\nimport from items Item end\nexport choice Move go int pick Item rest end\nexport function Move longest return go 9\n");
+        const string source = """
+            use moves "moves.prp"
+            use items "items.prp"
+            def from moves Move m from moves go 3
+            write_line m
+            write_line from moves pick from items lamp
+            for from moves Move each in list_of from moves Move m from moves longest from moves rest end
+                match each
+                    when from moves go n write_line n
+                    when from moves pick item write_line item
+                    when from moves rest write_line "rest"
+                end
+            import from moves Move end
+            match pick from items shield
+                when go n write_line n
+                when pick item write_line item
+                when rest write_line "rest"
+            end
+            """;
+
+        Assert.Equal("go 3\npick lamp\n3\n9\nrest\nshield\n", RunFile(source));
+    }
+
+    [Theory]
+    [InlineData("choice C a from bad T b end")]
+    [InlineData("choice C a list from bad T b end")]
+    public void DataFromAModuleThatFailedToLoadReportsTheFailure(string declaration)
+    {
+        var error = FailFile($"use bad \"missing.prp\"\n{declaration}");
+
+        Assert.StartsWith("Cannot use \"missing.prp\"", error.Message);
+    }
+
+    [Fact]
+    public void AnExportedChoiceCannotCarryAPrivateType()
+    {
+        WriteFile("bad.prp", "record Secret int x\nexport choice Leak show Secret end\n");
+
+        var error = FailFile("use bad \"bad.prp\"\nwrite_line 1");
+
+        Assert.Equal(
+            "Exported choice 'Leak' uses the record 'Secret' in its variant 'show', but 'Secret' is not exported; export it too.",
+            error.Message);
+    }
 }

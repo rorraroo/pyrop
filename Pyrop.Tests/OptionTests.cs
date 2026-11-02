@@ -44,12 +44,12 @@ public class OptionTests
             def list Room rooms list_of Room Room "Hall" 10 Room "Cellar" 4 end
             function option Room find_room string wanted
             block
-                for Room room in rooms if equal get_field name room wanted return some room
+                for Room room in rooms if equal the name of room wanted return some room
                 return none Room
             end
             function int size_of option Room room
             block
-                if_some Room found room return get_field size found
+                if_some Room found room return the size of found
                 else return 0
             end
             write_line find_room "Cellar"
@@ -101,8 +101,8 @@ public class OptionTests
             def bool walking true
             while walking block
                 if_some Node node current block
-                    set total add total get_field value node
-                    set current get_field next node
+                    set total add total the value of node
+                    set current the next of node
                 end
                 else set walking false
             end

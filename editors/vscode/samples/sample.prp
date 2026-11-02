@@ -61,7 +61,7 @@ write_error_line "usage: sample <file>"
 export record Point float x float y
 record Hero string name int health Point position list string inventory
 def Hero hero Hero "Ann" 10 Point 0.0 0.0 list_of string end
-set hero with_field health hero subtract get_field health hero 1
+set hero copy hero with health subtract the health of hero 1
 write_line hero
 
 export choice Direction north east south west end

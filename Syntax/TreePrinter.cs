@@ -44,6 +44,9 @@ public static class TreePrinter
                 case BlockStatement block:
                     WriteBlock(depth, Keywords.Block, block);
                     break;
+                case MatchStatement match:
+                    WriteMatch(match, depth);
+                    break;
                 default:
                     Line(depth, Simple(statement));
                     break;
@@ -71,6 +74,17 @@ public static class TreePrinter
                     WriteHeaded(depth, Keywords.Else, otherwise);
                     break;
             }
+        }
+
+        private void WriteMatch(MatchStatement match, int depth)
+        {
+            Line(depth, $"{Keywords.Match} {Operand(match.Value)}");
+            foreach (var branch in match.Branches)
+            {
+                WriteHeaded(depth + 1, string.Join(' ', [Keywords.When, Callee(branch.Module, branch.Variant.Name), .. branch.Names]), branch.Body);
+            }
+
+            Line(depth, Keywords.End);
         }
 
         private void WriteHeaded(int depth, string header, Statement body)
@@ -139,12 +153,12 @@ public static class TreePrinter
                 .. record.Fields.SelectMany(field => new[] { TypeText(field.Type), field.Name }),
             ]);
 
-        private static string ChoiceHeader(ChoiceType choice) =>
+        private string ChoiceHeader(ChoiceType choice) =>
             string.Join(' ', [
                 .. choice.IsExported ? [Keywords.Export] : Array.Empty<string>(),
                 Keywords.Choice,
                 choice.Name,
-                .. choice.Variants.Select(variant => variant.Name),
+                .. choice.Variants.SelectMany(variant => variant.Data.Select(TypeText).Prepend(variant.Name)),
                 Keywords.End,
             ]);
 
@@ -210,7 +224,7 @@ public static class TreePrinter
         private void AppendOperand(StringBuilder builder, Expression expression)
         {
             if (expression is BuiltinCallExpression { Arguments.Count: > 0 } or FunctionCallExpression { Arguments.Count: > 0 }
-                or ConstructExpression { Arguments.Count: > 0 } or ConvertExpression or ListOfExpression or MapOfExpression
+                or ConstructExpression { Arguments.Count: > 0 } or VariantExpression { Arguments.Count: > 0 } or ConvertExpression or ListOfExpression or MapOfExpression
                 or GetFieldExpression or WithFieldExpression or AttemptExpression or NoneExpression)
             {
                 builder.Append('(');
@@ -260,13 +274,16 @@ public static class TreePrinter
                     builder.Append(' ').Append(Keywords.End);
                     break;
                 case GetFieldExpression read:
-                    AppendApplied(builder, $"{Keywords.GetField} {read.Field}", [read.Record]);
+                    AppendApplied(builder, $"{Keywords.The} {read.Field} {Keywords.Of}", [read.Record]);
                     break;
                 case WithFieldExpression change:
-                    AppendApplied(builder, $"{Keywords.WithField} {change.Field}", [change.Record, change.Value]);
+                    builder.Append(Keywords.Copy).Append(' ');
+                    AppendOperand(builder, change.Record);
+                    builder.Append(' ').Append(Keywords.With).Append(' ').Append(change.Field).Append(' ');
+                    AppendOperand(builder, change.Value);
                     break;
                 case VariantExpression variant:
-                    builder.Append(Callee(variant.Module, variant.Variant.Name));
+                    AppendApplied(builder, Callee(variant.Module, variant.Variant.Name), variant.Arguments);
                     break;
                 case AttemptExpression attempt:
                     AppendApplied(builder, Keywords.Attempt, [attempt.Operation]);

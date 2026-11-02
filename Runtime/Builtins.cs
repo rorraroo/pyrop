@@ -209,6 +209,8 @@ public static class Builtins
         Operation("join",
             Overload([PyropTypes.ListOf(S), S], S, c => new StringValue(
                 TextOperations.Join(c, c.Argument(0).AsList(), c.Argument(1).AsString())))),
+        Operation("fill",
+            Overload([S, ListT], S, c => new StringValue(TextOperations.Fill(c, c.Argument(0).AsString(), c.Argument(1).AsList())))),
         Operation("abs",
             Overload([I], I, c => Int(c, () => Math.Abs(c.Argument(0).AsInt()))),
             Overload([F], F, c => new FloatValue(Math.Abs(c.Argument(0).AsFloat())))),
