@@ -321,8 +321,14 @@ public sealed class TypeChecker
                 }
 
                 return convert.Target;
-            case EmptyExpression empty:
-                return empty.Type;
+            case MapOfExpression map:
+                foreach (var entry in map.Entries)
+                {
+                    CheckMapOfPart(map, "key", entry.Key, map.KeyType, scope);
+                    CheckMapOfPart(map, "value", entry.Value, map.ValueType, scope);
+                }
+
+                return PyropTypes.MapOf(map.KeyType, map.ValueType);
             case ListOfExpression list:
                 foreach (var item in list.Items)
                 {
@@ -445,6 +451,15 @@ public sealed class TypeChecker
         }
 
         return recordType;
+    }
+
+    private void CheckMapOfPart(MapOfExpression map, string part, Expression expression, PyropType expected, SymbolScope scope)
+    {
+        if (TypeOf(expression, scope) is { } actual && actual != expected)
+        {
+            var names = PyropTypes.NamesOf(map.KeyType, map.ValueType, expected, actual);
+            Report($"Every {part} of '{Keywords.MapOf} {names[0]} {names[1]}' must be {names[2]}, found {names[3]}.", expression.Position);
+        }
     }
 
     private static (string First, string Second) Names(PyropType first, PyropType second)

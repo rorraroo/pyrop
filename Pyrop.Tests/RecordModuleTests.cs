@@ -49,7 +49,7 @@ public sealed class RecordModuleTests : IDisposable
             def list from geo Point all list_of from geo Point a from geo origin end
             write_line from geo sum a
             write_line all
-            write_line equal item_at all 1 from geo Point 0.0 0.0
+            write_line equal get all 1 from geo Point 0.0 0.0
             """;
 
         Assert.Equal("7.0\n[Point x 3.0 y 4.0, Point x 0.0 y 0.0]\ntrue\n", RunFile(source));
@@ -61,7 +61,7 @@ public sealed class RecordModuleTests : IDisposable
         const string source = """
             def Point a Point 1.0 2.0
             use geo "geo.prp"
-            import from geo Point
+            import from geo Point end
             function Point twice Point p return Point multiply 2.0 get_field x p multiply 2.0 get_field y p
             write_line twice a
             write_line equal a from geo Point 1.0 2.0
@@ -131,17 +131,17 @@ public sealed class RecordModuleTests : IDisposable
 
     [Theory]
     [InlineData("use geo \"geo.prp\"\ndef from geo Secret s 1", 2, 14, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Secret", 2, 17, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Secret end", 2, 17, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
     [InlineData("use geo \"geo.prp\"\ndef from geo sum s 1", 2, 14, "'sum' of module 'geo' is a function, not a type.")]
     [InlineData("use geo \"geo.prp\"\ndef from geo Line s 1", 2, 14, "Module 'geo' has no record or choice 'Line'.")]
     [InlineData("use geo \"geo.prp\"\nwrite_line from geo Line 1", 2, 21, "Module 'geo' has no function, record, choice or variant 'Line'.")]
     [InlineData("def from shapes Point p 1", 1, 10, "'shapes' is not a module of this file; load it with use shapes \"<path>\".")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Point\nrecord Point int x", 2, 17, "'Point' is a record of this file and cannot also be imported.")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\nrecord Point int x", 2, 17, "'Point' is a record of this file and cannot also be imported.")]
     [InlineData("use Point \"geo.prp\"\nrecord Point int x", 2, 8, "'Point' is a module name in this file and cannot also name a record.")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Point\ndef int Point 1", 3, 9, "'Point' is an imported record and cannot be used as a variable name.")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\ndef int Point 1", 3, 9, "'Point' is an imported record and cannot be used as a variable name.")]
     [InlineData("use geo \"nope.prp\"\nrecord R from geo Point p", 1, 9, "Cannot use \"nope.prp\": no file at")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt\nrecord R Pointt p", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt\nfunction void f Pointt p write_line 1", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nrecord R Pointt p", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nfunction void f Pointt p write_line 1", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
     public void ReportsWrongQualifiedRecords(string source, int line, int column, string message)
     {
         var error = FailFile(source);
@@ -165,7 +165,7 @@ public sealed class RecordModuleTests : IDisposable
     [Fact]
     public void AModuleCannotPassOnAnImportedRecord()
     {
-        WriteFile("relay.prp", "use geo \"geo.prp\"\nimport from geo Point\nexport function Point make return Point 1.0 1.0\n");
+        WriteFile("relay.prp", "use geo \"geo.prp\"\nimport from geo Point end\nexport function Point make return Point 1.0 1.0\n");
 
         var error = FailFile("use relay \"relay.prp\"\ndef from relay Point p from relay make");
 
@@ -205,18 +205,18 @@ public sealed class RecordModuleTests : IDisposable
         const string source = """
             use geo "geo.prp"
             use other "other.prp"
-            import from other Point
+            import from other Point end
             function from geo Point flip Point p return from geo Point get_field y p get_field x p
-            def list from geo Point all empty list from geo Point
+            def list from geo Point all list_of from geo Point end
             """;
 
         var inspected = _session.Inspect(source, WriteFile("main.prp", source));
 
         Assert.Null(inspected.Error);
         Assert.Equal(
-            "use geo \"geo.prp\"\nuse other \"other.prp\"\nimport from other Point\n" +
+            "use geo \"geo.prp\"\nuse other \"other.prp\"\nimport from other Point end\n" +
             "function from geo Point flip Point p\n    return (from geo Point (get_field y p) (get_field x p))\n" +
-            "def list from geo Point all (empty list from geo Point)\n",
+            "def list from geo Point all (list_of from geo Point end)\n",
             inspected.Text);
     }
 
@@ -225,7 +225,7 @@ public sealed class RecordModuleTests : IDisposable
     {
         _session.Run($"use geo \"{Path.Combine(_directory, "geo.prp").Replace("\\", "\\\\")}\"");
         _session.Run("def from geo Point p from geo origin");
-        _session.Run("import from geo Point");
+        _session.Run("import from geo Point end");
         _session.Run("set p Point 2.0 3.0");
         _session.Run("write_line from geo sum p");
 

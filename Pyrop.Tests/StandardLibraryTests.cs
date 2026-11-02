@@ -34,9 +34,9 @@ public class StandardLibraryTests
     [InlineData("substring \"abc\" 3 0", "")]
     [InlineData("substring \"" + Sword + "x\" 1 1", "x")]
     [InlineData("substring \"" + Sword + "x\" 0 1", Sword)]
-    [InlineData("char_at \"čau\" 0", "č")]
-    [InlineData("char_at \"" + DecomposedC + "au\" 0", DecomposedC)]
-    [InlineData("char_at \"" + Sword + "x\" 1", "x")]
+    [InlineData("get \"čau\" 0", "č")]
+    [InlineData("get \"" + DecomposedC + "au\" 0", DecomposedC)]
+    [InlineData("get \"" + Sword + "x\" 1", "x")]
     public void TakesPartsOfTextByVisibleCharacter(string expression, string expected)
     {
         Assert.Equal(expected, Evaluate(expression));
@@ -47,8 +47,8 @@ public class StandardLibraryTests
     [InlineData("substring \"abc\" 4 0", "Position 4 is out of range for a 3-character text, numbered from 0.")]
     [InlineData("substring \"abc\" -1 1", "Position -1 is out of range for a 3-character text, numbered from 0.")]
     [InlineData("substring \"abc\" 0 -1", "'substring' cannot take a negative count (-1).")]
-    [InlineData("char_at \"abc\" 3", "Position 3 is out of range for a 3-character text, numbered from 0.")]
-    [InlineData("char_at \"\" 0", "Position 0 is out of range for a 0-character text, numbered from 0.")]
+    [InlineData("get \"abc\" 3", "Position 3 is out of range for a 3-character text, numbered from 0.")]
+    [InlineData("get \"\" 0", "Position 0 is out of range for a 0-character text, numbered from 0.")]
     public void RejectsPositionsOutsideTheText(string expression, string message)
     {
         Assert.Equal(message, RuntimeFailure(expression));
@@ -148,8 +148,6 @@ public class StandardLibraryTests
     [Theory]
     [InlineData("abs -5", "5")]
     [InlineData("abs -2.5", "2.5")]
-    [InlineData("negate 5", "-5")]
-    [InlineData("negate -0.5", "0.5")]
     [InlineData("smaller 3 7", "3")]
     [InlineData("larger 2.5 1.5", "2.5")]
     [InlineData("smaller \"b\" \"a\"", "a")]
@@ -185,7 +183,6 @@ public class StandardLibraryTests
 
     [Theory]
     [InlineData("abs -9223372036854775808", "Integer overflow.")]
-    [InlineData("negate -9223372036854775808", "Integer overflow.")]
     [InlineData("to_power 2 63", "Integer overflow.")]
     [InlineData("to_power 2 -1", "'to_power' on ints cannot take a negative exponent (-1); use floats instead.")]
     [InlineData("to_power -8.0 0.5", "Float result is not a real number.")]
@@ -282,7 +279,7 @@ public class StandardLibraryTests
 
         var output = Run.Program(
             "def string text argument_at 0\n" +
-            "write_line length_of text\nwrite_line char_at text 241\nwrite_line find text \"b \"\n" +
+            "write_line length_of text\nwrite_line get text 241\nwrite_line find text \"b \"\n" +
             "write_line substring text 237 3\nwrite_line length_of replace text \"c\" \"x\"",
             host: host);
 

@@ -1,5 +1,5 @@
 use items "items.prp"
-import from items ItemKind
+import from items ItemKind end
 
 export choice Direction north east south west end
 export choice Place hall cellar library tower garden end
@@ -16,40 +16,40 @@ export function list Direction compass
     return list_of Direction north east south west end
 
 export function map Place Room build_world block
-    def map Place Room rooms empty map Place Room
+    def map Place Room rooms map_of Place Room end
     set rooms put rooms hall Room
         "Great Hall"
         "Dust lies thick on a long table. Doors lead north, south and east."
-        put put put empty map Direction Place north library south cellar east garden
-        empty list ItemKind
+        map_of Direction Place north library south cellar east garden end
+        list_of ItemKind end
         false
         none ItemKind
     set rooms put rooms library Room
         "Library"
         "Shelves of rotting books lean against each other. A narrow door leads east."
-        put put empty map Direction Place south hall east tower
+        map_of Direction Place south hall east tower end
         list_of ItemKind lamp end
         false
         none ItemKind
     set rooms put rooms cellar Room
         "Cellar"
         "Barrels and broken crates fill the damp cellar."
-        put empty map Direction Place north hall
+        map_of Direction Place north hall end
         list_of ItemKind key end
         true
         none ItemKind
     set rooms put rooms tower Room
         "Tower"
         "Wind howls through the arrow slits of the round tower room."
-        put empty map Direction Place west library
+        map_of Direction Place west library end
         list_of ItemKind crown end
         false
         some key
     set rooms put rooms garden Room
         "Garden"
         "Sunlight falls on an overgrown garden. The gate to the world stands open."
-        put empty map Direction Place west hall
-        empty list ItemKind
+        map_of Direction Place west hall end
+        list_of ItemKind end
         false
         none ItemKind
     return rooms

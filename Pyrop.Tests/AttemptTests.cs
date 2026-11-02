@@ -28,14 +28,14 @@ public class AttemptTests
     [InlineData("round 100000000000000000000000.0")]
     [InlineData("round_down -100000000000000000000000.0")]
     [InlineData("abs subtract -9223372036854775807 1")]
-    [InlineData("negate subtract -9223372036854775807 1")]
+    [InlineData("subtract 0 subtract -9223372036854775807 1")]
     [InlineData("random 1.0 1.0")]
     [InlineData("roll_dice 2 1")]
     [InlineData("read")]
     [InlineData("ask \"Name? \"")]
     [InlineData("confirm \"Sure?\"")]
     [InlineData("choose \"Where?\" list_of string \"Hall\" end")]
-    [InlineData("choose \"Where?\" empty list string")]
+    [InlineData("choose \"Where?\" list_of string end")]
     [InlineData("argument_at 0")]
     [InlineData("read_environment \"\"")]
     [InlineData("read_environment \"A=B\"")]
@@ -44,7 +44,7 @@ public class AttemptTests
     [InlineData("read_lines \"no such file for attempt.txt\"")]
     [InlineData("list_files \"no such directory for attempt\"")]
     [InlineData("substring \"abc\" 2 5")]
-    [InlineData("char_at \"abc\" 3")]
+    [InlineData("get \"abc\" 3")]
     [InlineData("find_from \"abc\" \"a\" 9")]
     [InlineData("replace \"abc\" \"\" \"x\"")]
     [InlineData("repeat \"a\" -1")]
@@ -52,11 +52,11 @@ public class AttemptTests
     [InlineData("pad_left \"a\" 3 \"xy\"")]
     [InlineData("pad_right \"a\" 3 \"\"")]
     [InlineData("split \"a\" \"\"")]
-    [InlineData("item_at list_of int 1 end 1")]
-    [InlineData("replace_at list_of int 1 end -1 2")]
-    [InlineData("remove_at empty list int 0")]
-    [InlineData("value_of empty map string int \"lamp\"")]
-    [InlineData("remove_key put empty map int bool 1 true 2")]
+    [InlineData("get list_of int 1 end 1")]
+    [InlineData("put list_of int 1 end -1 2")]
+    [InlineData("remove list_of int end 0")]
+    [InlineData("get map_of string int end \"lamp\"")]
+    [InlineData("remove put map_of int bool end 1 true 2")]
     [InlineData("convert int \"abc\"")]
     [InlineData("convert int \" \"")]
     [InlineData("convert float \"1e999\"")]
@@ -79,7 +79,7 @@ public class AttemptTests
     [InlineData("append_file \"no such directory for attempt/save.txt\" \"data\"")]
     [InlineData("write_file \"\" \"data\"")]
     [InlineData("write_file \".\" \"data\"")]
-    [InlineData("write_table empty list string empty list list string")]
+    [InlineData("write_table list_of string end list_of list string end")]
     [InlineData("write_table list_of string \"a\" end list_of list string list_of string \"b\" \"c\" end end")]
     public void FailingVoidOperationsGiveFalse(string operation)
     {
@@ -120,8 +120,8 @@ public class AttemptTests
             write_line attempt convert int " 42 "
             write_line attempt convert Direction " west "
             write_line attempt convert string 3.0
-            write_line attempt item_at list_of string "lamp" "key" end 1
-            write_line attempt value_of put empty map string int "lamp" 5 "lamp"
+            write_line attempt get list_of string "lamp" "key" end 1
+            write_line attempt get put map_of string int end "lamp" 5 "lamp"
             write_line attempt read
             write_line attempt split "a,b" ","
             write_line attempt not true
@@ -175,7 +175,7 @@ public class AttemptTests
         error = Failure("write_line attempt convert int read_file \"no such file for attempt.txt\"", ErrorStage.Runtime, 1, 32);
         Assert.StartsWith("File \"no such file for attempt.txt\"", error.Message);
 
-        error = Failure("write_line attempt item_at list_of int 1 end divide 1 0", ErrorStage.Runtime, 1, 46);
+        error = Failure("write_line attempt get list_of int 1 end divide 1 0", ErrorStage.Runtime, 1, 42);
         Assert.Equal("Division by zero.", error.Message);
     }
 
@@ -184,7 +184,7 @@ public class AttemptTests
     {
         const string source = """
             function string path_of string name
-                return add "dir/" char_at name 10
+                return add "dir/" get name 10
             write_line attempt read_file path_of "save"
             """;
 
@@ -223,7 +223,7 @@ public class AttemptTests
         Assert.Equal("some 5\n", Run.Program("write_line attempt divide 10 value_or attempt convert int \"x\" 2"));
         Assert.Equal("some some none\n", Run.Program("write_line attempt some attempt convert int \"x\""));
 
-        var error = Failure("write_line value_or attempt item_at list_of int 1 end 3 divide 1 0", ErrorStage.Runtime, 1, 57);
+        var error = Failure("write_line value_or attempt get list_of int 1 end 3 divide 1 0", ErrorStage.Runtime, 1, 53);
         Assert.Equal("Division by zero.", error.Message);
     }
 
@@ -234,7 +234,7 @@ public class AttemptTests
             function int parse_all list string texts int index
             block
                 if equal index length_of texts return 0
-                return add value_or attempt convert int item_at texts index 0 parse_all texts add index 1
+                return add value_or attempt convert int get texts index 0 parse_all texts add index 1
             end
             write_line parse_all list_of string "1" "x" "30" "" "4" end 0
             """;
@@ -280,7 +280,7 @@ public class AttemptTests
         var session = new PyropSession(new StringReader(""), output) { CollectionLimit = 2 };
         const string source = """
             write_line attempt push list_of int 1 2 end 3
-            write_line attempt put put put empty map int int 1 1 2 2 3 3
+            write_line attempt put put put map_of int int end 1 1 2 2 3 3
             write_line attempt push list_of int 1 end 2
             """;
 
@@ -294,7 +294,7 @@ public class AttemptTests
 
     [Theory]
     [InlineData("write_line attempt equal deep copy", 20, "'equal' cannot compare values nested this deeply.")]
-    [InlineData("write_line attempt contains list_of list list list list int deep end copy", 20, "'contains' cannot compare values nested this deeply.")]
+    [InlineData("write_line attempt has list_of list list list list int deep end copy", 20, "'has' cannot compare values nested this deeply.")]
     [InlineData("write_line attempt convert string deep", 20, "This value is nested too deeply to be written as text.")]
     [InlineData("write_line convert string deep", 12, "This value is nested too deeply to be written as text.")]
     public void TheNestingLimitIsNotCaughtByAttempt(string line, int column, string message)
@@ -335,7 +335,7 @@ public class AttemptTests
     [InlineData("write_line attempt \"text\"", 1, 20, "found string \"text\".")]
     [InlineData("def int x 1 write_line attempt x", 1, 32, "found 'x'.")]
     [InlineData("write_line attempt attempt read", 1, 20, "found 'attempt'.")]
-    [InlineData("write_line attempt empty list int", 1, 20, "found 'empty'.")]
+    [InlineData("write_line attempt map_of string int end", 1, 20, "found 'map_of'.")]
     [InlineData("write_line attempt none int", 1, 20, "found 'none'.")]
     [InlineData("write_line attempt list_of int end", 1, 20, "found 'list_of'.")]
     [InlineData("write_line attempt true", 1, 20, "found 'true'.")]

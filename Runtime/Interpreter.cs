@@ -329,10 +329,12 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                     convert.Target,
                     message => Runtime(message, convert.Position),
                     NestingLimit);
-            case EmptyExpression empty:
-                return PyropTypes.IsMap(empty.Type) ? MapValue.Empty(empty.Type)
-                    : PyropTypes.IsList(empty.Type) ? ListValue.Empty(empty.Type)
-                    : throw Internal($"'empty' of the non-collection type {empty.Type.Name}.", empty.Position);
+            case MapOfExpression map:
+                return CollectionOperations.MapOf(
+                    PyropTypes.MapOf(map.KeyType, map.ValueType),
+                    map.Entries.Select(entry => (Evaluate(entry.Key, scope), Evaluate(entry.Value, scope))),
+                    CollectionLimit,
+                    message => Runtime(message, map.Position));
             case ListOfExpression list:
                 return CollectionOperations.ListOf(
                     list.ElementType,

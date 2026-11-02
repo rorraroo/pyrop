@@ -42,12 +42,12 @@ public class RecordTests
     [Theory]
     [InlineData("Point 1.0 -2.5", "Point x 1.0 y -2.5")]
     [InlineData("list_of Point Point 0.0 0.0 Point 1.0 1.0 end", "[Point x 0.0 y 0.0, Point x 1.0 y 1.0]")]
-    [InlineData("put empty map string Point \"home\" Point 0.0 1.0", "{\"home\": Point x 0.0 y 1.0}")]
+    [InlineData("put map_of string Point end \"home\" Point 0.0 1.0", "{\"home\": Point x 0.0 y 1.0}")]
     [InlineData("Named \"say \\\"hi\\\"\\n\" true", "Named text \"say \\\"hi\\\"\\n\" flag true")]
     [InlineData("Line Point 0.0 0.0 Point 1.0 1.0", "Line start (Point x 0.0 y 0.0) finish (Point x 1.0 y 1.0)")]
     [InlineData("Outer Line Point 0.0 0.0 Point 1.0 1.0 2", "Outer line (Line start (Point x 0.0 y 0.0) finish (Point x 1.0 y 1.0)) count 2")]
     [InlineData("list_of Line Line Point 0.0 0.0 Point 1.0 1.0 end", "[Line start (Point x 0.0 y 0.0) finish (Point x 1.0 y 1.0)]")]
-    [InlineData("Box list_of Named Named \"a\" false end empty map int string", "Box items [Named text \"a\" flag false] lookup {}")]
+    [InlineData("Box list_of Named Named \"a\" false end map_of int string end", "Box items [Named text \"a\" flag false] lookup {}")]
     [InlineData("convert string Point 3.0 4.0", "Point x 3.0 y 4.0")]
     public void WritesTheTextFormOfRecords(string expression, string expected)
     {
@@ -68,8 +68,8 @@ public class RecordTests
     [InlineData("equal Point 1.0 2.0 Point 1.0 2.5", "false")]
     [InlineData("equal Line Point 0.0 0.0 Point 1.0 1.0 Line Point 0.0 0.0 Point 1.0 1.0", "true")]
     [InlineData("equal Line Point 0.0 0.0 Point 1.0 1.0 Line Point 0.0 0.0 Point 1.0 2.0", "false")]
-    [InlineData("contains list_of Point Point 1.0 2.0 end Point 1.0 2.0", "true")]
-    [InlineData("equal list_of Point end empty list Point", "true")]
+    [InlineData("has list_of Point Point 1.0 2.0 end Point 1.0 2.0", "true")]
+    [InlineData("equal list_of Point end list_of Point end", "true")]
     public void ComparesRecordsStructurally(string expression, string expected)
     {
         Assert.Equal(expected + "\n", Run.Program(Point + "record Line Point start Point finish\nwrite_line " + expression));
@@ -102,8 +102,8 @@ public class RecordTests
     {
         const string source = """
             def Room hall Room "hall" list_of Exit Exit "north" "kitchen" end
-            write_line get_field target item_at get_field exits hall 0
-            function Room make string name return Room name empty list Exit
+            write_line get_field target get get_field exits hall 0
+            function Room make string name return Room name list_of Exit end
             write_line make "attic"
             record Room string name list Exit exits
             record Exit string direction string target
@@ -117,10 +117,10 @@ public class RecordTests
     {
         const string source = """
             record Tree string label list Tree children map string Tree named
-            def Tree leaf Tree "leaf" empty list Tree empty map string Tree
-            def Tree root Tree "root" list_of Tree leaf end put empty map string Tree "only" leaf
+            def Tree leaf Tree "leaf" list_of Tree end map_of string Tree end
+            def Tree root Tree "root" list_of Tree leaf end put map_of string Tree end "only" leaf
             for Tree child in get_field children root write_line get_field label child
-            write_line get_field label value_of get_field named root "only"
+            write_line get_field label get get_field named root "only"
             """;
 
         Assert.Equal("leaf\nleaf\n", Run.Program(source));
@@ -138,6 +138,33 @@ public class RecordTests
         Assert.Equal("10.0\n", Run.Program(source));
     }
 
+    [Fact]
+    public void RecordNamesMayStartWithAnyLetter()
+    {
+        const string source = """
+            record point float x float y
+            record čas int hodiny
+            record _pair point first čas second
+            function point mirror point p return point get_field y p get_field x p
+            def _pair pair _pair mirror point 1.0 2.0 čas 7
+            write_line pair
+            for point p in list_of point get_field first pair end write_line p
+            if_some čas c some get_field second pair write_line get_field hodiny c
+            """;
+
+        Assert.Equal("_pair first (point x 2.0 y 1.0) second (čas hodiny 7)\npoint x 2.0 y 1.0\n7\n", Run.Program(source));
+    }
+
+    [Theory]
+    [InlineData("record room int x\ndef room room room 1", 2, 10, "'room' is a record and cannot be used as a variable name.")]
+    [InlineData("record room int x\nfunction void f room room write_line 1", 2, 22, "'room' is a record and cannot be used as a parameter name.")]
+    [InlineData("record room int x\nrecord room int y", 2, 8, "Record 'room' is already declared.")]
+    [InlineData("function int room return 1\nrecord room int x", 2, 8, "'room' is a function of this file and cannot also name a record.")]
+    public void ALowercaseRecordNameClashesLikeAnyOtherName(string source, int line, int column, string message)
+    {
+        Assert.Equal(message, Failure(source, ErrorStage.Parse, line, column).Message);
+    }
+
     [Theory]
     [InlineData("record Node int value Node next", 1, 8, "Record 'Node' contains itself: Node has field 'next' of type Node, so no Node could ever be made. A record can hold itself only inside a list, a map or an option, such as option Node.")]
     [InlineData("record A int c B b\nrecord B A a", 1, 8, "Record 'A' contains itself: A has field 'b' of type B, and B has field 'a' of type A, so no A could ever be made. A record can hold itself only inside a list, a map or an option, such as option A.")]
@@ -148,9 +175,6 @@ public class RecordTests
     }
 
     [Theory]
-    [InlineData("record point int x", 1, 8, "A record name must start with a capital letter A to Z, so that types stand out: record Point …, found 'point'.")]
-    [InlineData("record _Point int x", 1, 8, "A record name must start with a capital letter A to Z, so that types stand out: record Point …, found '_Point'.")]
-    [InlineData("record Čas int x", 1, 8, "A record name must start with a capital letter A to Z, so that types stand out: record Point …, found 'Čas'.")]
     [InlineData("record add int x", 1, 1, "'record' is a reserved word and cannot be used as a name.")]
     [InlineData("record 5 int x", 1, 1, "'record' is a reserved word and cannot be used as a name.")]
     [InlineData("record P int x\nrecord P int y", 2, 8, "Record 'P' is already declared.")]
@@ -167,14 +191,12 @@ public class RecordTests
     [InlineData("record P int x\ndef int P 1", 2, 9, "'P' is a record and cannot be used as a variable name.")]
     [InlineData("record P int x\nfunction void f int P write_line P", 2, 21, "'P' is a record and cannot be used as a parameter name.")]
     [InlineData("record P int x\nfor int P in list_of int end write_line 1", 2, 9, "'P' is a record and cannot be used as a loop variable name.")]
-    [InlineData("record P int x\ndef map P int m empty map P int", 2, 9, "A map key must be int, string, bool or a choice, found P.")]
-    [InlineData("record P int x\ndef P p empty P", 2, 15, "'empty' takes a list or map type, such as empty list string or empty map string int, found P.")]
+    [InlineData("record P int x\ndef map P int m map_of P int end", 2, 9, "A map key must be int, string, bool or a choice, found P.")]
     [InlineData("def Q q 1", 1, 5, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
     [InlineData("function Q f return 1", 1, 10, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
     [InlineData("def int x get_field 5 y", 1, 21, "Expected a field name after 'get_field', found '5'.")]
     [InlineData("def int x get_field add y", 1, 21, "'add' is a reserved word and cannot be used as a field name.")]
     [InlineData("get_field x y", 1, 1, "'get_field' cannot start a statement.")]
-    [InlineData("export record p int x", 1, 15, "A record name must start with a capital letter A to Z, so that types stand out: record Point …, found 'p'.")]
     public void RejectsInvalidRecordDeclarationsAndForms(string source, int line, int column, string message)
     {
         Assert.Equal(message, Failure(source, ErrorStage.Parse, line, column).Message);
@@ -189,7 +211,7 @@ public class RecordTests
     [InlineData("for int record in list_of int end write_line 1", 1, 9, "record")]
     [InlineData("def string answer \"x\"\ndef string record answer\ndef int x 1", 2, 12, "record")]
     [InlineData("write_line record\nwrite_line Point 1.0 2.0", 1, 12, "record")]
-    [InlineData("def list int l empty list int\nwrite_line function\nf l", 2, 12, "function")]
+    [InlineData("def list int l list_of int end\nwrite_line function\nf l", 2, 12, "function")]
     [InlineData("def int function 1", 1, 9, "function")]
     [InlineData("write_line function", 1, 12, "function")]
     [InlineData("set function Point", 1, 5, "function")]
@@ -256,7 +278,7 @@ public class RecordTests
         const string source = """
             export record Point float x float y
             record Hero string name Point position list Point trail
-            def Hero hero Hero "Ann" Point 0.0 0.0 empty list Point
+            def Hero hero Hero "Ann" Point 0.0 0.0 list_of Point end
             set hero with_field position hero Point get_field x get_field position hero 1.0
             function Point at Hero h return get_field position h
             """;
@@ -264,7 +286,7 @@ public class RecordTests
         Assert.Equal(
             "export record Point float x float y\n" +
             "record Hero string name Point position list Point trail\n" +
-            "def Hero hero (Hero \"Ann\" (Point 0.0 0.0) (empty list Point))\n" +
+            "def Hero hero (Hero \"Ann\" (Point 0.0 0.0) (list_of Point end))\n" +
             "set hero (with_field position hero (Point (get_field x (get_field position hero)) 1.0))\n" +
             "function Point at Hero h\n    return (get_field position h)\n",
             Tree(source));
@@ -369,12 +391,12 @@ public class RecordTests
     {
         const string source = """
             record Tree list Tree kids
-            def Tree t Tree empty list Tree
-            def Tree u Tree empty list Tree
+            def Tree t Tree list_of Tree end
+            def Tree u Tree list_of Tree end
             def int i 0
             while less i 1000 block
-                set t Tree push empty list Tree t
-                set u Tree push empty list Tree u
+                set t Tree push list_of Tree end t
+                set u Tree push list_of Tree end u
                 set i add i 1
             end
             write_line equal t u
@@ -386,15 +408,15 @@ public class RecordTests
 
     [Theory]
     [InlineData("write_line equal a b", "'equal' cannot compare values nested this deeply.")]
-    [InlineData("write_line contains list_of Tree a end b", "'contains' cannot compare values nested this deeply.")]
+    [InlineData("write_line has list_of Tree a end b", "'has' cannot compare values nested this deeply.")]
     [InlineData("write_line a", "This value is nested too deeply to be written as text.")]
     [InlineData("write_error_line a", "This value is nested too deeply to be written as text.")]
     [InlineData("def string s convert string a", "This value is nested too deeply to be written as text.")]
     public void ValuesNestedBeyondTheLimitAreRuntimeErrors(string statement, string message)
     {
         const string declarations = "record Tree list Tree kids\n" +
-            "def Tree a Tree list_of Tree Tree list_of Tree Tree empty list Tree end end\n" +
-            "def Tree b Tree list_of Tree Tree list_of Tree Tree empty list Tree end end\n";
+            "def Tree a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
+            "def Tree b Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n";
         var session = new PyropSession(new StringReader(""), new StringOutput()) { NestingLimit = 4 };
 
         var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(declarations + statement)).Errors);
@@ -412,8 +434,8 @@ public class RecordTests
 
         session.Run(
             "record Tree list Tree kids\n" +
-            "def Tree a Tree list_of Tree Tree list_of Tree Tree empty list Tree end end\n" +
-            "write_line equal a Tree list_of Tree Tree list_of Tree Tree empty list Tree end end\n" +
+            "def Tree a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
+            "write_line equal a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
             "write_line a");
 
         Assert.Equal("true\nTree kids [Tree kids [Tree kids []]]\n", output.ToString());

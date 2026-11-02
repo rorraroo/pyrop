@@ -3,32 +3,58 @@ using Pyrop.Runtime;
 
 namespace Pyrop.Parsing;
 
+public sealed record KnownTypes(ModuleNamespace Names, IReadOnlySet<string> DeclaredHere)
+{
+    public static KnownTypes Of(ModuleNamespace names) => new(names, new HashSet<string>());
+
+    public static IReadOnlySet<string> DeclaredIn(IReadOnlyList<Token> tokens)
+    {
+        var declared = new HashSet<string>();
+        for (var index = 0; index + 1 < tokens.Count; index++)
+        {
+            if ((tokens[index].IsWord(Keywords.Record) || tokens[index].IsWord(Keywords.Choice))
+                && tokens[index + 1].Kind == TokenKind.Word
+                && !Keywords.IsReserved(tokens[index + 1].Text))
+            {
+                declared.Add(tokens[index + 1].Text);
+            }
+        }
+
+        return declared;
+    }
+
+    public bool IsTypeName(string word) =>
+        !Keywords.IsReserved(word) && (DeclaredHere.Contains(word) || Names.FindType(word) is not null);
+
+    public bool IsTypeWord(string word) => PyropTypes.ValueConstructors.ContainsKey(word) || IsTypeName(word);
+
+    public bool IsQualifiedType(string module, string name) =>
+        Names.Uses.TryGetValue(module, out var use)
+        && (use.Target.Names.Records.ContainsKey(name) || use.Target.Names.Choices.ContainsKey(name));
+}
+
 public static class RecordDeclarations
 {
     private static readonly HashSet<string> NamePositions =
         [Keywords.Def, Keywords.Set, Keywords.For, Keywords.Use, Keywords.From, Keywords.GetField, Keywords.WithField];
 
-    public static bool IsTypeName(string name) => name.Length > 0 && name[0] is >= 'A' and <= 'Z';
-
     private static readonly HashSet<string> ValuePositions =
     [
         Keywords.Write, Keywords.WriteLine, Keywords.WriteError, Keywords.WriteErrorLine, Keywords.Return, Keywords.Exit,
-        Keywords.If, Keywords.While, Keywords.WithStyle, Keywords.In, Keywords.Convert, Keywords.Empty, Keywords.ListOf,
+        Keywords.If, Keywords.While, Keywords.WithStyle, Keywords.In, Keywords.Convert, Keywords.ListOf, Keywords.MapOf,
         Keywords.Attempt, Keywords.None, Keywords.IfSome,
     ];
 
-    private static readonly HashSet<string> TypedNamePositions = [Keywords.Def, Keywords.For, Keywords.IfSome, Keywords.Convert, Keywords.ListOf];
-
-    public static void RejectKeywordAsName(Token keyword, TokenCursor cursor, bool startsDeclaration)
+    public static void RejectKeywordAsName(Token keyword, TokenCursor cursor, bool startsDeclaration, KnownTypes types)
     {
-        if (!startsDeclaration || FollowsWordExpectingNameOrValue(cursor))
+        if (!startsDeclaration || FollowsWordExpectingNameOrValue(cursor, types))
         {
             throw new PyropException(
                 ErrorStage.Parse, $"'{keyword.Text}' is a reserved word and cannot be used as a name.", keyword.Position);
         }
     }
 
-    private static bool FollowsWordExpectingNameOrValue(TokenCursor cursor)
+    private static bool FollowsWordExpectingNameOrValue(TokenCursor cursor, KnownTypes types)
     {
         if (cursor.Behind(2) is not { Kind: TokenKind.Word } previous)
         {
@@ -42,47 +68,149 @@ public static class RecordDeclarations
             return true;
         }
 
-        if (!IsTypeWord(previous.Text))
+        if (FollowsTypeInHeader(cursor, types) is { } inHeader)
+        {
+            return inHeader;
+        }
+
+        var head = 2;
+        var length = TypeWordLength(cursor, head, types);
+        if (length == 0)
         {
             return false;
         }
 
-        var head = 2;
-        while (true)
+        while (length > 0)
         {
-            if (IsTypeName(cursor.Behind(head)!.Text) && cursor.Behind(head + 2) is { } from && from.IsWord(Keywords.From))
-            {
-                head += 2;
-            }
-
-            if (cursor.Behind(head + 1) is not { Kind: TokenKind.Word } earlier || !IsTypeWord(earlier.Text))
-            {
-                break;
-            }
-
-            head++;
+            head += length;
+            length = TypeWordLength(cursor, head, types);
         }
 
-        if (cursor.Behind(head + 1) is { Kind: TokenKind.Word } preceding)
+        return cursor.Behind(head) is not { Kind: TokenKind.Word } preceding
+            || !(preceding.IsWord(Keywords.None) || preceding.IsWord(Keywords.Import));
+    }
+
+    private static bool? FollowsTypeInHeader(TokenCursor cursor, KnownTypes types)
+    {
+        var offset = 2;
+        while (cursor.Behind(offset) is { Kind: TokenKind.Word } word)
         {
-            if (TypedNamePositions.Contains(preceding.Text))
+            if (word.IsWord(Keywords.Import))
+            {
+                return false;
+            }
+
+            if (word.IsWord(Keywords.Record) || word.IsWord(Keywords.Function))
+            {
+                return HeaderEndsInType(cursor, offset - 1, types, word.IsWord(Keywords.Function));
+            }
+
+            if (Keywords.IsReserved(word.Text)
+                && !PyropTypes.ValueConstructors.ContainsKey(word.Text)
+                && !word.IsWord(Keywords.From)
+                && !word.IsWord(PyropType.Void.Name))
+            {
+                return null;
+            }
+
+            offset++;
+        }
+
+        return null;
+    }
+
+    private static bool? HeaderEndsInType(TokenCursor cursor, int offset, KnownTypes types, bool isFunction)
+    {
+        if (isFunction)
+        {
+            var returned = cursor.Behind(offset) is { } first && first.IsWord(PyropType.Void.Name)
+                ? 1
+                : ForwardTypeLength(cursor, offset, types);
+            if (returned == 0)
+            {
+                return null;
+            }
+
+            offset -= returned;
+        }
+
+        offset--;
+        while (offset > 1)
+        {
+            var length = ForwardTypeLength(cursor, offset, types);
+            if (length == 0)
+            {
+                return null;
+            }
+
+            offset -= length;
+            if (offset <= 1)
             {
                 return true;
             }
 
-            if (preceding.IsWord(Keywords.Empty) || preceding.IsWord(Keywords.None))
-            {
-                return false;
-            }
+            offset--;
         }
 
-        return !IsTypeName(previous.Text);
+        return offset == 1 ? false : null;
     }
 
-    private static bool IsTypeWord(string word) =>
-        PyropTypes.ValueConstructors.ContainsKey(word) || (IsTypeName(word) && !Keywords.IsReserved(word));
+    private static int ForwardTypeLength(TokenCursor cursor, int offset, KnownTypes types)
+    {
+        if (offset <= 1 || cursor.Behind(offset) is not { Kind: TokenKind.Word } word)
+        {
+            return 0;
+        }
 
-    public static bool CanStartRecord(TokenCursor cursor)
+        if (word.IsWord(Keywords.From))
+        {
+            return offset > 3
+                && cursor.Behind(offset - 1) is { Kind: TokenKind.Word } module
+                && cursor.Behind(offset - 2) is { Kind: TokenKind.Word } name
+                && types.IsQualifiedType(module.Text, name.Text)
+                    ? 3
+                    : 0;
+        }
+
+        if (PyropTypes.ValueConstructors.TryGetValue(word.Text, out var constructor))
+        {
+            var length = 1;
+            for (var argument = 0; argument < constructor.Arity; argument++)
+            {
+                var inner = ForwardTypeLength(cursor, offset - length, types);
+                if (inner == 0)
+                {
+                    return 0;
+                }
+
+                length += inner;
+            }
+
+            return length;
+        }
+
+        return types.IsTypeName(word.Text) ? 1 : 0;
+    }
+
+    private static int TypeWordLength(TokenCursor cursor, int offset, KnownTypes types)
+    {
+        if (cursor.Behind(offset) is not { Kind: TokenKind.Word } word)
+        {
+            return 0;
+        }
+
+        if (cursor.Behind(offset + 2) is { } from
+            && from.IsWord(Keywords.From)
+            && cursor.Behind(offset + 1) is { Kind: TokenKind.Word } module
+            && types.IsQualifiedType(module.Text, word.Text))
+        {
+            return 3;
+        }
+
+        return types.IsTypeWord(word.Text) ? 1 : 0;
+    }
+
+    public static bool CanStartRecord(TokenCursor cursor, KnownTypes types)
     {
         var name = cursor.Current;
         if (name.Kind != TokenKind.Word || Keywords.IsReserved(name.Text))
@@ -91,24 +219,21 @@ public static class RecordDeclarations
         }
 
         var next = cursor.Peek(1);
-        return IsTypeName(name.Text)
+        var afterNext = cursor.Peek(2);
+        return next.Kind == TokenKind.EndOfInput
             || (next.Kind == TokenKind.Word
-                && (PyropTypes.ValueConstructors.ContainsKey(next.Text) || IsTypeName(next.Text) || next.IsWord(PyropType.Void.Name)));
+                && (Keywords.IsReserved(next.Text)
+                    || types.IsTypeName(next.Text)
+                    || types.Names.Failures.OfName(next.Text) is not null
+                    || (afterNext.Kind == TokenKind.Word && !Keywords.IsReserved(afterNext.Text))));
     }
 
-    public static Token ReadName(TokenCursor cursor, string keyword = Keywords.Record, string example = "Point")
+    public static Token ReadName(TokenCursor cursor, string keyword = Keywords.Record)
     {
         var token = cursor.ExpectWord($"a {keyword} name after '{keyword}'");
         if (Keywords.IsReserved(token.Text))
         {
             throw cursor.Error($"'{token.Text}' is a reserved word and cannot be used as a {keyword} name.", token);
-        }
-
-        if (!IsTypeName(token.Text))
-        {
-            throw cursor.Error(
-                $"A {keyword} name must start with a capital letter A to Z, so that types stand out: {keyword} {example} …, found '{token.Text}'.",
-                token);
         }
 
         return token;
@@ -126,6 +251,15 @@ public static class RecordDeclarations
 
             if (!TypeReader.StartsValueType(cursor, names))
             {
+                if (fields.Count == 0
+                    && cursor.Current.Kind == TokenKind.Word
+                    && !Keywords.IsReserved(cursor.Current.Text)
+                    && cursor.Peek(1).Kind == TokenKind.Word
+                    && !Keywords.IsReserved(cursor.Peek(1).Text))
+                {
+                    TypeReader.ReadValueType(cursor, names, "field");
+                }
+
                 break;
             }
 

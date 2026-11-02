@@ -87,7 +87,7 @@ public class OptionTests
             write_line chain
             def list option string names list_of option string some "Ann" none string some "a \"b\"" end
             write_line names
-            def map string option int ages put put empty map string option int "Ann" some 30 "Bob" none int
+            def map string option int ages put put map_of string option int end "Ann" some 30 "Bob" none int
             write_line ages
             def option option int twice some some 2
             write_line twice
@@ -127,7 +127,7 @@ public class OptionTests
             write_line equal none int none int
             write_line equal some some 1 some none int
             write_line equal some list_of int 1 end some list_of int 1 end
-            write_line contains list_of option int some 1 none int end none int
+            write_line has list_of option int some 1 none int end none int
             """;
 
         Assert.Equal("true\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\n", Run.Program(source));
@@ -151,7 +151,7 @@ public class OptionTests
     [Fact]
     public void AnOptionIsNotAMapKey()
     {
-        var error = Failure("def map option int int m empty map option int int", ErrorStage.Parse, 1, 9);
+        var error = Failure("def map option int int m map_of option int int end", ErrorStage.Parse, 1, 9);
         Assert.Equal("A map key must be int, string, bool or a choice, found option int.", error.Message);
     }
 

@@ -30,7 +30,7 @@ public static class QualifiedNames
         var name = cursor.Peek(2).Text;
         return names.Uses.TryGetValue(cursor.Peek(1).Text, out var use)
             ? use.Target.Names.Records.ContainsKey(name) || use.Target.Names.Choices.ContainsKey(name)
-            : RecordDeclarations.IsTypeName(name) && names.Failures.OfName(cursor.Peek(1).Text) is not null;
+            : names.Failures.OfName(cursor.Peek(1).Text) is not null;
     }
 
     public static object Resolve(ModuleNamespace names, QualifiedName qualified, TokenCursor cursor)

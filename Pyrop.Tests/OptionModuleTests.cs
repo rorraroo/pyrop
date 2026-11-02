@@ -20,8 +20,8 @@ public sealed class OptionModuleTests : IDisposable
         "block\n" +
         "    def list string parts split text \",\"\n" +
         "    if not equal length_of parts 2 return none Point\n" +
-        "    if_some float x attempt convert float item_at parts 0\n" +
-        "        if_some float y attempt convert float item_at parts 1 return some Point x y\n" +
+        "    if_some float x attempt convert float get parts 0\n" +
+        "        if_some float y attempt convert float get parts 1 return some Point x y\n" +
         "    return none Point\n" +
         "end\n" +
         "export function float broken string text return convert float text\n";

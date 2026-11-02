@@ -18,9 +18,12 @@ public sealed record FunctionCallExpression(
 
 public sealed record ConvertExpression(PyropType Target, Expression Operand, SourcePosition Position) : Expression(Position);
 
-public sealed record EmptyExpression(PyropType Type, SourcePosition Position) : Expression(Position);
-
 public sealed record ListOfExpression(PyropType ElementType, IReadOnlyList<Expression> Items, SourcePosition Position)
+    : Expression(Position);
+
+public sealed record MapEntry(Expression Key, Expression Value);
+
+public sealed record MapOfExpression(PyropType KeyType, PyropType ValueType, IReadOnlyList<MapEntry> Entries, SourcePosition Position)
     : Expression(Position);
 
 public sealed record ConstructExpression(

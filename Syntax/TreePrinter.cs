@@ -108,7 +108,7 @@ public static class TreePrinter
             ContinueStatement => Keywords.Continue,
             CallStatement call => Bare(call.Call),
             UseStatement use => $"{Keywords.Use} {use.Name} {TextForm.Quote(use.Path)}",
-            ImportStatement import => $"{Keywords.Import} {Keywords.From} {import.Module} {import.Name}",
+            ImportStatement import => $"{Keywords.Import} {Keywords.From} {import.Module} {string.Join(' ', import.Names)} {Keywords.End}",
             RecordStatement record => RecordHeader(record.Record),
             ChoiceStatement choice => ChoiceHeader(choice.Choice),
             _ => throw new InvalidOperationException($"Unknown statement {statement.GetType().Name}."),
@@ -210,7 +210,7 @@ public static class TreePrinter
         private void AppendOperand(StringBuilder builder, Expression expression)
         {
             if (expression is BuiltinCallExpression { Arguments.Count: > 0 } or FunctionCallExpression { Arguments.Count: > 0 }
-                or ConstructExpression { Arguments.Count: > 0 } or ConvertExpression or EmptyExpression or ListOfExpression
+                or ConstructExpression { Arguments.Count: > 0 } or ConvertExpression or ListOfExpression or MapOfExpression
                 or GetFieldExpression or WithFieldExpression or AttemptExpression or NoneExpression)
             {
                 builder.Append('(');
@@ -248,11 +248,15 @@ public static class TreePrinter
                     builder.Append(Keywords.Convert).Append(' ').Append(TypeText(convert.Target)).Append(' ');
                     AppendOperand(builder, convert.Operand);
                     break;
-                case EmptyExpression empty:
-                    builder.Append(Keywords.Empty).Append(' ').Append(TypeText(empty.Type));
-                    break;
                 case ListOfExpression list:
                     AppendApplied(builder, $"{Keywords.ListOf} {TypeText(list.ElementType)}", list.Items);
+                    builder.Append(' ').Append(Keywords.End);
+                    break;
+                case MapOfExpression map:
+                    AppendApplied(
+                        builder,
+                        $"{Keywords.MapOf} {TypeText(map.KeyType)} {TypeText(map.ValueType)}",
+                        [.. map.Entries.SelectMany(entry => new[] { entry.Key, entry.Value })]);
                     builder.Append(' ').Append(Keywords.End);
                     break;
                 case GetFieldExpression read:

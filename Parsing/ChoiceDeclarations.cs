@@ -13,11 +13,11 @@ public static class ChoiceDeclarations
         }
 
         var next = cursor.Peek(1);
-        return RecordDeclarations.IsTypeName(name.Text)
+        return next.Kind == TokenKind.EndOfInput
             || (next.Kind == TokenKind.Word && (next.IsWord(Keywords.End) || !Keywords.IsStatement(next.Text)));
     }
 
-    public static Token ReadName(TokenCursor cursor) => RecordDeclarations.ReadName(cursor, Keywords.Choice, "Direction");
+    public static Token ReadName(TokenCursor cursor) => RecordDeclarations.ReadName(cursor, Keywords.Choice);
 
     public static IReadOnlyList<Token> ReadVariants(TokenCursor cursor, Token start, string choice)
     {

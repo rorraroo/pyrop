@@ -78,13 +78,13 @@ public class TreeTests
             "export function int answer return 42\nexport function void greet write_line \"hi\"");
         var path = library.Replace('\\', '/');
         const string program =
-            "import from geometry distance\nexport function void stop return void\n" +
+            "import from geometry distance end\nexport function void stop return void\n" +
             "write_line from geometry distance 3.0 distance 1.0 2.0\nwrite_line from geometry answer\nfrom geometry greet";
 
         try
         {
             Assert.Equal(
-                $"use geometry \"{path}\"\nimport from geometry distance\nexport function void stop\n    return void\n" +
+                $"use geometry \"{path}\"\nimport from geometry distance end\nexport function void stop\n    return void\n" +
                 "write_line (from geometry distance 3.0 (distance 1.0 2.0))\nwrite_line from geometry answer\nfrom geometry greet\n",
                 Tree($"use geometry \"{path}\"\n{program}"));
         }
@@ -118,16 +118,16 @@ public class TreeTests
     public void BracketsCollectionFormsAndPrintsTypesInFull()
     {
         const string source =
-            "def map string list int m empty map string list int\n" +
-            "def list list int a list_of list int\n    list_of int 1 add 1 1 end\n    empty list int\nend\n" +
+            "def map string list int m map_of string list int \"k\" list_of int 7 end end\n" +
+            "def list list int a list_of list int\n    list_of int 1 add 1 1 end\n    list_of int end\nend\n" +
             "function list string names map string list int scores return keys_of scores\n" +
-            "set m put m \"x\" item_at a 0\nwrite_line list_of string \"a\\\"b\" end";
+            "set m put m \"x\" get a 0\nwrite_line list_of string \"a\\\"b\" end";
 
         Assert.Equal(
-            "def map string list int m (empty map string list int)\n" +
-            "def list list int a (list_of list int (list_of int 1 (add 1 1) end) (empty list int) end)\n" +
+            "def map string list int m (map_of string list int \"k\" (list_of int 7 end) end)\n" +
+            "def list list int a (list_of list int (list_of int 1 (add 1 1) end) (list_of int end) end)\n" +
             "function list string names map string list int scores\n    return (keys_of scores)\n" +
-            "set m (put m \"x\" (item_at a 0))\n" +
+            "set m (put m \"x\" (get a 0))\n" +
             "write_line (list_of string \"a\\\"b\" end)\n",
             Tree(source));
     }
@@ -136,14 +136,14 @@ public class TreeTests
     public void PrintsDeeplyNestedProgramsWithoutRunningOutOfStack()
     {
         const int depth = 20_000;
-        var source = $"write_line {string.Concat(Enumerable.Repeat("negate ", depth))}1\n" +
-            $"def int n length_of empty {string.Concat(Enumerable.Repeat("list ", depth))}int";
+        var source = $"write_line {string.Concat(Enumerable.Repeat("abs ", depth))}1\n" +
+            $"def int n length_of list_of {string.Concat(Enumerable.Repeat("list ", depth))}int end";
 
         var inspected = Inspect(source);
 
         Assert.Null(inspected.Error);
-        Assert.StartsWith("write_line (negate (negate ", inspected.Text);
-        Assert.EndsWith(" list int))\n", inspected.Text);
+        Assert.StartsWith("write_line (abs (abs ", inspected.Text);
+        Assert.EndsWith(" list int end))\n", inspected.Text);
     }
 
     [Fact]

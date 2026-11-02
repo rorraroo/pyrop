@@ -20,7 +20,7 @@ end
 - **Highlighting that knows your program.** Built-in operations, your own functions, variables, parameters, record fields, types, variants and module names each get their own colour, and names imported from another module are shown in italics.
 - **Syntax highlighting** for `.prp` files: keywords, types, built-in operations, numbers, strings with escape sequences, and comments.
 - **Declarations stand out:** function names and parameters in `function` headers, record names and fields in `record` declarations, choice names and variants in `choice` declarations, new variables in `def`, loop variables in `for`, and unwrapped values in `if_some`.
-- **Record and choice types stand out:** capitalised words such as `Point` or `Direction` are coloured as types, and field names after `get_field` and `with_field` as fields.
+- **Record and choice types stand out:** the language server colours every record and choice name as a type, whatever its spelling; without it, capitalised words such as `Point` or `Direction` are coloured as types by convention. Field names after `get_field` and `with_field` are coloured as fields.
 - **Invalid escape sequences** such as `\q` are marked as errors.
 - **Editing helpers:**
   - `Ctrl+/` toggles `#` comments.

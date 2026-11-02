@@ -165,7 +165,7 @@
       }
     },
     "conversion": {
-      "match": "\\b(convert|empty|list_of|none)\\b(?:\\s+((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\b)?",
+      "match": "\\b(convert|list_of|map_of|none)\\b(?:\\s+((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\b)?",
       "captures": {
         "1": { "name": "keyword.operator.convert.pyrop" },
         "2": { "name": "storage.type.pyrop" }
@@ -194,7 +194,7 @@
       "name": "constant.language.boolean.pyrop"
     },
     "builtin": {
-      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|read_lines|list_files|at_least|at_most|smaller|larger|abs|negate|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|char_at|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|item_at|push|replace_at|remove_at|contains|value_of|put|remove_key|has_key|keys_of|some|value_or)\\b",
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|read_lines|list_files|at_least|at_most|smaller|larger|abs|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|get|push|put|remove|has|keys_of|some|value_or)\\b",
       "name": "support.function.builtin.pyrop"
     },
     "user-type": {

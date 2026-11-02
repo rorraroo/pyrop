@@ -11,7 +11,7 @@ public sealed class ChoiceModuleTests : IDisposable
         _session = new PyropSession(new StringReader(""), _output);
         WriteFile("items.prp", Items);
         WriteFile("tools.prp", "export choice Tool sword hammer end\n");
-        WriteFile("relay.prp", "use items \"items.prp\"\nimport from items Item\nexport function Item first return sword\n");
+        WriteFile("relay.prp", "use items \"items.prp\"\nimport from items Item end\nexport function Item first return sword\n");
     }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
@@ -50,7 +50,7 @@ public sealed class ChoiceModuleTests : IDisposable
             write_line a
             write_line equal a from items best
             write_line from items describe from items lamp
-            def map from items Item int counts put empty map from items Item int from items shield 2
+            def map from items Item int counts put map_of from items Item int end from items shield 2
             write_line counts
             write_line convert from items Item " lamp "
             function from items Item pick from items Item x return x
@@ -66,7 +66,7 @@ public sealed class ChoiceModuleTests : IDisposable
         const string source = """
             def Item a lamp
             use items "items.prp"
-            import from items Item
+            import from items Item end
             write_line list_of Item sword shield lamp end
             write_line equal a from items lamp
             write_line equal from items best sword
@@ -116,15 +116,15 @@ public sealed class ChoiceModuleTests : IDisposable
 
     [Theory]
     [InlineData("use items \"items.prp\"\nwrite_line from items hidden", 2, 23, "Variant 'hidden' of module 'items' belongs to the choice 'Secret', which is not exported; mark its declaration in ")]
-    [InlineData("use items \"items.prp\"\nimport from items sword", 2, 19, "'sword' is a variant of the choice 'Item'; import the choice with import from items Item, which imports all its variants.")]
-    [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items Item", 3, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a function of this file.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\nchoice Mine lamp end", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a variant of this file.")]
-    [InlineData("use items \"items.prp\"\nuse tools \"tools.prp\"\nimport from items Item\nimport from tools Tool", 4, 19, "Importing 'Tool' would also import its variant 'sword', but 'sword' is a variant of the imported choice 'Item'.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\nwrite_line sword\nuse sword \"tools.prp\"", 2, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a module name in this file.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\nimport from items Item", 3, 19, "'Item' is already imported in this file.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\ndef int lamp 1", 3, 9, "'lamp' is an imported variant and cannot be used as a variable name.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\nfunction void f Item lamp write_line lamp", 3, 22, "'lamp' is an imported variant and cannot be used as a parameter name.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item\nfunction int lamp return 1", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a function of this file.")]
+    [InlineData("use items \"items.prp\"\nimport from items sword end", 2, 19, "'sword' is a variant of the choice 'Item'; import the choice with import from items Item end, which imports all its variants.")]
+    [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items Item end", 3, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a function of this file.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nchoice Mine lamp end", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a variant of this file.")]
+    [InlineData("use items \"items.prp\"\nuse tools \"tools.prp\"\nimport from items Item end\nimport from tools Tool end", 4, 19, "Importing 'Tool' would also import its variant 'sword', but 'sword' is a variant of the imported choice 'Item'.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nwrite_line sword\nuse sword \"tools.prp\"", 2, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a module name in this file.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nimport from items Item end", 3, 19, "'Item' is already imported in this file.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\ndef int lamp 1", 3, 9, "'lamp' is an imported variant and cannot be used as a variable name.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nfunction void f Item lamp write_line lamp", 3, 22, "'lamp' is an imported variant and cannot be used as a parameter name.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nfunction int lamp return 1", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a function of this file.")]
     [InlineData("use items \"items.prp\"\nwrite_line from items Item", 2, 12, "'Item' is a choice, not a value; name one of its variants, such as from items sword.")]
     [InlineData("use items \"items.prp\"\nfrom items Item", 2, 1, "A statement cannot start with the choice 'Item': a choice is a type, and no statement may start with a type name. Use one of its variants as a value, as in def from items Item <name> from items sword.")]
     [InlineData("use items \"items.prp\"\nfrom items sword", 2, 1, "'from items sword' cannot stand alone as a statement.")]
@@ -169,11 +169,11 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         var main = Path.Combine(_directory, "main.prp");
         _session.Run("use items \"items.prp\"", main);
-        _session.Run("import from items Item", main);
+        _session.Run("import from items Item end", main);
         _session.Run("def Item i shield", main);
         _session.Run("write_line equal i from items shield", main);
         var error = Assert.Single(Assert.Throws<PyropException>(() => _session.Run("choice Foo lamp end", main)).Errors);
-        _session.Run("import from items Item", main);
+        _session.Run("import from items Item end", main);
         _session.Run("write_line lamp", main);
 
         Assert.Equal("'lamp' is imported in this file and cannot also be a variant.", error.Message);

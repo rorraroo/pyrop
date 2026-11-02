@@ -53,7 +53,7 @@ public class ChoiceTests
                 write " is back to the "
                 write_line opposite get_field way door
             end
-            write_line contains list_of Direction north south end south
+            write_line has list_of Direction north south end south
             """;
 
         Assert.Equal("hall is back to the south\ngarden is back to the west\ntrue\n", Run.Program(source));
@@ -62,8 +62,8 @@ public class ChoiceTests
     [Theory]
     [InlineData("north", "north")]
     [InlineData("list_of Direction north east end", "[north, east]")]
-    [InlineData("put put empty map Direction string south \"cellar\" north \"hall\"", "{south: \"cellar\", north: \"hall\"}")]
-    [InlineData("put empty map string Direction \"way\" west", "{\"way\": west}")]
+    [InlineData("put put map_of Direction string end south \"cellar\" north \"hall\"", "{south: \"cellar\", north: \"hall\"}")]
+    [InlineData("put map_of string Direction end \"way\" west", "{\"way\": west}")]
     [InlineData("Exit north \"hall\"", "Exit way north target \"hall\"")]
     [InlineData("Door Exit east \"yard\" true", "Door passage (Exit way east target \"yard\") open true")]
     [InlineData("convert string south", "south")]
@@ -106,16 +106,16 @@ public class ChoiceTests
     {
         const string source = """
             choice Direction north east south west end
-            def map Direction int steps empty map Direction int
+            def map Direction int steps map_of Direction int end
             set steps put steps east 2
             set steps put steps north 1
             set steps put steps east 3
             write_line steps
-            write_line value_of steps east
-            write_line has_key steps west
-            write_line keys_of remove_key steps east
-            write_line equal steps put put empty map Direction int north 1 east 3
-            write_line value_of steps south
+            write_line get steps east
+            write_line has steps west
+            write_line keys_of remove steps east
+            write_line equal steps put put map_of Direction int end north 1 east 3
+            write_line get steps south
             """;
 
         var output = new StringOutput();
@@ -155,9 +155,6 @@ public class ChoiceTests
     }
 
     [Theory]
-    [InlineData("choice direction north end", 1, 8, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'direction'.")]
-    [InlineData("export choice d a end", 1, 15, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'd'.")]
-    [InlineData("choice direction end", 1, 8, "A choice name must start with a capital letter A to Z, so that types stand out: choice Direction …, found 'direction'.")]
     [InlineData("choice D end", 1, 10, "Choice 'D' needs at least one variant, such as choice D first end.")]
     [InlineData("choice D a a end", 1, 12, "Variant 'a' is declared twice in choice 'D'.")]
     [InlineData("choice D a add end", 1, 12, "'add' is a reserved word and cannot be used as a variant name.")]
@@ -206,7 +203,6 @@ public class ChoiceTests
     [InlineData("a", 2, 1, "'a' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes.")]
     [InlineData("write_line a b", 2, 14, "'b' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes.")]
     [InlineData("def a x a", 2, 5, "'a' is a variant of the choice 'D', not a type.")]
-    [InlineData("def list D l empty D", 2, 20, "'empty' takes a list or map type, such as empty list string or empty map string int, found D.")]
     [InlineData("def map Q int m 1", 2, 9, "'Q' is not a type; no record or choice named 'Q' is declared or imported in this file.")]
     [InlineData("def map float D m 1", 2, 9, "A map key must be int, string, bool or a choice, found float.")]
     public void RejectsChoicesAndVariantsInTheWrongPlace(string statement, int line, int column, string message)
@@ -224,7 +220,7 @@ public class ChoiceTests
     [InlineData("def Direction d convert Direction 1", 2, 17, "Cannot convert int to Direction.")]
     [InlineData("choice Turn left right end\ndef Turn t convert Turn north", 3, 12, "Cannot convert Direction to Turn.")]
     [InlineData("def bool b convert bool north", 2, 12, "Cannot convert Direction to bool.")]
-    [InlineData("def map Direction int m put empty map Direction int \"north\" 1", 2, 25, "'put' cannot take map Direction int string int. It accepts: map K V K V (K and V stand for any types, each the same wherever it appears).")]
+    [InlineData("def map Direction int m put map_of Direction int end \"north\" 1", 2, 25, "'put' cannot take map Direction int string int. It accepts: list T int T, map K V K V (T, K and V stand for any types, each the same wherever it appears).")]
     public void ChecksChoiceTypes(string source, int line, int column, string message)
     {
         Assert.Equal(message, Failure(Direction + source, ErrorStage.Type, line, column).Message);
@@ -239,7 +235,7 @@ public class ChoiceTests
     [InlineData("def Direction choice north\nwrite_line choice", 1, 15)]
     [InlineData("function void greet string n write_line n\ndef string name \"a\"\nwrite_line choice\ngreet name", 3, 12)]
     [InlineData("def string answer \"x\"\ndef string choice answer", 2, 12)]
-    [InlineData("def list Direction l empty list Direction\nwrite_line convert Direction choice\nwrite_line l", 2, 30)]    [InlineData("choice add a end", 1, 1)]
+    [InlineData("def list Direction l list_of Direction end\nwrite_line convert Direction choice\nwrite_line l", 2, 30)]    [InlineData("choice add a end", 1, 1)]
     [InlineData("choice", 1, 1)]
     public void AChoiceKeywordThatCannotStartADeclarationIsReportedAsAReservedName(string source, int line, int column)
     {
@@ -256,7 +252,7 @@ public class ChoiceTests
         const string source = """
             export choice Direction north east end
             choice Mood calm end
-            def map Direction Mood moods put empty map Direction Mood north calm
+            def map Direction Mood moods put map_of Direction Mood end north calm
             function Direction turn Direction d return east
             write_line turn north
             """;
@@ -264,10 +260,62 @@ public class ChoiceTests
         Assert.Equal(
             "export choice Direction north east end\n" +
             "choice Mood calm end\n" +
-            "def map Direction Mood moods (put (empty map Direction Mood) north calm)\n" +
+            "def map Direction Mood moods (put (map_of Direction Mood end) north calm)\n" +
             "function Direction turn Direction d\n    return east\n" +
             "write_line (turn north)\n",
             Tree(source));
+    }
+
+    [Fact]
+    public void ChoiceNamesMayStartWithAnyLetter()
+    {
+        const string source = """
+            choice směr sever jih end
+            choice _mood calm end
+            def map směr _mood moods put map_of směr _mood end jih calm
+            function směr flip směr s if equal s sever return jih else return sever
+            write_line flip sever
+            write_line moods
+            def list směr all list_of směr sever jih end
+            for směr s in all write_line convert string s
+            """;
+
+        Assert.Equal("jih\n{jih: calm}\nsever\njih\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void AReservedWordAfterALowercaseTypeIsStillAName()
+    {
+        var program = "choice mood calm end\nrecord spot int x\n";
+
+        Assert.Equal("'choice' is a reserved word and cannot be used as a name.", Run.Failure(program + "def mood choice calm").Message);
+        Assert.Equal("'record' is a reserved word and cannot be used as a name.", Run.Failure(program + "def spot record spot 1").Message);
+        Assert.Equal("'record' is a reserved word and cannot be used as a name.", Run.Failure(program + "function void f spot record write_line 1").Message);
+        Assert.Equal("calm\n", Run.Program(program + "def mood m calm\nrecord other mood m\nwrite_line m"));
+        Assert.Equal("'record' is a reserved word and cannot be used as a name.", Run.Failure(program + "record other mood record").Message);
+        Assert.Equal("'record' is a reserved word and cannot be used as a name.", Run.Failure(program + "function void f int a list record write_line a").Message);
+    }
+
+    [Theory]
+    [InlineData("record item string label\nwrite_line item \"lamp\"", "item label \"lamp\"")]
+    [InlineData("choice q a end\nwrite_line a", "a")]
+    [InlineData("function void f int a write_line a\nf 3", "3")]
+    [InlineData("record holder spot spot\nwrite_line holder spot 1", "holder spot (spot x 1)")]
+    [InlineData("function mood g mood m return m\nwrite_line g calm", "calm")]
+    public void AFieldOrParameterNamedLikeATypeDoesNotHideTheNextDeclaration(string next, string expected)
+    {
+        var program = "choice mood calm end\nrecord spot int x\nrecord player string name mood mood\n" +
+            next + "\nwrite_line player \"Ann\" calm";
+
+        Assert.Equal(expected + "\nplayer name \"Ann\" mood calm\n", Run.Program(program));
+    }
+
+    [Theory]
+    [InlineData("record hero strng name", "'strng' is not a type; no record or choice named 'strng' is declared or imported in this file.")]
+    [InlineData("choice dir north end\nrecord hero dirr d", "'dirr' is not a type; no record or choice named 'dirr' is declared or imported in this file.")]
+    public void AMisspeltFirstFieldTypeIsReportedAsSuch(string source, string message)
+    {
+        Assert.Equal(message, Run.Failure(source).Message);
     }
 
     [Fact]
@@ -295,7 +343,7 @@ public class ChoiceTests
         session.Run("def Direction d north");
         session.Run("function Direction flip Direction x if equal x north return south else return north");
         session.Run("choice Direction north south end");
-        session.Run("def map Direction int m put empty map Direction int d 1");
+        session.Run("def map Direction int m put map_of Direction int end d 1");
         session.Run("write_line flip d");
         session.Run("write_line equal d convert Direction \"north\"");
         session.Run("write_line m");
@@ -359,11 +407,11 @@ public class ChoiceTests
     public void ADeclarationMayFollowAValueThatLooksLikeAType()
     {
         const string source = """
-            def list int l empty list int
+            def list int l list_of int end
             choice Colour Red green end
             def Colour c Red
             record Paint Colour colour
-            def map string Colour m empty map string Colour
+            def map string Colour m map_of string Colour end
             function void show Colour shown write_line shown
             show c
             """;

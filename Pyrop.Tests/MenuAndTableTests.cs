@@ -68,7 +68,7 @@ public class MenuAndTableTests
     }
 
     [Theory]
-    [InlineData("write_line choose \"Pick\" empty list string", "", "'choose' needs at least one entry.")]
+    [InlineData("write_line choose \"Pick\" list_of string end", "", "'choose' needs at least one entry.")]
     [InlineData("write_line choose \"Pick\" list_of string \"a\" end", "", "'choose' reached the end of input.")]
     [InlineData("write_line choose \"Pick\" list_of string \"a\" end", "x\n", "'choose' reached the end of input.")]
     public void ChooseFailsAtRuntime(string source, string input, string message)
@@ -83,7 +83,7 @@ public class MenuAndTableTests
     public void AnEmptyChooseWritesNothing()
     {
         var output = new StringOutput();
-        Assert.Throws<PyropException>(() => new PyropSession(new StringReader("1\n"), output).Run("write choose \"Pick\" empty list string"));
+        Assert.Throws<PyropException>(() => new PyropSession(new StringReader("1\n"), output).Run("write choose \"Pick\" list_of string end"));
 
         Assert.Equal("", output.ToString());
     }
@@ -92,7 +92,7 @@ public class MenuAndTableTests
     public void AttemptedChooseIsAbsentForAnEmptyListOrAtEndOfInput()
     {
         const string source =
-            "write_line attempt choose \"a\" empty list string\n" +
+            "write_line attempt choose \"a\" list_of string end\n" +
             "write_line attempt choose \"b\" list_of string \"x\" end\n" +
             "write_line attempt choose \"c\" list_of string \"y\" end";
 
@@ -143,9 +143,9 @@ public class MenuAndTableTests
     public void ATableAndANumberedListStartOnANewLine()
     {
         const string source =
-            "write \"partial\"\nwrite_table list_of string \"a\" end empty list list string\n" +
+            "write \"partial\"\nwrite_table list_of string \"a\" end list_of list string end\n" +
             "write \"more\"\nwrite_line choose \"Pick\" list_of string \"x\" \"y\" end\n" +
-            "write_line \"done\"\nwrite_table list_of string \"b\" end empty list list string";
+            "write_line \"done\"\nwrite_table list_of string \"b\" end list_of list string end";
 
         Assert.Equal("partial\na\nmore\nPick\n1. x\n2. y\nChoose a number from 1 to 2: y\ndone\nb\n", Run.Program(source, "2\n"));
     }
@@ -168,7 +168,7 @@ public class MenuAndTableTests
     [Fact]
     public void WriteTableWithoutRowsWritesTheHeaders()
     {
-        Assert.Equal("a  b\n", Run.Program("write_table list_of string \"a\" \"b\" end empty list list string"));
+        Assert.Equal("a  b\n", Run.Program("write_table list_of string \"a\" \"b\" end list_of list string end"));
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class MenuAndTableTests
     [InlineData(
         "list_of string \"a\" \"b\" end list_of list string list_of string \"1\" end end",
         "Row 0 of the table has 1 cell, but the table has 2 headers; rows are numbered from 0.")]
-    [InlineData("empty list string empty list list string", "'write_table' needs at least one header.")]
+    [InlineData("list_of string end list_of list string end", "'write_table' needs at least one header.")]
     public void WriteTableFailsBeforeWritingAnything(string operands, string message)
     {
         var output = new StringOutput();
@@ -219,7 +219,7 @@ public class MenuAndTableTests
     {
         const string source =
             "write_line attempt write_table list_of string \"a\" end list_of list string list_of string end end\n" +
-            "write_line attempt write_table list_of string \"a\" end empty list list string";
+            "write_line attempt write_table list_of string \"a\" end list_of list string end";
 
         Assert.Equal("false\na\ntrue\n", Run.Program(source));
     }
@@ -227,7 +227,7 @@ public class MenuAndTableTests
     [Fact]
     public void WriteTableIsAStatement()
     {
-        var error = Run.Failure("write_line write_table list_of string \"a\" end empty list list string");
+        var error = Run.Failure("write_line write_table list_of string \"a\" end list_of list string end");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
     }
@@ -244,12 +244,12 @@ public class MenuAndTableTests
     [Fact]
     public void TreeBracketsChooseAndWriteTableOperands()
     {
-        var source = "def string r choose \"Go?\" list_of string \"a\" end\nwrite_table list_of string \"h\" end empty list list string";
+        var source = "def string r choose \"Go?\" list_of string \"a\" end\nwrite_table list_of string \"h\" end list_of list string end";
         var inspected = new PyropSession(new StringReader(""), new StringOutput()).Inspect(source, "main.prp");
 
         Assert.Null(inspected.Error);
         Assert.Equal(
-            "def string r (choose \"Go?\" (list_of string \"a\" end))\nwrite_table (list_of string \"h\" end) (empty list list string)\n",
+            "def string r (choose \"Go?\" (list_of string \"a\" end))\nwrite_table (list_of string \"h\" end) (list_of list string end)\n",
             TreePrinter.Print(inspected.Tree!));
     }
 

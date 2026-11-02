@@ -39,7 +39,7 @@ public class TypeCheckerTests
     [Fact]
     public void FunctionsSeeGlobalsDeclaredLaterInTheFile()
     {
-        Assert.Equal("5\n", Run.Program("function int get return value\ndef int value 5\nwrite_line get"));
+        Assert.Equal("5\n", Run.Program("function int fetch return value\ndef int value 5\nwrite_line fetch"));
     }
 
     [Theory]

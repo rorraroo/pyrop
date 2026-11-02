@@ -287,7 +287,7 @@ public sealed class LanguageServerTests : IDisposable
         FileOnDisk("lib.prp", "export function int double int n\n    return multiply n 2\n");
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "use lib \"lib.prp\"\nimport from lib double\nfunction int twice int n return double double n\ndef int x twice 3\n");
+        client.Open(uri, "use lib \"lib.prp\"\nimport from lib double end\nfunction int twice int n return double double n\ndef int x twice 3\n");
         client.Diagnostics();
 
         var data = client.Response(client.Request("textDocument/semanticTokens/full", new { textDocument = new { uri } }))

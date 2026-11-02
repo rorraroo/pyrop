@@ -2,20 +2,10 @@ use items "items.prp"
 use world "world.prp"
 use state "state.prp"
 use saving "saving.prp"
-import from items ItemKind
-import from items item_description
-import from world Direction
-import from world Place
-import from world Room
-import from world compass
-import from world build_world
-import from state Player
-import from state new_player
-import from state carries
-import from state can_see
-import from state items_in
-import from saving save_game
-import from saving load_game
+import from items item_description ItemKind end
+import from world Direction Place Room compass build_world end
+import from state Player new_player carries can_see items_in end
+import from saving save_game load_game end
 
 choice Opening fresh_start saved_start leave_game end
 choice ActionKind go take show_inventory save quit end
@@ -27,13 +17,13 @@ if greater argument_count 0 set save_path argument_at 0
 def map Place Room rooms build_world
 
 function list string names_of list ItemKind kinds block
-    def list string names empty list string
+    def list string names list_of string end
     for ItemKind kind in kinds set names push names add "the " convert string kind
     return names
 end
 
 function void describe Player player block
-    def Room room value_of rooms get_field place player
+    def Room room get rooms get_field place player
     write_line ""
     with_style "emphasis" write_line get_field title room
     if not can_see room player block
@@ -46,11 +36,11 @@ function void describe Player player block
 end
 
 function map string Action actions_for Player player block
-    def Room room value_of rooms get_field place player
+    def Room room get rooms get_field place player
     def map Direction Place exits get_field exits room
-    def map string Action actions empty map string Action
+    def map string Action actions map_of string Action end
     for Direction way in compass
-        if has_key exits way
+        if has exits way
             set actions put actions add "Go " convert string way Action go some way none ItemKind
     if can_see room player
         for ItemKind item in items_in room player
@@ -62,10 +52,10 @@ function map string Action actions_for Player player block
 end
 
 function Player walk Player player Direction way block
-    def Room here value_of rooms get_field place player
-    def Place target value_of get_field exits here way
+    def Room here get rooms get_field place player
+    def Place target get get_field exits here way
     def Player moved with_field moves player add get_field moves player 1
-    if_some ItemKind needed get_field needs value_of rooms target block
+    if_some ItemKind needed get_field needs get rooms target block
         if not carries player needed block
             write_line add "The door is locked. You need the " add convert string needed "."
             return moved
@@ -88,7 +78,7 @@ function void show_inventory_of Player player block
         write_line "You carry nothing."
         return void
     end
-    def list list string rows empty list list string
+    def list list string rows list_of list string end
     for ItemKind item in carried
         set rows push rows list_of string convert string item item_description item end
     write_table list_of string "Item" "Description" end rows
@@ -114,11 +104,12 @@ end
 with_style "emphasis" write_line "The Crown of Pyrop"
 write_line "Find the lost crown and carry it out into the garden."
 
-def map string Opening openings put put put empty map string Opening
+def map string Opening openings map_of string Opening
     "Start a new game" fresh_start
     "Load the saved game" saved_start
     "Leave" leave_game
-def Opening opening value_of openings choose "How do you begin?" keys_of openings
+end
+def Opening opening get openings choose "How do you begin?" keys_of openings
 if equal opening leave_game exit 0
 
 def Player player new_player
@@ -132,7 +123,7 @@ while playing block
         break
     end
     def map string Action actions actions_for player
-    def Action action value_of actions choose "What do you do?" keys_of actions
+    def Action action get actions choose "What do you do?" keys_of actions
     def ActionKind kind get_field kind action
     if equal kind go block
         if_some Direction way get_field way action set player walk player way
@@ -148,4 +139,4 @@ while playing block
         set playing false
     end
 end
-read
+if not input_ended read

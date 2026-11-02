@@ -57,7 +57,7 @@ public sealed class ListTextTests : IDisposable
         var host = new HostContext(["a\r\nb"], _ => null);
 
         Assert.Equal("1\ntrue\n", Run.Program(
-            "write_line length_of split argument_at 0 \"\\n\"\nwrite_line equal item_at split argument_at 0 \"\\n\" 0 argument_at 0",
+            "write_line length_of split argument_at 0 \"\\n\"\nwrite_line equal get split argument_at 0 \"\\n\" 0 argument_at 0",
             host: host));
     }
 
@@ -74,7 +74,7 @@ public sealed class ListTextTests : IDisposable
     [Fact]
     public void SplitGivesAListOfStrings()
     {
-        Assert.Equal("3\nb\n", Run.Program("def list string parts split \"a b c\" \" \"\nwrite_line length_of parts\nwrite_line item_at parts 1"));
+        Assert.Equal("3\nb\n", Run.Program("def list string parts split \"a b c\" \" \"\nwrite_line length_of parts\nwrite_line get parts 1"));
     }
 
     [Fact]

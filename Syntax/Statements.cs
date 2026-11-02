@@ -38,7 +38,7 @@ public sealed record CallStatement(Expression Call, SourcePosition Position) : S
 
 public sealed record UseStatement(string Name, string Path, SourcePosition Position) : Statement(Position);
 
-public sealed record ImportStatement(string Module, string Name, SourcePosition Position) : Statement(Position);
+public sealed record ImportStatement(string Module, IReadOnlyList<string> Names, SourcePosition Position) : Statement(Position);
 
 public sealed record RecordStatement(RecordType Record, SourcePosition Position) : Statement(Position);
 

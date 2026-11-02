@@ -45,17 +45,17 @@ public class ForTests
     [Fact]
     public void AnEmptyListRunsTheBodyZeroTimes()
     {
-        Assert.Equal("done\n", Run.Program("for int n in empty list int write_line n\nwrite_line \"done\""));
+        Assert.Equal("done\n", Run.Program("for int n in list_of int end write_line n\nwrite_line \"done\""));
     }
 
     [Fact]
     public void WalksAMapThroughKeysOfInInsertionOrder()
     {
         const string source = """
-            def map string int prices put put put empty map string int "rope" 2 "lamp" 5 "rope" 3
+            def map string int prices put put put map_of string int end "rope" 2 "lamp" 5 "rope" 3
             for string name in keys_of prices block
                 write add name ": "
-                write_line value_of prices name
+                write_line get prices name
             end
             """;
 
@@ -137,7 +137,7 @@ public class ForTests
             end
             write_line first_over list_of int 1 5 9 end 4
             write_line first_over list_of int 1 2 end 4
-            write_line first_over empty list int 4
+            write_line first_over list_of int end 4
             """;
 
         Assert.Equal("5\n-1\n-1\n", Run.Program(source));
@@ -189,7 +189,7 @@ public class ForTests
             def list int numbers list_of int 1 2 3 end
             for int n in numbers block
                 set numbers push numbers multiply n 10
-                set numbers remove_at numbers 0
+                set numbers remove numbers 0
                 write_line n
             end
             write_line numbers
@@ -258,7 +258,7 @@ public class ForTests
     {
         const string source = """
             function list int squares_up_to int n block
-                def list int result empty list int
+                def list int result list_of int end
                 def int i 1
                 while at_most i n block
                     set result push result multiply i i
@@ -384,7 +384,7 @@ public class ForTests
     [Fact]
     public void TheLoopVariableTypeMustMatchNestedElementTypesExactly()
     {
-        var error = Failure("def list list int grid empty list list int\nfor list float row in grid write_line row", ErrorStage.Type);
+        var error = Failure("def list list int grid list_of list int end\nfor list float row in grid write_line row", ErrorStage.Type);
 
         Assert.Equal("The loop variable 'row' is list float, but the list holds list int items.", error.Message);
     }
@@ -392,7 +392,7 @@ public class ForTests
     [Fact]
     public void WalkingAMapPointsToKeysOf()
     {
-        var error = Failure("def map string int m empty map string int\nfor string k in m write_line k", ErrorStage.Type);
+        var error = Failure("def map string int m map_of string int end\nfor string k in m write_line k", ErrorStage.Type);
 
         Assert.Equal("'for' walks a list, found map string int. Walk a map's keys with keys_of.", error.Message);
         Assert.Equal(2, error.Position.Line);
@@ -493,19 +493,19 @@ public class ForTests
     public void PrintsForLoopsInTheTree()
     {
         const string source = """
-            def map string int prices empty map string int
+            def map string int prices map_of string int end
             for string name in keys_of prices block
                 if equal name "x" continue
                 write_line name
             end
             for int n in list_of int 1 2 end write_line n
-            for list int row in empty list list int
+            for list int row in list_of list int end
                 for int cell in row break
             """;
 
         Assert.Equal(
             """
-            def map string int prices (empty map string int)
+            def map string int prices (map_of string int end)
             for string name in (keys_of prices) block
                 if (equal name "x")
                     continue
@@ -513,7 +513,7 @@ public class ForTests
             end
             for int n in (list_of int 1 2 end)
                 write_line n
-            for list int row in (empty list list int)
+            for list int row in (list_of list int end)
                 for int cell in row
                     break
 
@@ -525,7 +525,7 @@ public class ForTests
     public void WalksALargeListQuickly()
     {
         const string source = """
-            def list int numbers empty list int
+            def list int numbers list_of int end
             def int i 0
             while less i 100000 block
                 set numbers push numbers i

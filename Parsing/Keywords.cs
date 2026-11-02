@@ -22,8 +22,8 @@ public static class Keywords
     public const string WriteError = "write_error";
     public const string WriteErrorLine = "write_error_line";
     public const string Convert = "convert";
-    public const string Empty = "empty";
     public const string ListOf = "list_of";
+    public const string MapOf = "map_of";
     public const string Exit = "exit";
     public const string WithStyle = "with_style";
     public const string Use = "use";
@@ -40,13 +40,28 @@ public static class Keywords
     public const string True = "true";
     public const string False = "false";
 
+    private static readonly Dictionary<string, string> Retired = new()
+    {
+        ["empty"] = "write an empty list as list_of int end and an empty map as map_of string int end",
+        ["item_at"] = "use get <list> <index>",
+        ["value_of"] = "use get <map> <key>",
+        ["char_at"] = "use get <text> <position>",
+        ["contains"] = "use has <list> <item>",
+        ["has_key"] = "use has <map> <key>",
+        ["remove_at"] = "use remove <list> <index>",
+        ["remove_key"] = "use remove <map> <key>",
+        ["replace_at"] = "use put <list> <index> <item>",
+        ["negate"] = "write subtract 0 <number>, or subtract 0.0 <number> for a float",
+    };
+
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Convert, Empty, ListOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, GetField,
+        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, GetField,
         WithField, Attempt, IfSome, None, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
+        .. Retired.Keys,
     ];
 
     private static readonly HashSet<string> Statements =
@@ -59,8 +74,11 @@ public static class Keywords
 
     public static bool IsStatement(string word) => Statements.Contains(word);
 
+    public static string? RetiredHint(string word) =>
+        Retired.TryGetValue(word, out var hint) ? $"'{word}' is no longer part of Pyrop; {hint}." : null;
+
     public static string? UnderscoredSpelling(string word) =>
-        Reserved.FirstOrDefault(reserved => reserved != word && reserved.Replace("_", "") == word);
+        Reserved.FirstOrDefault(reserved => reserved != word && !Retired.ContainsKey(reserved) && reserved.Replace("_", "") == word);
 
     public static string UnderscoreHint(string word, string spelling) =>
         $"'{word}' is not a Pyrop word; did you mean '{spelling}'? Names made of several words are joined with underscores.";

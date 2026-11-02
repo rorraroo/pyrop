@@ -160,8 +160,8 @@ public class InterpreterTests
     [InlineData("write_line convert int -9223372036854777856.0", "out of range for int")]
     [InlineData("write_line read", "end of input")]
     [InlineData("function int down int n return down add n 1\nwrite_line down 0", "Call depth limit")]
-    [InlineData("function int get return late\nwrite_line get\ndef int late 1", "does not exist yet")]
-    [InlineData("function int get return late\ndef int late get", "does not exist yet")]
+    [InlineData("function int fetch return late\nwrite_line fetch\ndef int late 1", "does not exist yet")]
+    [InlineData("function int fetch return late\ndef int late fetch", "does not exist yet")]
     public void ReportsRuntimeErrors(string source, string message)
     {
         var error = Run.Failure(source);

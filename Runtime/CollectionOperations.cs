@@ -23,7 +23,7 @@ public static class CollectionOperations
         list.With(list.Items.RemoveAt(CheckIndex(invocation, list, index)));
 
     public static bool Contains(IBuiltinInvocation invocation, ListValue list, Value item) =>
-        list.Items.Any(candidate => ValueEquality.Equal(candidate, item, invocation.NestingLimit, () => TooDeep(invocation, "contains")));
+        list.Items.Any(candidate => ValueEquality.Equal(candidate, item, invocation.NestingLimit, () => TooDeep(invocation, "has")));
 
     public static Exception TooDeep(IBuiltinInvocation invocation, string operation) =>
         invocation.FailAtLimit($"'{operation}' cannot compare values nested this deeply.");
@@ -51,6 +51,22 @@ public static class CollectionOperations
     {
         CheckRoom(items.Count, limit, "list", fail);
         return new ListValue(PyropTypes.ListOf(elementType), items.ToImmutableList());
+    }
+
+    public static MapValue MapOf(PyropType type, IEnumerable<(Value Key, Value Value)> entries, int limit, Func<string, Exception> fail)
+    {
+        var map = MapValue.Empty(type);
+        foreach (var (key, value) in entries)
+        {
+            if (!map.ContainsKey(key))
+            {
+                CheckRoom(map.Count + 1, limit, "map", fail);
+            }
+
+            map = map.Put(key, value);
+        }
+
+        return map;
     }
 
     public static void CheckRoom(int count, int limit, string kind, Func<string, Exception> fail)

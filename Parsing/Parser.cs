@@ -133,12 +133,38 @@ public sealed class Parser
         if (!_cursor.Current.IsWord(Keywords.From))
         {
             throw _cursor.Error(
-                $"'{Keywords.Import}' takes a qualified name: {Keywords.Import} {Keywords.From} <module> <name>, found {_cursor.Current.Describe()}.");
+                $"'{Keywords.Import}' takes a module and the names to import: {Keywords.Import} {Keywords.From} <module> <name>… {Keywords.End}, found {_cursor.Current.Describe()}.");
         }
 
-        var qualified = QualifiedNames.Read(_cursor);
-        QualifiedNames.Resolve(_names, qualified, _cursor);
-        return new ImportStatement(qualified.Module.Text, qualified.Name.Text, start.Position);
+        var from = _cursor.Advance();
+        var module = _cursor.ExpectWord($"a module name after '{Keywords.From}'");
+        var names = new List<string>();
+        while (!_cursor.Current.IsWord(Keywords.End))
+        {
+            if (_cursor.IsAtEnd)
+            {
+                throw _cursor.Error($"Expected '{Keywords.End}' to close the {Keywords.Import} started at {start.Position}.");
+            }
+
+            if (_cursor.Current.Kind != TokenKind.Word || Keywords.IsReserved(_cursor.Current.Text))
+            {
+                throw _cursor.Error(
+                    $"Expected a name to import or '{Keywords.End}' to close the {Keywords.Import} started at {start.Position}, found {_cursor.Current.Describe()}.");
+            }
+
+            var name = _cursor.Advance();
+            QualifiedNames.Resolve(_names, new QualifiedName(from, module, name), _cursor);
+            names.Add(name.Text);
+        }
+
+        if (names.Count == 0)
+        {
+            throw _cursor.Error(
+                $"'{Keywords.Import}' needs at least one name before '{Keywords.End}', such as {Keywords.Import} {Keywords.From} {module.Text} <name> {Keywords.End}.");
+        }
+
+        _cursor.Advance();
+        return new ImportStatement(module.Text, names, start.Position);
     }
 
     private Statement ParseExport()
@@ -262,6 +288,7 @@ public sealed class Parser
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
             _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
             _ when _names.Uses.ContainsKey(token.Text) => throw ModuleUsedAsValue(token),
+            _ when Keywords.RetiredHint(token.Text) is { } retired => throw _cursor.Error(retired),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
             _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
                 throw _cursor.Error(Keywords.UnderscoreHint(token.Text, spelling)),
@@ -583,11 +610,10 @@ public sealed class Parser
                 _cursor.Advance();
                 var target = TypeReader.ReadValueType(_cursor, _names, "conversion target");
                 return new ConvertExpression(target, ParseExpression(), token.Position);
-            case Keywords.Empty:
-                _cursor.Advance();
-                return new EmptyExpression(TypeReader.ReadCollectionType(_cursor, _names, Keywords.Empty), token.Position);
             case Keywords.ListOf:
                 return ParseListOf();
+            case Keywords.MapOf:
+                return ParseMapOf();
             case Keywords.Attempt:
                 return ParseAttempt();
             case Keywords.None:
@@ -636,6 +662,11 @@ public sealed class Parser
             throw ChoiceAsValue(token, choice);
         }
 
+        if (Keywords.RetiredHint(token.Text) is { } retired)
+        {
+            throw _cursor.Error(retired);
+        }
+
         if (Keywords.IsReserved(token.Text))
         {
             throw _cursor.Error($"Expected an expression, found keyword '{token.Text}'.");
@@ -669,6 +700,11 @@ public sealed class Parser
             return new AttemptExpression(ParseCall(allowVoid: true), start.Position);
         }
 
+        if (operand.Kind == TokenKind.Word && Keywords.RetiredHint(operand.Text) is { } retired)
+        {
+            throw _cursor.Error(retired);
+        }
+
         var found = operand.Kind == TokenKind.Word && _names.FindCallable(operand.Text) is not null
             ? $"the function '{operand.Text}'; a function's own failures are runtime errors, so that a bug in it is never mistaken for bad input"
             : operand.IsWord(Keywords.From)
@@ -685,24 +721,62 @@ public sealed class Parser
         var start = _cursor.Advance();
         var elementType = TypeReader.ReadValueType(_cursor, _names, "list item");
         var items = new List<Expression>();
-        while (!_cursor.Current.IsWord(Keywords.End))
+        while (!AtItemsEnd(start, "a list item"))
         {
-            if (_cursor.IsAtEnd)
-            {
-                throw _cursor.Error($"Expected 'end' to close the list_of started at {start.Position}.");
-            }
-
-            if (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text))
-            {
-                throw _cursor.Error(
-                    $"Expected a list item or 'end' to close the list_of started at {start.Position}, found '{_cursor.Current.Text}'.");
-            }
-
             items.Add(ParseExpression());
         }
 
         _cursor.Advance();
         return new ListOfExpression(elementType, items, start.Position);
+    }
+
+    private Expression ParseMapOf()
+    {
+        var start = _cursor.Advance();
+        var keyType = TypeReader.ReadKeyType(_cursor, _names);
+        var valueType = TypeReader.ReadValueType(_cursor, _names, "map value");
+        var entries = new List<MapEntry>();
+        while (!AtItemsEnd(start, "a key"))
+        {
+            var key = ParseExpression();
+            if (_cursor.Current.IsWord(Keywords.End))
+            {
+                throw _cursor.Error(
+                    $"The last key of the {Keywords.MapOf} started at {start.Position} has no value; every key is followed by its value.");
+            }
+
+            if (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text))
+            {
+                throw _cursor.Error(
+                    $"Expected the value of the last key of the {Keywords.MapOf} started at {start.Position}, found '{_cursor.Current.Text}'.");
+            }
+
+            entries.Add(new MapEntry(key, ParseExpression()));
+        }
+
+        _cursor.Advance();
+        return new MapOfExpression(keyType, valueType, entries, start.Position);
+    }
+
+    private bool AtItemsEnd(Token start, string expected)
+    {
+        if (_cursor.Current.IsWord(Keywords.End))
+        {
+            return true;
+        }
+
+        if (_cursor.IsAtEnd)
+        {
+            throw _cursor.Error($"Expected '{Keywords.End}' to close the {start.Text} started at {start.Position}.");
+        }
+
+        if (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text))
+        {
+            throw _cursor.Error(
+                $"Expected {expected} or '{Keywords.End}' to close the {start.Text} started at {start.Position}, found '{_cursor.Current.Text}'.");
+        }
+
+        return false;
     }
 
     private Expression ParseCall(bool allowVoid)

@@ -1,5 +1,5 @@
 use lines "lines.prp"
-import from lines counted
+import from lines counted end
 
 if less argument_count 1 block
     write_error_line "usage: logcheck <log file> [report file]"

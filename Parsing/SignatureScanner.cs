@@ -40,7 +40,8 @@ public static class SignatureScanner
                 var uses = ScanUses(new TokenCursor(tokens, reportsIncompleteInput), existing, directory, failures);
                 var imports = ScanImports(
                     new TokenCursor(tokens, reportsIncompleteInput), existing.With([], uses, []).WithFailures(failures), failures);
-                var (declarations, choiceDeclarations) = ScanTypeNames(new TokenCursor(tokens, reportsIncompleteInput), existing);
+                var knownTypes = new KnownTypes(existing.With([], uses, imports).WithFailures(failures), KnownTypes.DeclaredIn(tokens));
+                var (declarations, choiceDeclarations) = ScanTypeNames(new TokenCursor(tokens, reportsIncompleteInput), existing, knownTypes);
                 var records = declarations.Where(declaration => declaration.IsNew).Select(declaration => declaration.Record).ToList();
                 var choices = choiceDeclarations.Where(declaration => declaration.IsNew).Select(declaration => declaration.Choice).ToList();
                 var typeNames = existing.With([], uses, imports, records, choices).WithFailures(failures);
@@ -153,7 +154,7 @@ public static class SignatureScanner
         private sealed record ChoiceDeclaration(ChoiceType Choice, bool IsNew);
 
         private static (List<RecordDeclaration> Records, List<ChoiceDeclaration> Choices) ScanTypeNames(
-            TokenCursor cursor, ModuleNamespace existing)
+            TokenCursor cursor, ModuleNamespace existing, KnownTypes knownTypes)
         {
             var records = new List<RecordDeclaration>();
             var choices = new List<ChoiceDeclaration>();
@@ -166,7 +167,7 @@ public static class SignatureScanner
                 previous = token;
                 if (token.IsWord(Keywords.Record))
                 {
-                    RecordDeclarations.RejectKeywordAsName(token, cursor, RecordDeclarations.CanStartRecord(cursor));
+                    RecordDeclarations.RejectKeywordAsName(token, cursor, RecordDeclarations.CanStartRecord(cursor, knownTypes), knownTypes);
                     var nameToken = RecordDeclarations.ReadName(cursor);
                     var name = nameToken.Text;
                     CheckNewTypeName(nameToken, Keywords.Record, records, choices, existing, cursor);
@@ -176,7 +177,7 @@ public static class SignatureScanner
                 }
                 else if (token.IsWord(Keywords.Choice))
                 {
-                    RecordDeclarations.RejectKeywordAsName(token, cursor, ChoiceDeclarations.CanStartChoice(cursor));
+                    RecordDeclarations.RejectKeywordAsName(token, cursor, ChoiceDeclarations.CanStartChoice(cursor), knownTypes);
                     var nameToken = ChoiceDeclarations.ReadName(cursor);
                     CheckNewTypeName(nameToken, Keywords.Choice, records, choices, existing, cursor);
                     var variants = ChoiceDeclarations.ReadVariants(cursor, token, nameToken.Text);
@@ -284,7 +285,7 @@ public static class SignatureScanner
                     continue;
                 }
 
-                RecordDeclarations.RejectKeywordAsName(token, cursor, cursor.Current.Kind == TokenKind.Word);
+                RecordDeclarations.RejectKeywordAsName(token, cursor, cursor.Current.Kind == TokenKind.Word, KnownTypes.Of(names));
 
                 var signature = ReadHeader(cursor, names, exported);
                 if (names.Functions.Contains(signature.Name) || functions.Any(function => function.Name == signature.Name))
@@ -305,50 +306,75 @@ public static class SignatureScanner
             while (!cursor.IsAtEnd)
             {
                 var token = cursor.Advance();
-                if (!token.IsWord(Keywords.Import)
-                    || !cursor.Current.IsWord(Keywords.From)
-                    || cursor.Peek(1).Kind != TokenKind.Word
-                    || cursor.Peek(2).Kind != TokenKind.Word)
+                if (!token.IsWord(Keywords.Import) || !cursor.Current.IsWord(Keywords.From) || cursor.Peek(1).Kind != TokenKind.Word)
                 {
                     continue;
                 }
 
-                var qualified = QualifiedNames.Read(cursor);
-                var name = qualified.Name.Text;
-                try
+                var from = cursor.Advance();
+                var module = cursor.Advance();
+                var inStatement = new HashSet<string>();
+                while (cursor.Current.Kind == TokenKind.Word
+                    && !cursor.Current.IsWord(Keywords.End)
+                    && !Keywords.IsStatement(cursor.Current.Text))
                 {
-                    var target = QualifiedNames.Resolve(names, qualified, cursor);
-                    if (target is ChoiceVariant variant)
+                    var qualified = new QualifiedName(from, module, cursor.Advance());
+                    if (!inStatement.Add(qualified.Name.Text))
                     {
-                        throw cursor.Error(
-                            $"'{name}' is a variant of the choice '{variant.Choice.Name}'; import the choice with {Keywords.Import} {Keywords.From} {qualified.Module.Text} {variant.Choice.Name}, which imports all its variants.",
-                            qualified.Name);
+                        failures.Add(token, qualified.Name.Text, cursor.Error(
+                            $"'{qualified.Name.Text}' is named twice in the {Keywords.Import} started at {token.Position}; if the names were meant to stop before it, close the {Keywords.Import} with '{Keywords.End}'.",
+                            qualified.Name));
+                        continue;
                     }
 
-                    if (!seen.Add(name))
-                    {
-                        throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
-                    }
-
-                    if (names.Imports.TryGetValue(name, out var earlier))
-                    {
-                        if (ReferenceEquals(earlier.Target, target))
-                        {
-                            continue;
-                        }
-
-                        throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
-                    }
-
-                    imports.Add(new ModuleImport(qualified.Module.Text, name, target, qualified.Name.Position, token));
-                }
-                catch (PyropException error)
-                {
-                    failures.Add(token, name, error);
+                    ScanImportedName(qualified, token, cursor, names, seen, imports, failures);
                 }
             }
 
             return imports;
+        }
+
+        private static void ScanImportedName(
+            QualifiedName qualified,
+            Token token,
+            TokenCursor cursor,
+            ModuleNamespace names,
+            HashSet<string> seen,
+            List<ModuleImport> imports,
+            ModuleFailures failures)
+        {
+            var name = qualified.Name.Text;
+            try
+            {
+                var target = QualifiedNames.Resolve(names, qualified, cursor);
+                if (target is ChoiceVariant variant)
+                {
+                    throw cursor.Error(
+                        $"'{name}' is a variant of the choice '{variant.Choice.Name}'; import the choice with {Keywords.Import} {Keywords.From} {qualified.Module.Text} {variant.Choice.Name} {Keywords.End}, which imports all its variants.",
+                        qualified.Name);
+                }
+
+                if (!seen.Add(name))
+                {
+                    throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
+                }
+
+                if (names.Imports.TryGetValue(name, out var earlier))
+                {
+                    if (ReferenceEquals(earlier.Target, target))
+                    {
+                        return;
+                    }
+
+                    throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
+                }
+
+                imports.Add(new ModuleImport(qualified.Module.Text, name, target, qualified.Name.Position, token));
+            }
+            catch (PyropException error)
+            {
+                failures.Add(token, name, error);
+            }
         }
 
         private static void CheckClashes(

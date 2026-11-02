@@ -2,7 +2,7 @@
   "name": "pyrop",
   "displayName": "Pyrop",
   "description": "Pyrop language support: errors while you type, highlighting that knows functions, variables and imports.",
-  "version": "0.11.0",
+  "version": "0.13.0",
   "publisher": "radardev",
   "icon": "icons/pyrop-128.png",
   "engines": {

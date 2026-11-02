@@ -5,13 +5,15 @@ namespace Pyrop.Parsing;
 
 public static class TypeReader
 {
+    private const string TypeArgument = "type argument";
+
     public static bool StartsValueType(TokenCursor cursor, ModuleNamespace names)
     {
         var token = cursor.Current;
         return token.Kind == TokenKind.Word
             && (PyropTypes.ValueConstructors.ContainsKey(token.Text)
                 || names.FindType(token.Text) is not null
-                || (RecordDeclarations.IsTypeName(token.Text) && names.Failures.OfName(token.Text) is not null)
+                || names.Failures.OfName(token.Text) is not null
                 || QualifiedNames.NamesType(names, cursor));
     }
 
@@ -38,7 +40,7 @@ public static class TypeReader
             throw names.Failures.OfName(token.Text) ?? cursor.Error(
                 names.FindVariant(token.Text) is { } variant
                     ? $"'{token.Text}' is a variant of the choice '{variant.Choice.Name}', not a type."
-                    : RecordDeclarations.IsTypeName(token.Text)
+                    : LooksLikeTypeBeforeName(token, cursor) || (owner == TypeArgument && !Keywords.IsReserved(token.Text))
                     ? $"'{token.Text}' is not a type; no record or choice named '{token.Text}' is declared or imported in this file."
                     : $"Expected a type ({string.Join(", ", PyropTypes.ValueConstructors.Keys)}, a record or choice name), found {token.Describe()}.",
                 token);
@@ -47,26 +49,21 @@ public static class TypeReader
         var arguments = new PyropType[constructor.Arity];
         for (var index = 0; index < arguments.Length; index++)
         {
-            var argumentToken = cursor.Current;
-            arguments[index] = ReadValueType(cursor, names, "type argument");
-            if (constructor == PyropTypes.Map && index == 0 && !PyropTypes.IsMapKey(arguments[index]))
-            {
-                throw cursor.Error(
-                    $"A map key must be {PyropTypes.DescribeMapKeyTypes()}, found {arguments[index].Name}.", argumentToken);
-            }
+            arguments[index] = constructor == PyropTypes.Map && index == 0
+                ? ReadKeyType(cursor, names)
+                : ReadValueType(cursor, names, TypeArgument);
         }
 
         return new ConstructedType(constructor, arguments);
     }
 
-    public static PyropType ReadCollectionType(TokenCursor cursor, ModuleNamespace names, string owner)
+    public static PyropType ReadKeyType(TokenCursor cursor, ModuleNamespace names)
     {
         var start = cursor.Current;
-        var type = ReadValueType(cursor, names, "collection");
-        if (!PyropTypes.IsCollection(type))
+        var type = ReadValueType(cursor, names, TypeArgument);
+        if (!PyropTypes.IsMapKey(type))
         {
-            throw cursor.Error(
-                $"'{owner}' takes a list or map type, such as {owner} list string or {owner} map string int, found {type.Name}.", start);
+            throw cursor.Error($"A map key must be {PyropTypes.DescribeMapKeyTypes()}, found {type.Name}.", start);
         }
 
         return type;
@@ -83,7 +80,7 @@ public static class TypeReader
         if (!StartsValueType(cursor, names) && !cursor.Current.IsWord(Keywords.From))
         {
             var token = cursor.ExpectWord("a return type");
-            if (RecordDeclarations.IsTypeName(token.Text))
+            if (names.Failures.OfName(token.Text) is not null || LooksLikeTypeBeforeName(token, cursor))
             {
                 throw names.Failures.OfName(token.Text) ?? cursor.Error(
                     $"'{token.Text}' is not a type; no record or choice named '{token.Text}' is declared or imported in this file.", token);
@@ -95,4 +92,7 @@ public static class TypeReader
 
         return ReadValueType(cursor, names, "return type");
     }
+
+    private static bool LooksLikeTypeBeforeName(Token token, TokenCursor cursor) =>
+        !Keywords.IsReserved(token.Text) && cursor.Current.Kind == TokenKind.Word && !Keywords.IsReserved(cursor.Current.Text);
 }
