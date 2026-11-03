@@ -120,7 +120,7 @@ public static class QualifiedNames
         names.Libraries.All.FirstOrDefault(library => library.Module == use.Target.Module) is { } library
         && library.FormerNames.TryGetValue(name, out var current)
             ? $"The library {module} has no '{name}'; it is now called '{current}'."
-            : $"The library {module} has no '{name}'; it offers {string.Join(", ", use.Target.Names.Operations.Keys)}.";
+            : $"The library {module} has no '{name}'; it offers {string.Join(", ", use.Target.Names.Operations.Keys.Concat(use.Target.Names.Choices.Keys))}.";
 
     private static ChoiceVariant ExportedVariant(ChoiceVariant variant, ModuleUse use, QualifiedName qualified, TokenCursor cursor)
     {

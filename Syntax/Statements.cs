@@ -34,7 +34,7 @@ public sealed record WriteStatement(Expression Value, bool AppendNewLine, bool T
 
 public sealed record ExitStatement(Expression Code, SourcePosition Position) : Statement(Position);
 
-public sealed record WithStyleStatement(Expression Style, Statement Body, SourcePosition Position) : Statement(Position);
+public sealed record StyledStatement(Expression Style, Statement Body, SourcePosition Position) : Statement(Position);
 
 public sealed record BlockStatement(IReadOnlyList<Statement> Statements, SourcePosition Position) : Statement(Position);
 

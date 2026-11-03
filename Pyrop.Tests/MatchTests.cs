@@ -190,8 +190,6 @@ public class MatchTests
         "'add' cannot take int string. It accepts: int int, float float, string string.")]
     [InlineData("write_line go \"x\"", 2, 15, "The variant 'go' carries int, found string.")]
     [InlineData("choice Pair both int string end\nwrite_line both 1 2", 3, 19, "Value 2 of the variant 'both' must be string, found int.")]
-    [InlineData("write_line convert Action \"wait\"", 2, 12,
-        "Cannot convert string to Action, because some of its variants carry data; only a choice whose variants carry none can be read from text.")]
     public void MatchAndVariantTypeErrors(string body, int line, int column, string message)
     {
         var error = Failure(Action + body, ErrorStage.Type, line, column);

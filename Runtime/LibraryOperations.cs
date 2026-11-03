@@ -1,4 +1,5 @@
 using static Pyrop.Runtime.Builtins;
+using Pyrop.Parsing;
 
 namespace Pyrop.Runtime;
 
@@ -81,6 +82,22 @@ public static class LibraryOperations
         ["roll_dice"] = "roll",
         ["seed_random"] = "seed",
     });
+
+    private static readonly Module TerminalModule = BuiltinLibrary.ModuleFor("terminal");
+
+    public static ChoiceType TerminalView { get; } = Views.Declare(TerminalModule);
+
+    public static BuiltinLibrary Terminal { get; } = new("terminal",
+    [
+        Operation("show",
+            Overload([TerminalView], V, c => Views.Show(c, c.Argument(0)))),
+        Operation("write_view",
+            Overload([TerminalView], V, c => Views.WriteView(c, c.Argument(0)))),
+        Operation("read_key",
+            Overload([], S, c => new StringValue(Keys.Read(c)))),
+        Operation("read_key_within",
+            Overload([I], PyropTypes.OptionOf(S), c => Keys.ReadWithin(c, c.Argument(0).AsInt()))),
+    ], new Dictionary<string, string>(), TerminalModule, [TerminalView]);
 
     private static IntValue Power(IBuiltinInvocation invocation, long number, long exponent)
     {

@@ -79,6 +79,10 @@ public static class Repl
             Terminal.SeparateErrorsFrom(output);
             ErrorRenderer.Render(exception, "input", session.SourceText);
         }
+        finally
+        {
+            output.LeaveScreen();
+        }
 
         return null;
     }

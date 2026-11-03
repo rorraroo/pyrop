@@ -27,7 +27,7 @@ end
 function void describe Player player block
     def Room room get rooms the place of player
     write_line ""
-    with_style "emphasis" write_line the title of room
+    styled "emphasis" write_line the title of room
     if not can_see room player block
         write_line "It is pitch dark. You cannot see a thing."
         return void
@@ -87,23 +87,23 @@ function void show_inventory_of Player player block
 end
 
 function void save_to string path Player player
-    if save_game path player with_style "success" write_line "The game is saved."
-    else with_style "warning" write_line "The game could not be saved."
+    if save_game path player styled "success" write_line "The game is saved."
+    else styled "warning" write_line "The game could not be saved."
 
 function Player restored string path block
     if not from files exists path block
-        with_style "warning" write_line "There is no saved game yet, so a new game begins."
+        styled "warning" write_line "There is no saved game yet, so a new game begins."
         return new_player
     end
     if_some Player saved load_game path block
         write_line fill "Your saved game is restored after {} moves." list_of int the moves of saved end
         return saved
     end
-    with_style "warning" write_line "The saved game is damaged, so a new game begins."
+    styled "warning" write_line "The saved game is damaged, so a new game begins."
     return new_player
 end
 
-with_style "emphasis" write_line "The Crown of Pyrop"
+styled "emphasis" write_line "The Crown of Pyrop"
 write_line "Find the lost crown and carry it out into the garden."
 
 def map string Opening openings map_of string Opening
@@ -121,7 +121,7 @@ def bool playing true
 while playing block
     describe player
     if and equal the place of player garden carries player crown block
-        with_style "success" write_line fill "You carry the crown out into the sunlight. You won in {} moves." list_of int the moves of player end
+        styled "success" write_line fill "You carry the crown out into the sunlight. You won in {} moves." list_of int the moves of player end
         break
     end
     def map string Action actions actions_for player

@@ -40,7 +40,9 @@ public static class Terminal
                 Errors.Profile.Out.Writer, ErrorsPlain, NewLineFor(Console.IsErrorRedirected), onScreen: !Console.IsErrorRedirected),
             sharedScreen: !Console.IsOutputRedirected && !Console.IsErrorRedirected,
             richConsole: Plain ? null : AnsiConsole.Console,
-            selectable: !Plain && !Console.IsInputRedirected && AnsiConsole.Profile.Capabilities.Interactive);
+            selectable: !Plain && !Console.IsInputRedirected && AnsiConsole.Profile.Capabilities.Interactive,
+            screen: ConsoleScreen.Instance,
+            keys: !Console.IsInputRedirected);
 
     public static void SeparateErrorsFrom(ConsoleProgramOutput output) => output.BeginErrorMessage();
 

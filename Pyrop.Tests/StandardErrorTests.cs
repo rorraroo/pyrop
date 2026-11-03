@@ -19,11 +19,11 @@ public class StandardErrorTests
     }
 
     [Fact]
-    public void WithStyleAppliesToWriteError()
+    public void StyledAppliesToWriteError()
     {
         Assert.Equal(
             ("<info>a</info>", "<danger>b\n</danger>"),
-            Run.Streams("with_style \"danger\" write_error_line \"b\"\nwith_style \"info\" write \"a\""));
+            Run.Streams("styled \"danger\" write_error_line \"b\"\nstyled \"info\" write \"a\""));
     }
 
     [Fact]

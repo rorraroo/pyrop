@@ -141,7 +141,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return Completion.Normal;
             case ExitStatement exit:
                 throw new ExitSignal(EvaluateExitCode(exit, scope));
-            case WithStyleStatement styled:
+            case StyledStatement styled:
                 return ExecuteWithStyle(styled, scope);
             case BlockStatement block:
                 return ExecuteBlock(block, new Scope(scope));
@@ -153,7 +153,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         }
     }
 
-    private Completion ExecuteWithStyle(WithStyleStatement styled, Scope scope)
+    private Completion ExecuteWithStyle(StyledStatement styled, Scope scope)
     {
         var name = Evaluate(styled.Style, scope).AsString();
         var outer = _style;
@@ -348,7 +348,8 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                     Evaluate(convert.Operand, scope),
                     convert.Target,
                     message => Runtime(message, convert.Position),
-                    NestingLimit);
+                    NestingLimit,
+                    collectionLimit: CollectionLimit);
             case MapOfExpression map:
                 return CollectionOperations.MapOf(
                     PyropTypes.MapOf(map.KeyType, map.ValueType),
@@ -477,7 +478,12 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 BuiltinCallExpression call => Overload(call).Implementation(new BuiltinInvocation(this, call, scope, failure)),
                 ConvertExpression convert when operand is not null =>
                     Conversions.Convert(
-                        operand, convert.Target, _ => new OperationFailed(failure), NestingLimit, message => Runtime(message, convert.Position)),
+                        operand,
+                        convert.Target,
+                        _ => new OperationFailed(failure),
+                        NestingLimit,
+                        message => Runtime(message, convert.Position),
+                        CollectionLimit),
                 var other => throw Internal($"'attempt' of the unexpected expression {other.GetType().Name}.", other.Position),
             };
         }

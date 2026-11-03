@@ -1,0 +1,11 @@
+INFO  09:00:01 Server started on port 8080
+INFO  09:00:02 Connected to the database
+INFO  09:02:15 GET /index.html 200
+WARN  09:03:40 Slow response from the database (1.8 s)
+INFO  09:05:00 GET /report 200
+ERROR 09:14:02 Disk quota exceeded on /var
+INFO  09:14:30 Cleanup job started
+ERROR 09:15:40 Upstream timed out after 30 s
+WARN  09:16:00 Retrying the upstream request
+ERROR 09:17:11 Worker 3 crashed
+INFO  09:17:12 Worker 3 restarted

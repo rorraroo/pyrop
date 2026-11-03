@@ -57,7 +57,7 @@ def list string words split "a,b,c" ","
 write_line join words " "
 if exists "notes.txt" for string line in load_lines "notes.txt" write_line line
 for string file in from files listing "." write_line file
-with_style "warning" write_error "careful: "
+styled "warning" write_error "careful: "
 write_error_line "usage: sample <file>"
 
 export record Point float x float y

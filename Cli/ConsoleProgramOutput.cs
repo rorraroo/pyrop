@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Pyrop.Runtime;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -12,21 +14,45 @@ public sealed class ConsoleProgramOutput(
     ConsoleStream? errors = null,
     bool sharedScreen = false,
     IAnsiConsole? richConsole = null,
-    bool selectable = false) : IProgramOutput
+    bool selectable = false,
+    ITerminalScreen? screen = null,
+    bool keys = false) : IProgramOutput
 {
     private const string MoreEntries = "(Move up and down to see more entries)";
+    private const string EnterAlternateScreen = "\e[?1049h\e[?25l\e[2J";
+    private const string LeaveAlternateScreen = "\e[?25h\e[?1049l";
+    private const int KeyPollMilliseconds = 15;
 
     private readonly ConsoleStream _output = new(writer, plain, newLine);
     private readonly ConsoleStream _errors = errors ?? ConsoleStream.Null;
     private ConsoleStream? _lastWritten;
+    private bool _onScreen;
+    private (ViewNode View, OutputStyle Style)? _shown;
+    private string[]? _frame;
+    private (int Width, int Height) _frameSize;
+    private ConsoleCancelEventHandler? _restoreOnCancel;
+
+    public bool OnAlternateScreen => _onScreen;
 
     public bool AtLineStart => _output.AtLineStart;
 
     public bool ErrorsAtLineStart => _errors.AtLineStart;
 
-    public void Write(string text, OutputStyle style) => WriteTo(_output, _errors, text, style);
+    public void Write(string text, OutputStyle style)
+    {
+        LeaveScreen();
+        WriteTo(_output, _errors, text, style);
+    }
 
-    public void WriteError(string text, OutputStyle style) => WriteTo(_errors, _output, text, style);
+    public void WriteError(string text, OutputStyle style)
+    {
+        if (_errors.OnScreen)
+        {
+            LeaveScreen();
+        }
+
+        WriteTo(_errors, _output, text, style);
+    }
 
     public void WritePrompt(string prompt, string? hint, OutputStyle style)
     {
@@ -60,6 +86,7 @@ public sealed class ConsoleProgramOutput(
             return null;
         }
 
+        LeaveScreen();
         var question = prompt.TrimEnd();
         var selection = new SelectionPrompt<int>()
             .Title($"{Marked("?", OutputStyle.Info)} {Marked(question, style)}")
@@ -106,6 +133,7 @@ public sealed class ConsoleProgramOutput(
             return false;
         }
 
+        LeaveScreen();
         var table = new Table().BorderStyle(cellStyle);
         foreach (var header in headerCells)
         {
@@ -129,6 +157,157 @@ public sealed class ConsoleProgramOutput(
         return true;
     }
 
+    public bool TryShow(ViewNode view, OutputStyle style)
+    {
+        if (plain || richConsole is null || screen is null)
+        {
+            return false;
+        }
+
+        if (!_onScreen)
+        {
+            writer.Write(EnterAlternateScreen);
+            _onScreen = true;
+            _frame = null;
+            _restoreOnCancel = (_, _) => RestoreScreen();
+            Console.CancelKeyPress += _restoreOnCancel;
+        }
+
+        _shown = (view, style);
+        Draw(screen);
+        return true;
+    }
+
+    public bool TryWriteView(ViewNode view, OutputStyle style)
+    {
+        if (plain || richConsole is null)
+        {
+            return false;
+        }
+
+        LeaveScreen();
+        EnsureLineStart();
+        foreach (var line in ViewLayout.Page(view, style, richConsole.Profile.Width))
+        {
+            writer.Write(line.ToAnsi() + newLine);
+        }
+
+        writer.Flush();
+        _output.AtLineStart = true;
+        _lastWritten = _output;
+        if (sharedScreen)
+        {
+            _errors.AtLineStart = true;
+        }
+
+        return true;
+    }
+
+    public bool TryReadKey(int? milliseconds, out string? key)
+    {
+        key = null;
+        if (!keys || screen is null)
+        {
+            return false;
+        }
+
+        var watch = Stopwatch.StartNew();
+        while (true)
+        {
+            while (screen.KeyAvailable)
+            {
+                var name = KeyNames.Of(screen.ReadKey());
+                if (name is [var high] && char.IsHighSurrogate(high) && screen.KeyAvailable)
+                {
+                    name += screen.ReadKey().KeyChar;
+                }
+
+                if (name is not null)
+                {
+                    key = name;
+                    return true;
+                }
+            }
+
+            if (_onScreen && screen.Size != _frameSize)
+            {
+                Draw(screen);
+            }
+
+            var elapsed = watch.ElapsedMilliseconds;
+            if (milliseconds is { } limit && elapsed >= limit)
+            {
+                return true;
+            }
+
+            screen.Wait(milliseconds is { } wait ? (int)Math.Min(KeyPollMilliseconds, wait - elapsed) : KeyPollMilliseconds);
+        }
+    }
+
+    public void BeforeLineRead()
+    {
+        if (keys)
+        {
+            LeaveScreen();
+        }
+    }
+
+    public void LeaveScreen()
+    {
+        if (!_onScreen)
+        {
+            return;
+        }
+
+        RestoreScreen();
+        _onScreen = false;
+        _shown = null;
+        _frame = null;
+        if (_restoreOnCancel is not null)
+        {
+            Console.CancelKeyPress -= _restoreOnCancel;
+            _restoreOnCancel = null;
+        }
+    }
+
+    private void RestoreScreen()
+    {
+        writer.Write(LeaveAlternateScreen);
+        writer.Flush();
+    }
+
+    private void Draw(ITerminalScreen terminal)
+    {
+        if (_shown is not { } shown)
+        {
+            return;
+        }
+
+        var size = terminal.Size;
+        var builder = new StringBuilder();
+        if (_frame is not null && size != _frameSize)
+        {
+            builder.Append("\e[2J");
+            _frame = null;
+        }
+
+        var lines = ViewLayout.Screen(shown.View, shown.Style, size.Width, size.Height);
+        var frame = new string[Math.Max(size.Height, 0)];
+        for (var row = 0; row < frame.Length; row++)
+        {
+            frame[row] = row < lines.Count ? lines[row].ToAnsi() : "";
+            if (_frame is null || _frame[row] != frame[row])
+            {
+                builder.Append("\e[").Append(row + 1).Append(";1H").Append(frame[row]).Append("\e[K");
+            }
+        }
+
+        writer.Write(builder.ToString());
+        writer.Flush();
+        _frame = frame;
+        _frameSize = size;
+    }
+
     public void EnsureLineStart()
     {
         if (!AtLineStart)
@@ -139,6 +318,7 @@ public sealed class ConsoleProgramOutput(
 
     public void BeginErrorMessage()
     {
+        LeaveScreen();
         var unfinished = sharedScreen ? _lastWritten : _errors;
         if (unfinished is { AtLineStart: false })
         {

@@ -129,7 +129,7 @@ public static class Builtins
             Overload([PyropTypes.ListOf(S), PyropTypes.ListOf(PyropTypes.ListOf(S))], V, c => TerminalOperations.WriteTable(
                 c, c.Argument(0).AsList(), c.Argument(1).AsList()))),
         Operation("input_ended",
-            Overload([], B, c => BoolValue.Of(c.Input.HasEnded()))),
+            Overload([], B, c => BoolValue.Of(InputEnded(c)))),
         Operation("length_of",
             Overload([S], I, c => new IntValue(TextOperations.LengthOf(c.Argument(0).AsString()))),
             Overload([ListT], I, c => new IntValue(c.Argument(0).AsList().Count)),
@@ -246,9 +246,20 @@ public static class Builtins
 
     private static string ReadLine(IBuiltinInvocation invocation, string endOfInputMessage)
     {
+        invocation.Output.BeforeLineRead();
         var line = invocation.Input.ReadLine() ?? throw invocation.Fail(endOfInputMessage);
         invocation.Output.LineRead();
         return line;
+    }
+
+    private static bool InputEnded(IBuiltinInvocation invocation)
+    {
+        if (!invocation.Input.HasPendingLine)
+        {
+            invocation.Output.BeforeLineRead();
+        }
+
+        return invocation.Input.HasEnded();
     }
 
     private static string Ask(IBuiltinInvocation invocation, string prompt)

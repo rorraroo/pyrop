@@ -25,9 +25,32 @@ public static class TerminalOperations
 
     public static Value? WriteTable(IBuiltinInvocation invocation, ListValue headers, ListValue rows)
     {
+        var (headerTexts, rowTexts, lines, lengths, widths) = CheckedTable(invocation, headers, rows, asView: false);
+        if (!invocation.Output.TryWriteTable(headerTexts, rowTexts, invocation.Style))
+        {
+            invocation.Output.EnsureLineStart();
+            for (var index = 0; index < lines.Count; index++)
+            {
+                invocation.Output.Write(PlainLine(lines[index], lengths[index], widths), invocation.Style);
+            }
+        }
+
+        return null;
+    }
+
+    public static (IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows, IReadOnlyList<string> PlainLines) TableParts(
+        IBuiltinInvocation invocation, ListValue headers, ListValue rows, bool asView)
+    {
+        var (headerTexts, rowTexts, lines, lengths, widths) = CheckedTable(invocation, headers, rows, asView);
+        return (headerTexts, rowTexts, lines.Select((line, index) => PlainLine(line, lengths[index], widths)).ToList());
+    }
+
+    private static (List<string> Headers, List<IReadOnlyList<string>> Rows, List<IReadOnlyList<string>> Lines, List<long[]> Lengths, long[] Widths) CheckedTable(
+        IBuiltinInvocation invocation, ListValue headers, ListValue rows, bool asView)
+    {
         if (headers.Count == 0)
         {
-            throw invocation.Fail("'write_table' needs at least one header.");
+            throw invocation.Fail(asView ? "A table needs at least one header." : "'write_table' needs at least one header.");
         }
 
         var headerTexts = Texts(headers);
@@ -38,7 +61,7 @@ public static class TerminalOperations
             if (cells.Count != headers.Count)
             {
                 throw invocation.Fail(
-                    $"Row {rowTexts.Count} of the table has {Counted(cells.Count, "cell")}, but the table has {Counted(headers.Count, "header")}; rows are numbered from 0.");
+                    $"Row {rowTexts.Count} of {(asView ? "a" : "the")} table has {Counted(cells.Count, "cell")}, but the table has {Counted(headers.Count, "header")}; rows are numbered from 0.");
             }
 
             rowTexts.Add(Texts(cells));
@@ -50,19 +73,10 @@ public static class TerminalOperations
         var widths = Enumerable.Range(0, headers.Count).Select(column => lengths.Max(line => line[column])).ToArray();
         if (lines.Select((line, index) => PlainLength(line, lengths[index], widths)).Any(length => length > TextOperations.MaxLength))
         {
-            throw invocation.Fail("The table of 'write_table' would exceed the largest allowed text size.");
+            throw invocation.Fail(asView ? "A table would exceed the largest allowed text size." : "The table of 'write_table' would exceed the largest allowed text size.");
         }
 
-        if (!invocation.Output.TryWriteTable(headerTexts, rowTexts, invocation.Style))
-        {
-            invocation.Output.EnsureLineStart();
-            for (var index = 0; index < lines.Count; index++)
-            {
-                invocation.Output.Write(PlainLine(lines[index], lengths[index], widths), invocation.Style);
-            }
-        }
-
-        return null;
+        return (headerTexts, rowTexts, lines, lengths, widths);
     }
 
     private static string ChooseByNumber(IBuiltinInvocation invocation, string prompt, IReadOnlyList<string> entries)

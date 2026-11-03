@@ -1,0 +1,162 @@
+use dungeon "dungeon.prp"
+use random library
+use math library
+import from dungeon Item Treasure Monster Loot Level make_level tile_at is_wall monster_at loot_at item_name item_description end
+import from random roll end
+import from math abs end
+
+export record Hero int x int y int health int max_health int attack int gold int depth list Item items
+export record Game Hero hero Level level list string log
+
+export function Game new_game int bonus block
+    def Hero hero Hero 1 1 add 10 bonus add 10 bonus 2 0 1 list_of Item draught end
+    def Game game Game hero make_level 1 list_of string "You enter the crypt. Find the stairs down." end
+    if greater bonus 0 set game said game fill "Your banked gold buys you {} extra health." list_of int bonus end
+    return game
+end
+
+export function bool run_over Hero hero
+    return or at_most the health of hero 0 greater the depth of hero 3
+
+export function Game take_turn Game game string key
+    if equal key "up" return step game 0 -1
+    else if equal key "down" return step game 0 1
+    else if equal key "left" return step game -1 0
+    else if equal key "right" return step game 1 0
+    else if equal key "space" return monsters_act said game "You wait."
+    else return game
+
+export function Game use_item Game game int position block
+    def Hero hero the hero of game
+    if or less position 0 at_least position length_of the items of hero return game
+    def Item kind get the items of hero position
+    set hero copy hero with items remove the items of hero position
+    match kind
+        when draught block
+            set hero copy hero with health smaller the max_health of hero add the health of hero 8
+            return said copy game with hero hero "You drink the draught and feel better."
+        end
+        when blade block
+            set hero copy hero with attack add the attack of hero 1
+            return said copy game with hero hero "You fit the sharp blade. Your blows land harder."
+        end
+    end
+end
+
+export function list string pack_names Hero hero block
+    def list string names list_of string end
+    for Item kind in the items of hero set names push names item_name kind
+    return names
+end
+
+export function string pack_detail Hero hero int position
+    if and at_least position 0 less position length_of the items of hero
+        return item_description get the items of hero position
+    else return "Your pack is empty."
+
+function Game said Game game string message
+    return copy game with log push the log of game message
+
+function Game step Game game int dx int dy block
+    def Hero hero the hero of game
+    def int x add the x of hero dx
+    def int y add the y of hero dy
+    if is_wall the level of game x y return said game "A wall blocks the way."
+    if_some int target monster_at the level of game x y return monsters_act strike game target
+    return monsters_act arrive game x y
+end
+
+function Game strike Game game int index block
+    def Level level the level of game
+    def Monster monster get the monsters of level index
+    def int damage roll 1 the attack of the hero of game
+    def int left subtract the health of monster damage
+    if greater left 0 block
+        def Level hurt copy level with monsters put the monsters of level index copy monster with health left
+        return said copy game with level hurt fill "You hit the {} for {}." list_of string the name of monster convert string damage end
+    end
+    def Level cleared copy level with monsters remove the monsters of level index
+    return said copy game with level cleared fill "You slay the {}." list_of string the name of monster end
+end
+
+function Game arrive Game game int x int y block
+    def Hero hero the hero of game
+    set hero copy hero with x x
+    set hero copy hero with y y
+    def Game moved copy game with hero hero
+    if_some int found loot_at the level of game x y set moved pick_up moved found
+    if equal tile_at the level of game x y ">" return descend moved
+    return moved
+end
+
+function Game pick_up Game game int index block
+    def Level level the level of game
+    def Loot found get the loot of level index
+    def Game taken copy game with level copy level with loot remove the loot of level index
+    def Hero hero the hero of taken
+    match the treasure of found
+        when coins amount block
+            set hero copy hero with gold add the gold of hero amount
+            return said copy taken with hero hero fill "You pick up {} gold." list_of int amount end
+        end
+        when supply kind block
+            set hero copy hero with items push the items of hero kind
+            return said copy taken with hero hero fill "You pick up a {}." list_of string item_name kind end
+        end
+    end
+end
+
+function Game descend Game game block
+    def Hero hero the hero of game
+    def int depth add the depth of hero 1
+    set hero copy hero with depth depth
+    if greater depth 3 return said copy game with hero hero "You find the crypt's back door and escape!"
+    set hero copy hero with x 1
+    set hero copy hero with y 1
+    def Game deeper copy game with hero hero
+    return said copy deeper with level make_level depth fill "You climb down to depth {}." list_of int depth end
+end
+
+function Game monsters_act Game game block
+    def Game acted game
+    def int index 0
+    while less index length_of the monsters of the level of acted block
+        if greater the health of the hero of acted 0 set acted monster_acts acted index
+        set index add index 1
+    end
+    return acted
+end
+
+function Game monster_acts Game game int index block
+    def Hero hero the hero of game
+    def Level level the level of game
+    def Monster monster get the monsters of level index
+    def int dx subtract the x of hero the x of monster
+    def int dy subtract the y of hero the y of monster
+    def int distance add abs dx abs dy
+    if equal distance 1 return hit game monster
+    if greater distance 6 return game
+    def int x the x of monster
+    def int y the y of monster
+    if at_least abs dx abs dy set x add x sign dx
+    else set y add y sign dy
+    if is_wall level x y return game
+    if_some int other monster_at level x y return game
+    set monster copy monster with x x
+    set monster copy monster with y y
+    return copy game with level copy level with monsters put the monsters of level index monster
+end
+
+function Game hit Game game Monster monster block
+    def int damage roll 1 the strength of monster
+    def Hero hero the hero of game
+    set hero copy hero with health subtract the health of hero damage
+    def Game hurt copy game with hero hero
+    if at_most the health of hero 0 return said hurt fill "The {} kills you." list_of string the name of monster end
+    return said hurt fill "The {} hits you for {}." list_of string the name of monster convert string damage end
+end
+
+function int sign int n
+    if greater n 0 return 1
+    else if less n 0 return -1
+    else return 0

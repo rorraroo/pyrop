@@ -35,8 +35,8 @@ public static class TreePrinter
                 case ForStatement loop:
                     WriteHeaded(depth, $"{Keywords.For} {TypeText(loop.VariableType)} {loop.Variable} {Keywords.In} {Operand(loop.List)}", loop.Body);
                     break;
-                case WithStyleStatement styled:
-                    WriteHeaded(depth, $"{Keywords.WithStyle} {Operand(styled.Style)}", styled.Body);
+                case StyledStatement styled:
+                    WriteHeaded(depth, $"{Keywords.Styled} {Operand(styled.Style)}", styled.Body);
                     break;
                 case FunctionStatement function:
                     WriteHeaded(depth, Header(function.Signature), function.Body);

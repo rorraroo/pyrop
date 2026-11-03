@@ -1,62 +1,28 @@
 use items "items.prp"
-use world "world.prp"
 use state "state.prp"
 use files library
 import from items ItemKind end
-import from world Place end
 import from state Player end
 import from files save load_lines end
 
-def string header "pyrop adventure save 1"
+def string header "pyrop adventure save 2"
 
-export function bool save_game string path Player player block
-    def list string lines list_of string
-        header
-        add "place " convert string the place of player
-        add "moves " convert string the moves of player
-    end
-    for ItemKind item in the inventory of player
-        set lines push lines add "carrying " convert string item
-    return attempt save path add join lines "\n" "\n"
-end
+export function bool save_game string path Player player
+    return attempt save path fill "{}\n{}\n" list_of string header convert string player end
 
 export function option Player load_game string path block
     if_some list string lines attempt load_lines path block
-        if equal length_of lines 0 return none Player
+        if not equal length_of lines 2 return none Player
         if not equal get lines 0 header return none Player
-        def option Place place none Place
-        def option int moves none int
-        def list ItemKind inventory list_of ItemKind end
-        for string line in remove lines 0 block
-            def list string parts split line " "
-            if not equal length_of parts 2 return none Player
-            def string label get parts 0
-            def string value get parts 1
-            if equal label "place" block
-                if not equal place none Place return none Player
-                if_some Place found attempt convert Place value set place some found
-                else return none Player
+        if_some Player player attempt convert Player get lines 1 block
+            if or less the moves of player 0 greater the moves of player 1000000 return none Player
+            def list ItemKind seen list_of ItemKind end
+            for ItemKind item in the inventory of player block
+                if has seen item return none Player
+                set seen push seen item
             end
-            else if equal label "moves" block
-                if not equal moves none int return none Player
-                if_some int count attempt convert int value block
-                    if or less count 0 greater count 1000000 return none Player
-                    set moves some count
-                end
-                else return none Player
-            end
-            else if equal label "carrying" block
-                if_some ItemKind item attempt convert ItemKind value block
-                    if has inventory item return none Player
-                    set inventory push inventory item
-                end
-                else return none Player
-            end
-            else return none Player
+            return some player
         end
-        if_some Place found place
-            if_some int count moves
-                return some Player found count inventory
     end
     return none Player
 end

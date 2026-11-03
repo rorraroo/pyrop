@@ -69,7 +69,7 @@ public sealed class CliTests : IDisposable
     [Fact]
     public void RedirectedOutputIsPlain()
     {
-        var (output, _, exitCode) = Pyrop(Script("with_style \"danger\" write_line \"x\"\nwrite_line confirm \"ok\""));
+        var (output, _, exitCode) = Pyrop(Script("styled \"danger\" write_line \"x\"\nwrite_line confirm \"ok\""));
 
         Assert.Equal("x\nok [y/n] ", output);
         Assert.Equal(1, exitCode);
@@ -162,7 +162,7 @@ public sealed class CliTests : IDisposable
     [Fact]
     public void ProgramErrorTextGoesToStandardErrorWithoutStyles()
     {
-        var (output, errors, exitCode) = Pyrop(Script("write_line \"report\"\nwith_style \"danger\" write_error_line \"careful\"\nwrite_error \"x\""));
+        var (output, errors, exitCode) = Pyrop(Script("write_line \"report\"\nstyled \"danger\" write_error_line \"careful\"\nwrite_error \"x\""));
 
         Assert.Equal("report\n", output);
         Assert.Equal("careful\nx", errors);
@@ -190,7 +190,7 @@ public sealed class CliTests : IDisposable
     [Fact]
     public void RedirectedErrorsAreNotWrapped()
     {
-        var (_, errors, _) = Pyrop(Script("with_style add 1 \"a\" write \"x\""));
+        var (_, errors, _) = Pyrop(Script("styled add 1 \"a\" write \"x\""));
 
         Assert.Contains("It accepts: int int, float float, string string.", errors.Split('\n')[0]);
     }
@@ -199,7 +199,7 @@ public sealed class CliTests : IDisposable
     public void ChooseWithPipedInputUsesTheNumberedForm()
     {
         var (output, errors, exitCode) = PyropWithInput(
-            "x\n2\n", Script("with_style \"info\" write_line choose \"Where?\" list_of string \"Hall\" \"Cellar\" end"));
+            "x\n2\n", Script("styled \"info\" write_line choose \"Where?\" list_of string \"Hall\" \"Cellar\" end"));
 
         Assert.Equal("", errors);
         Assert.Equal("Where?\n1. Hall\n2. Cellar\nChoose a number from 1 to 2: Please choose a number from 1 to 2.\nChoose a number from 1 to 2: Cellar\n", output);
@@ -221,7 +221,7 @@ public sealed class CliTests : IDisposable
     public void RedirectedWriteTablePadsColumns()
     {
         var (output, errors, exitCode) = Pyrop(
-            Script("with_style \"danger\" write_table list_of string \"Item\" \"Count\" end list_of list string list_of string \"lamp\" \"12\" end end"));
+            Script("styled \"danger\" write_table list_of string \"Item\" \"Count\" end list_of list string list_of string \"lamp\" \"12\" end end"));
 
         Assert.Equal("", errors);
         Assert.Equal("Item  Count\nlamp  12\n", output);

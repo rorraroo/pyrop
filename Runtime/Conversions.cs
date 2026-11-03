@@ -11,7 +11,7 @@ public static class Conversions
             return false;
         }
 
-        if (from == to || to == PyropType.String || (from == PyropType.String && to is ChoiceType { HasData: false }))
+        if (from == to || to == PyropType.String || (from == PyropType.String && to is RecordType or ChoiceType))
         {
             return true;
         }
@@ -27,7 +27,12 @@ public static class Conversions
     }
 
     public static Value Convert(
-        Value value, PyropType target, Func<string, Exception> fail, int nestingLimit = ValueEquality.MaxNesting, Func<string, Exception>? tooDeep = null)
+        Value value,
+        PyropType target,
+        Func<string, Exception> fail,
+        int nestingLimit = ValueEquality.MaxNesting,
+        Func<string, Exception>? tooDeep = null,
+        int collectionLimit = int.MaxValue)
     {
         if (value.Type == target)
         {
@@ -42,6 +47,8 @@ public static class Conversions
             StringValue text when target == PyropType.Int => StringToInt(text.Value, fail),
             StringValue text when target == PyropType.Float => StringToFloat(text.Value, fail),
             StringValue text when target == PyropType.Bool => StringToBool(text.Value, fail),
+            StringValue text when target is RecordType or ChoiceType { HasData: true } =>
+                TextFormReader.Read(text.Value, (DeclaredType)target, fail, tooDeep ?? fail, nestingLimit, collectionLimit),
             StringValue text when target is ChoiceType choice => StringToChoice(text.Value, choice, fail),
             _ => throw new InvalidOperationException(
                 $"Conversion from {value.Type.Name} to {target.Name} should have been rejected by the type checker."),

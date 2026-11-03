@@ -6,16 +6,16 @@ namespace Pyrop.Tests;
 public class TerminalTests
 {
     [Fact]
-    public void WithStyleAppliesAStyleToItsStatement()
+    public void StyledAppliesAStyleToItsStatement()
     {
-        Assert.Equal("<warning>Low disk</warning>\n", Run.Program("with_style \"warning\" write \"Low disk\"\nwrite \"\\n\""));
+        Assert.Equal("<warning>Low disk</warning>\n", Run.Program("styled \"warning\" write \"Low disk\"\nwrite \"\\n\""));
     }
 
     [Fact]
     public void TheInnermostStyleWinsAndTheOuterOneResumes()
     {
         const string source =
-            "with_style \"warning\" block\n    write \"a\"\n    with_style \"emphasis\" write \"b\"\n    write \"c\"\nend\nwrite \"d\"";
+            "styled \"warning\" block\n    write \"a\"\n    styled \"emphasis\" write \"b\"\n    write \"c\"\nend\nwrite \"d\"";
 
         Assert.Equal("<warning>a</warning><emphasis>b</emphasis><warning>c</warning>d", Run.Program(source));
     }
@@ -23,13 +23,13 @@ public class TerminalTests
     [Fact]
     public void AcceptsAComputedStyleName()
     {
-        Assert.Equal("<success>ok</success>", Run.Program("def string mood \"success\"\nwith_style mood write \"ok\""));
+        Assert.Equal("<success>ok</success>", Run.Program("def string mood \"success\"\nstyled mood write \"ok\""));
     }
 
     [Fact]
     public void RejectsAnUnknownStyleLiteralBeforeRunning()
     {
-        var error = Run.Failure("write \"before\"\nwith_style \"loud\" write \"x\"");
+        var error = Run.Failure("write \"before\"\nstyled \"loud\" write \"x\"");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
         Assert.Equal("Unknown style \"loud\"; the styles are emphasis, muted, success, warning, danger, info.", error.Message);
@@ -38,7 +38,7 @@ public class TerminalTests
     [Fact]
     public void RejectsAnUnknownComputedStyleWhileRunning()
     {
-        var error = Run.Failure("def string mood \"Loud\"\nwith_style mood write \"x\"");
+        var error = Run.Failure("def string mood \"Loud\"\nstyled mood write \"x\"");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal("Unknown style \"Loud\"; the styles are emphasis, muted, success, warning, danger, info.", error.Message);
@@ -47,33 +47,33 @@ public class TerminalTests
     [Fact]
     public void RejectsAStyleThatIsNotAString()
     {
-        var error = Run.Failure("with_style 1 write \"x\"");
+        var error = Run.Failure("styled 1 write \"x\"");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
-        Assert.Equal("The style of 'with_style' must be string, found int.", error.Message);
+        Assert.Equal("The style of 'styled' must be string, found int.", error.Message);
     }
 
     [Fact]
     public void RejectsADefAsTheBody()
     {
-        var error = Run.Failure("with_style \"info\" def int x 1");
+        var error = Run.Failure("styled \"info\" def int x 1");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
-        Assert.Equal("A def cannot be the body of a with_style; wrap it in block … end.", error.Message);
+        Assert.Equal("A def cannot be the body of a styled; wrap it in block … end.", error.Message);
     }
 
     [Fact]
     public void ReservesWithStyle()
     {
-        Assert.Equal(ErrorStage.Parse, Run.Failure("def string with_style \"x\"").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure("def string styled \"x\"").Stage);
     }
 
     [Fact]
     public void ControlFlowPassesThroughWithStyle()
     {
         const string source =
-            "function int sign int x with_style \"muted\" if greater x 0 return 1 else return -1\n" +
-            "while true with_style \"info\" break\n" +
+            "function int sign int x styled \"muted\" if greater x 0 return 1 else return -1\n" +
+            "while true styled \"info\" break\n" +
             "write_line sign 5";
 
         Assert.Equal("1\n", Run.Program(source));
@@ -83,8 +83,8 @@ public class TerminalTests
     public void TheStyleEndsWhenControlLeavesItsStatement()
     {
         const string source =
-            "function int one with_style \"warning\" return 1\n" +
-            "while true with_style \"info\" break\n" +
+            "function int one styled \"warning\" return 1\n" +
+            "while true styled \"info\" break\n" +
             "write_line one";
 
         Assert.Equal("1\n", Run.Program(source));
@@ -111,7 +111,7 @@ public class TerminalTests
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
 
-        Assert.Throws<PyropException>(() => session.Run("with_style \"danger\" write_line divide 1 0"));
+        Assert.Throws<PyropException>(() => session.Run("styled \"danger\" write_line divide 1 0"));
         session.Run("write \"plain\"");
 
         Assert.Equal("plain", output.ToString());
@@ -122,7 +122,7 @@ public class TerminalTests
     {
         var session = new PyropSession(new StringReader(""), new StringOutput());
 
-        Assert.Equal(InputStatus.AwaitingElse, session.Probe("with_style \"info\" if true write \"x\""));
+        Assert.Equal(InputStatus.AwaitingElse, session.Probe("styled \"info\" if true write \"x\""));
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class TerminalTests
     {
         Assert.Equal(
             "<info>Name: </info>Ann\n",
-            Run.Program("def string name \"\"\nwith_style \"info\" set name ask \"Name: \"\nwrite_line name", "Ann\n"));
+            Run.Program("def string name \"\"\nstyled \"info\" set name ask \"Name: \"\nwrite_line name", "Ann\n"));
     }
 
     [Fact]
@@ -220,5 +220,22 @@ public class TerminalTests
         output.Write("done\n", OutputStyle.Danger);
 
         Assert.Equal("Go? [y/n] done\n", writer.ToString());
+    }
+
+    [Theory]
+    [InlineData("with_style \"warning\" write_line 1")]
+    [InlineData("write_line with_style")]
+    public void WithStyleIsRetiredInFavourOfStyled(string source)
+    {
+        var error = Run.Failure(source);
+
+        Assert.Equal(ErrorStage.Parse, error.Stage);
+        Assert.Equal("'with_style' is no longer part of Pyrop; it is now called styled, as in styled \"warning\" write_line \"Careful\".", error.Message);
+    }
+
+    [Fact]
+    public void StyledIsAReservedWord()
+    {
+        Assert.Contains("reserved word", Run.Failure("def int styled 1").Message);
     }
 }

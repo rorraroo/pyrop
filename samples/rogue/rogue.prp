@@ -1,0 +1,119 @@
+use dungeon "dungeon.prp"
+use rules "rules.prp"
+use progress "progress.prp"
+use terminal library
+use program library
+use random library
+import from terminal View show write_view read_key end
+import from dungeon map_lines end
+import from rules Hero Game new_game run_over take_turn use_item pack_names pack_detail end
+import from progress Progress load_progress save_progress after_run health_bonus end
+
+choice Mode exploring inventory end
+
+def list string arguments from program arguments
+def int run_seed 7
+def string progress_path "rogue.progress"
+if greater length_of arguments 0 set run_seed seed_from get arguments 0
+if greater length_of arguments 1 set progress_path get arguments 1
+from random seed run_seed
+
+function int seed_from string given_text block
+    if_some int given attempt convert int given_text return given
+    write_error_line "usage: rogue [seed] [progress file]"
+    exit 2
+end
+
+function list string last_of list string items int count block
+    def list string tail list_of string end
+    def int index larger 0 subtract length_of items count
+    while less index length_of items block
+        set tail push tail get items index
+        set index add index 1
+    end
+    return tail
+end
+
+function View status Hero hero block
+    def list View parts list_of View
+        bar "Health" the health of hero the max_health of hero
+        text fill "Depth {}   Gold {}   Attack {}" list_of int the depth of hero the gold of hero the attack of hero end
+    end
+    if at_most multiply the health of hero 3 the max_health of hero
+        set parts push parts in_style "danger" text "You are badly hurt."
+    return panel "Hero" rows parts
+end
+
+function View exploring_screen Game game block
+    def Hero hero the hero of game
+    def list string lines map_lines the level of game the x of hero the y of hero
+    return columns list_of View
+        panel "The crypt" grid lines the x of hero the y of hero
+        rows list_of View
+            status hero
+            panel "Log" text join last_of the log of game 4 "\n"
+            in_style "muted" text "arrows move   space wait   i inventory   q quit"
+        end
+    end
+end
+
+function View inventory_screen Hero hero int position
+    return columns list_of View
+        panel "Inventory" menu pack_names hero position
+        rows list_of View
+            panel "Item" text pack_detail hero position
+            in_style "muted" text "up/down choose   enter use   escape back"
+        end
+    end
+
+function int moved_cursor int cursor string key int count block
+    if equal key "down" set cursor add cursor 1
+    else if equal key "up" set cursor subtract cursor 1
+    return larger 0 smaller cursor subtract count 1
+end
+
+function void finish Game game Progress before block
+    def Hero hero the hero of game
+    def Progress after after_run before the depth of hero the gold of hero
+    def string ending "You leave the crypt with what you found."
+    if at_most the health of hero 0 set ending fill "You died on depth {}." list_of int the depth of hero end
+    else if greater the depth of hero 3 set ending "You escaped from the crypt!"
+    write_view panel "The run is over" rows list_of View
+        text join last_of the log of game 2 "\n"
+        text ending
+        text fill "Gold this run {}   Gold banked {}" list_of int the gold of hero the gold_banked of after end
+        text fill "Runs {}   Escapes {}   Deepest {}" list_of int the runs of after the escapes of after the best_depth of after end
+    end
+    if not save_progress progress_path after write_error_line add "Could not save the progress to " progress_path
+end
+
+def Progress before load_progress progress_path
+def Game game new_game health_bonus before
+def Mode mode exploring
+def int cursor 0
+
+while not run_over the hero of game block
+    match mode
+        when exploring show exploring_screen game
+        when inventory show inventory_screen the hero of game cursor
+    end
+    def string key read_key
+    def int pack length_of the items of the hero of game
+    match mode
+        when exploring
+            if equal key "q" break
+            else if equal key "i" block
+                set mode inventory
+                set cursor 0
+            end
+            else set game take_turn game key
+        when inventory
+            if equal key "escape" set mode exploring
+            else if equal key "enter" block
+                set game use_item game cursor
+                set cursor moved_cursor cursor "" subtract pack 1
+            end
+            else set cursor moved_cursor cursor key pack
+    end
+end
+finish game before

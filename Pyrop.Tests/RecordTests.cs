@@ -255,7 +255,6 @@ public class RecordTests
     [InlineData("def Point p Point 1.0 2.0\nset p copy p with x \"far\"", 3, 21, "Cannot set float field 'x' to a value of type string.")]
     [InlineData("def Point p Point 1.0 2.0\ndef float x p", 3, 13, "Cannot initialize float variable 'x' with a value of type Point.")]
     [InlineData("def Point p Point 1.0 2.0\ndef int n convert int p", 3, 11, "Cannot convert Point to int.")]
-    [InlineData("def Point p convert Point \"x 1.0 y 2.0\"", 2, 13, "Cannot convert string to Point.")]
     [InlineData("record Size float x float y\nwrite_line equal Point 1.0 2.0 Size 1.0 2.0", 3, 12, "'equal' cannot take Point Size. It accepts: T T (T stands for any type, the same wherever it appears).")]
     public void ChecksRecordTypes(string source, int line, int column, string message)
     {

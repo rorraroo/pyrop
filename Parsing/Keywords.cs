@@ -25,7 +25,7 @@ public static class Keywords
     public const string ListOf = "list_of";
     public const string MapOf = "map_of";
     public const string Exit = "exit";
-    public const string WithStyle = "with_style";
+    public const string Styled = "styled";
     public const string Use = "use";
     public const string Import = "import";
     public const string Export = "export";
@@ -59,12 +59,13 @@ public static class Keywords
         ["negate"] = "write subtract 0 <number>, or subtract 0.0 <number> for a float",
         ["get_field"] = "write the <field> of <record>",
         ["with_field"] = "write copy <record> with <field> <value>",
+        ["with_style"] = "it is now called styled, as in styled \"warning\" write_line \"Careful\"",
     };
 
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Library, Record, Choice,
+        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, Styled, Use, Import, Export, From, Library, Record, Choice,
         The, Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
@@ -74,7 +75,7 @@ public static class Keywords
     private static readonly HashSet<string> Statements =
     [
         Def, Set, If, Else, While, For, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Exit, WithStyle, Use, Import, Export, Record, Choice, IfSome, Match, When,
+        WriteError, WriteErrorLine, Exit, Styled, Use, Import, Export, Record, Choice, IfSome, Match, When,
     ];
 
     public static bool IsReserved(string word) => Reserved.Contains(word);

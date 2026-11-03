@@ -15,4 +15,18 @@ public interface IProgramOutput
     int? TryChoose(string prompt, IReadOnlyList<string> entries, OutputStyle style);
 
     bool TryWriteTable(IReadOnlyList<string> headers, IReadOnlyList<IReadOnlyList<string>> rows, OutputStyle style);
+
+    void BeforeLineRead()
+    {
+    }
+
+    bool TryShow(ViewNode view, OutputStyle style) => false;
+
+    bool TryWriteView(ViewNode view, OutputStyle style) => false;
+
+    bool TryReadKey(int? milliseconds, out string? key)
+    {
+        key = null;
+        return false;
+    }
 }

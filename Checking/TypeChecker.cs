@@ -124,7 +124,7 @@ public sealed class TypeChecker
                 }
 
                 break;
-            case WithStyleStatement styled:
+            case StyledStatement styled:
                 CheckStyle(styled.Style, scope);
                 CheckStatement(styled.Body, scope);
                 break;
@@ -277,6 +277,13 @@ public sealed class TypeChecker
     private void CheckVariantArguments(VariantExpression variant, SymbolScope scope)
     {
         var data = variant.Variant.Data;
+        if (Views.IsInStyle(variant.Variant)
+            && variant.Arguments[0] is LiteralExpression { Value: StringValue { Value: var style } } literal
+            && OutputStyles.Find(style) is null)
+        {
+            Report(OutputStyles.UnknownMessage(style), literal.Position);
+        }
+
         for (var index = 0; index < variant.Arguments.Count; index++)
         {
             if (TypeOf(variant.Arguments[index], scope) is { } type && type != data[index])
@@ -308,7 +315,7 @@ public sealed class TypeChecker
     {
         if (TypeOf(style, scope) is { } type && type != PyropType.String)
         {
-            Report($"The style of 'with_style' must be string, found {type.Name}.", style.Position);
+            Report($"The style of 'styled' must be string, found {type.Name}.", style.Position);
         }
         else if (style is LiteralExpression { Value: StringValue { Value: var name } } && OutputStyles.Find(name) is null)
         {
@@ -387,11 +394,7 @@ public sealed class TypeChecker
                 if (TypeOf(convert.Operand, scope) is { } from && !Conversions.IsAllowed(from, convert.Target))
                 {
                     var (source, target) = Names(from, convert.Target);
-                    Report(
-                        convert.Target is ChoiceType { HasData: true } && from == PyropType.String
-                            ? $"Cannot convert {source} to {target}, because some of its variants carry data; only a choice whose variants carry none can be read from text."
-                            : $"Cannot convert {source} to {target}.",
-                        convert.Position);
+                    Report($"Cannot convert {source} to {target}.", convert.Position);
                 }
 
                 return convert.Target;

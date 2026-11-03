@@ -254,7 +254,7 @@ public sealed class PyropSession
         WhileStatement loop => EndsWithOpenIf(loop.Body),
         ForStatement loop => EndsWithOpenIf(loop.Body),
         FunctionStatement function => EndsWithOpenIf(function.Body),
-        WithStyleStatement styled => EndsWithOpenIf(styled.Body),
+        StyledStatement styled => EndsWithOpenIf(styled.Body),
         _ => false,
     };
 }

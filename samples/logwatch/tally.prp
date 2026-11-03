@@ -1,0 +1,15 @@
+export record Tally int lines int infos int warnings list string errors
+
+export function Tally tally_of list string lines block
+    def Tally counted Tally 0 0 0 list_of string end
+    for string text in lines block
+        def string line trim text
+        if equal line "" continue
+        set counted copy counted with lines add the lines of counted 1
+        def string level upper line
+        if starts_with level "ERROR" set counted copy counted with errors push the errors of counted line
+        else if starts_with level "WARN" set counted copy counted with warnings add the warnings of counted 1
+        else if starts_with level "INFO" set counted copy counted with infos add the infos of counted 1
+    end
+    return counted
+end

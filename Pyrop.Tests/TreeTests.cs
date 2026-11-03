@@ -50,11 +50,11 @@ public class TreeTests
     public void KeepsBlocksOnTheirHeaderLine()
     {
         const string source =
-            "with_style \"warning\" block while true block if true break else continue end write \"x\" end\n" +
+            "styled \"warning\" block while true block if true break else continue end write \"x\" end\n" +
             "block exit 2 end";
 
         Assert.Equal(
-            "with_style \"warning\" block\n    while true block\n        if true\n            break\n        else\n            continue\n    end\n" +
+            "styled \"warning\" block\n    while true block\n        if true\n            break\n        else\n            continue\n    end\n" +
             "    write \"x\"\nend\nblock\n    exit 2\nend\n",
             Tree(source));
     }

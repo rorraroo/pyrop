@@ -114,7 +114,7 @@
         "1": { "name": "storage.type.choice.pyrop" },
         "2": { "name": "entity.name.type.pyrop" }
       },
-      "end": "\\b(end)\\b|(?=\\b(?:def|set|if|else|while|for|break|continue|block|function|return|write|write_line|write_error|write_error_line|exit|with_style|use|import|export|record|choice|if_some|match|when)\\b|[\"\\d])",
+      "end": "\\b(end)\\b|(?=\\b(?:def|set|if|else|while|for|break|continue|block|function|return|write|write_line|write_error|write_error_line|exit|styled|use|import|export|record|choice|if_some|match|when)\\b|[\"\\d])",
       "endCaptures": {
         "1": { "name": "keyword.control.pyrop" }
       },
@@ -208,7 +208,7 @@
       "name": "keyword.control.pyrop"
     },
     "keyword": {
-      "match": "\\b(write|write_line|write_error|write_error_line|with_style)\\b",
+      "match": "\\b(write|write_line|write_error|write_error_line|styled)\\b",
       "name": "keyword.other.pyrop"
     },
     "type": {

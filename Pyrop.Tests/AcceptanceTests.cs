@@ -151,7 +151,7 @@ public sealed class AcceptanceTests : IDisposable
             "Choose a number from 1 to 5: Save before you leave? [y/n] Goodbye.\n");
         Assert.EndsWith("Save before you leave? [y/n] Goodbye.\n", first);
         Assert.Equal(
-            "pyrop adventure save 1\nplace study\nmoves 5\ncarrying lamp\n",
+            "pyrop adventure save 2\nPlayer place study moves 5 inventory [lamp]\n",
             File.ReadAllText(PathOf("game.save")));
 
         var (second, secondErrors, secondExit) = Play(built, "2", "2", "3", "2", "1", "1", "1", "2", "1", "2", "2");
@@ -176,7 +176,7 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.EndsWith("Save before you leave? [y/n] <success>The game is saved.\n</success>Goodbye.\n", output);
-        Assert.Equal("pyrop adventure save 1\nplace study\nmoves 1\n", File.ReadAllText(PathOf("game.save")));
+        Assert.Equal("pyrop adventure save 2\nPlayer place study moves 1 inventory []\n", File.ReadAllText(PathOf("game.save")));
     }
 
     [Theory]
@@ -195,21 +195,23 @@ public sealed class AcceptanceTests : IDisposable
     [Theory]
     [InlineData("")]
     [InlineData("not a save\n")]
-    [InlineData("pyrop adventure save 2\nplace hall\nmoves 1\n")]
-    [InlineData("pyrop adventure save 1\nplace attic\nmoves 1\n")]
-    [InlineData("pyrop adventure save 1\nplace Hall\nmoves 1\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves -1\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves many\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 1000001\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 9223372036854775807\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 2\ncarrying sword\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 2\ncarrying lamp\ncarrying lamp\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\n")]
-    [InlineData("pyrop adventure save 1\nmoves 3\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nplace tower\nmoves 2\n")]
-    [InlineData("pyrop adventure save 1\nplace  hall\nmoves 2\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 2\n\n")]
-    [InlineData("pyrop adventure save 1\nplace hall\nmoves 2\nhealth 10\n")]
+    [InlineData("pyrop adventure save 1\nPlayer place hall moves 1 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place attic moves 1 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place Hall moves 1 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves -1 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves many inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 1000001 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 9223372036854775807 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 99999999999999999999 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2 inventory [sword]\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2 inventory [lamp, lamp]\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2\n")]
+    [InlineData("pyrop adventure save 2\nPlayer moves 3 place hall inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place  hall moves 2 inventory []\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2 inventory []\n\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2 inventory [] health 10\n")]
+    [InlineData("pyrop adventure save 2\nPlayer place hall moves 2 inventory []\nPlayer place hall moves 2 inventory []\n")]
+    [InlineData("pyrop adventure save 2\n")]
     public void StartsANewGameWhenTheSaveIsDamaged(string save)
     {
         File.WriteAllText(PathOf("game.save"), save);
@@ -240,7 +242,7 @@ public sealed class AcceptanceTests : IDisposable
     [Fact]
     public void AcceptsASaveWithWindowsLineEndings()
     {
-        File.WriteAllText(PathOf("game.save"), "pyrop adventure save 1\r\nplace tower\r\nmoves 7\r\ncarrying key\r\n");
+        File.WriteAllText(PathOf("game.save"), "pyrop adventure save 2\r\nPlayer place tower moves 7 inventory [key]\r\n");
 
         var (output, _, exitCode) = Play(false, "2", "5", "n");
 
@@ -254,7 +256,7 @@ public sealed class AcceptanceTests : IDisposable
     [InlineData(true)]
     public void WinsAtOnceWhenTheLoadedSaveIsAlreadyWon(bool built)
     {
-        File.WriteAllText(PathOf("game.save"), "pyrop adventure save 1\nplace garden\nmoves 1000000\ncarrying crown\n");
+        File.WriteAllText(PathOf("game.save"), "pyrop adventure save 2\nPlayer place garden moves 1000000 inventory [crown]\n");
 
         var (output, errors, exitCode) = Play(built, "2");
 
@@ -496,6 +498,337 @@ public sealed class AcceptanceTests : IDisposable
         <success>You carry the crown out into the sunlight. You won in 12 moves.
         </success>
         """;
+
+    private static string Rogue => Path.Combine(Samples, "rogue", "rogue.prp");
+
+    private static string Logwatch => Path.Combine(Samples, "logwatch", "logwatch.prp");
+
+    private static string ServerLog => Path.Combine(Samples, "logwatch", "server.log");
+
+    private string ProgressFile => PathOf("rogue.progress");
+
+    private const string ToDepthThree =
+        "right right right right right right right right right right right right right right right right " +
+        "down down down down down down down down right right right right right right right up up up " +
+        "down down right right right right right right right right down down right right " +
+        "up right right right right up " +
+        "right right right right right right right right right right right right right right down down";
+
+    private const string Escape = ToDepthThree + " i enter escape down down down down down down down";
+
+    private const string Death = ToDepthThree + " down down down down down down";
+
+    private const string FirstScreen = """
+        The crypt
+        ########################
+        #@.......r..$..........#
+        #.#...#................#
+        #......................#
+        #...#...#.....#.......>#
+        #.......!r.............#
+        #.#.#.#.#.....#........#
+        #.................$....#
+        ########################
+        Hero
+        Health: 10 of 10
+        Depth 1   Gold 0   Attack 2
+        Log
+        You enter the crypt. Find the stairs down.
+        <muted>arrows move   space wait   i inventory   q quit
+        </muted>
+
+        """;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PlaysTheRogueliteToAnEscape(bool built)
+    {
+        var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], Keys(Escape));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("", errors);
+        Assert.StartsWith(FirstScreen, output);
+        AssertInOrder(
+            output,
+            "You hit the rat for 1.\nThe rat hits you for 1.\nYou slay the rat.\n",
+            "You pick up 2 gold.\n",
+            "You climb down to depth 2.\n",
+            "Depth 3   Gold 22   Attack 2\n",
+            "Inventory\nhealing draught (selected)\nItem\nRestores 8 health. Tastes of copper.\n<muted>up/down choose   enter use   escape back\n</muted>\n",
+            "Inventory\nItem\nYour pack is empty.\n",
+            "You drink the draught and feel better.\n",
+            "Health: 2 of 10\nDepth 3   Gold 22   Attack 2\n<danger>You are badly hurt.\n</danger>",
+            "You slay the orc.\n");
+        Assert.EndsWith(
+            "\nThe run is over\nYou slay the orc.\nYou find the crypt's back door and escape!\nYou escaped from the crypt!\n" +
+            "Gold this run 22   Gold banked 22\nRuns 1   Escapes 1   Deepest 3\n",
+            output);
+        Assert.Equal(78, CountOf(output, "\nThe crypt\n") + 1);
+        Assert.Equal("Progress runs 1 escapes 1 best_depth 3 gold_banked 22\n", File.ReadAllText(ProgressFile));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DiesInTheRogueliteAndStillBanksTheGold(bool built)
+    {
+        File.WriteAllText(ProgressFile, "Progress runs 2 escapes 1 best_depth 3 gold_banked 20\n");
+
+        var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], Keys(Death));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("", errors);
+        Assert.EndsWith(
+            "\nThe run is over\nYou hit the orc for 1.\nThe orc kills you.\nYou died on depth 3.\n" +
+            "Gold this run 22   Gold banked 42\nRuns 3   Escapes 1   Deepest 3\n",
+            output);
+        Assert.Equal("Progress runs 3 escapes 1 best_depth 3 gold_banked 42\n", File.ReadAllText(ProgressFile));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SpendsBankedGoldOnExtraHealthInTheNextRun(bool built)
+    {
+        File.WriteAllText(ProgressFile, "Progress runs 4 escapes 1 best_depth 2 gold_banked 60\n");
+
+        var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], "q\n");
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("", errors);
+        Assert.Contains("Hero\nHealth: 12 of 12\n", output);
+        Assert.Contains("Log\nYou enter the crypt. Find the stairs down.\nYour banked gold buys you 2 extra health.\n", output);
+        Assert.EndsWith("Gold this run 0   Gold banked 60\nRuns 5   Escapes 1   Deepest 2\n", output);
+        Assert.Equal("Progress runs 5 escapes 1 best_depth 2 gold_banked 60\n", File.ReadAllText(ProgressFile));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not a progress file\n")]
+    [InlineData("Progress runs 1 escapes 0 best_depth 1\n")]
+    [InlineData("Progress escapes 0 runs 1 best_depth 1 gold_banked 0\n")]
+    [InlineData("Progress runs -1 escapes 0 best_depth 1 gold_banked 0\n")]
+    [InlineData("Progress runs 1 escapes 2 best_depth 1 gold_banked 0\n")]
+    [InlineData("Progress runs 1 escapes 0 best_depth 9 gold_banked 0\n")]
+    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 9223372036854775807\n")]
+    [InlineData("Progress runs 9223372036854775807 escapes 0 best_depth 1 gold_banked 0\n")]
+    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 99999999999999999999\n")]
+    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\nProgress runs 1 escapes 0 best_depth 1 gold_banked 0\n")]
+    public void StartsTheRogueliteFreshWhenTheProgressIsDamaged(string progress)
+    {
+        File.WriteAllText(ProgressFile, progress);
+
+        foreach (var built in new[] { false, true })
+        {
+            var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], "q\n");
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal("", errors);
+            Assert.Equal(FirstScreen + FreshEnding, output);
+            Assert.Equal("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\n", File.ReadAllText(ProgressFile));
+            File.WriteAllText(ProgressFile, progress);
+        }
+    }
+
+    [Fact]
+    public void StartsTheRogueliteFreshWithoutAProgressFileOrWhenItIsNotText()
+    {
+        Assert.Equal((FirstScreen + FreshEnding, "", 0), PlayRogue(false, ["7", ProgressFile], "q\n"));
+
+        File.WriteAllBytes(ProgressFile, [0x50, 0xFF, 0xFE, 0x0A]);
+        Assert.Equal((FirstScreen + FreshEnding, "", 0), PlayRogue(false, ["7", ProgressFile], "q\n"));
+        Assert.Equal("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\n", File.ReadAllText(ProgressFile));
+    }
+
+    [Fact]
+    public void ARunDependsOnlyOnTheSeedAndTheKeys()
+    {
+        var first = PlayRogue(false, ["7", PathOf("first.progress")], Keys(Death));
+        var second = PlayRogue(true, ["7", PathOf("second.progress")], Keys(Death));
+        var other = PlayRogue(false, ["8", PathOf("other.progress")], "q\n");
+
+        Assert.Equal(first, second);
+        Assert.False(other.Output.StartsWith(FirstScreen, StringComparison.Ordinal));
+        Assert.StartsWith("The crypt\n########################\n#@", other.Output);
+    }
+
+    [Fact]
+    public void ExplainsTheRoguelitesUsageForABadSeed()
+    {
+        Assert.Equal(("", "usage: rogue [seed] [progress file]\n", 2), PlayRogue(false, ["seven", ProgressFile], ""));
+        Assert.False(File.Exists(ProgressFile));
+    }
+
+    [Fact]
+    public void ReportsProgressThatCannotBeSaved()
+    {
+        var unwritable = Path.Combine(_directory, "missing", "rogue.progress");
+
+        var (output, errors, exitCode) = PlayRogue(false, ["7", unwritable], "q\n");
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(FirstScreen + FreshEnding, output);
+        Assert.Equal($"Could not save the progress to {unwritable}\n", errors);
+    }
+
+    [Fact]
+    public void BundlesEveryModuleOfTheRoguelite()
+    {
+        var bundle = BuildSample(Rogue, "rogue");
+
+        Assert.Equal(
+            ["dungeon.prp", "progress.prp", "rogue.prp", "rules.prp"],
+            bundle.Files.Select(file => file.Name).Order(StringComparer.Ordinal));
+        Assert.Equal("rogue.prp", bundle.EntryName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WatchesALogUntilQIsPressed(bool built)
+    {
+        var (output, errors, exitCode) = PlaySample(built, Logwatch, "logwatch", [ServerLog], "\n\ndown\nq\n");
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("", errors);
+        Assert.Equal(
+            Dashboard(ServerLog, "watching", 11, 6, 2, 1, 0) +
+            Dashboard(ServerLog, "watching", 11, 6, 2, 2, 0) +
+            Dashboard(ServerLog, "watching", 11, 6, 2, 3, 0) +
+            Dashboard(ServerLog, "watching", 11, 6, 2, 4, 1),
+            output);
+    }
+
+    [Fact]
+    public void SeesLinesAddedToTheLogBetweenRefreshes()
+    {
+        var log = PathOf("live.log");
+        File.Copy(ServerLog, log);
+        var keys = new KeysThatWriteToALog(["", "end", "q"], () =>
+            File.AppendAllText(log, "ERROR 09:20:00 Database connection lost\nINFO  09:20:05 Reconnected\n"));
+        var output = new StringOutput();
+        var session = new PyropSession(keys, output, new HostContext([log], _ => null));
+
+        var exitCode = session.Run(File.ReadAllText(Logwatch), Logwatch) ?? 0;
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(
+            Dashboard(log, "watching", 11, 6, 2, 1, 0) +
+            Dashboard(log, "watching", 13, 7, 2, 2, 0, "ERROR 09:20:00 Database connection lost") +
+            Dashboard(log, "watching", 13, 7, 2, 3, 3, "ERROR 09:20:00 Database connection lost"),
+            output.ToString());
+    }
+
+    [Fact]
+    public void WaitsForALogThatDoesNotExistYet()
+    {
+        var log = PathOf("later.log");
+
+        var (output, errors, exitCode) = PlaySample(false, Logwatch, "logwatch", [log], "down\nq\n");
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("", errors);
+        var empty =
+            "Levels\nInfo: 0 of 0\n<warning>Warnings: 0 of 0\n</warning><danger>Errors: 0 of 0\n</danger>" +
+            $"File\nField      Value\nPath       {log}\nState      missing\nLines      0\nRefreshes  {{0}}\n" +
+            "Errors\n<muted>up/down select   q quit\n</muted>\n";
+        Assert.Equal(string.Format(empty, 1) + string.Format(empty, 2), output);
+    }
+
+    [Fact]
+    public void ExplainsTheLogWatchersUsage()
+    {
+        Assert.Equal(("", "usage: logwatch <log file>\n", 2), PlaySample(false, Logwatch, "logwatch", [], ""));
+    }
+
+    [Fact]
+    public void BundlesBothFilesOfTheLogWatcher()
+    {
+        Assert.Equal(["logwatch.prp", "tally.prp"], BuildSample(Logwatch, "logwatch").Files.Select(file => file.Name).Order(StringComparer.Ordinal));
+    }
+
+    private const string FreshEnding = """
+        The run is over
+        You enter the crypt. Find the stairs down.
+        You leave the crypt with what you found.
+        Gold this run 0   Gold banked 0
+        Runs 1   Escapes 0   Deepest 1
+
+        """;
+
+    private static string Dashboard(string path, string state, int lines, int infos, int warnings, int refreshes, int selected, params string[] moreErrors)
+    {
+        string[] errors =
+        [
+            "ERROR 09:14:02 Disk quota exceeded on /var",
+            "ERROR 09:15:40 Upstream timed out after 30 s",
+            "ERROR 09:17:11 Worker 3 crashed",
+            .. moreErrors,
+        ];
+        var menu = string.Concat(errors.Select((error, index) => index == selected ? $"{error} (selected)\n" : $"{error}\n"));
+        return
+            $"Levels\nInfo: {infos} of {lines}\n<warning>Warnings: {warnings} of {lines}\n</warning><danger>Errors: {errors.Length} of {lines}\n</danger>" +
+            $"File\nField      Value\nPath       {path}\nState      {state}\nLines      {lines}\nRefreshes  {refreshes}\n" +
+            $"Errors\n{menu}<muted>up/down select   q quit\n</muted>\n";
+    }
+
+    private sealed class KeysThatWriteToALog(string[] keys, Action write) : TextReader
+    {
+        private int _read;
+
+        public override string? ReadLine()
+        {
+            if (_read == 0)
+            {
+                write();
+            }
+
+            return _read < keys.Length ? keys[_read++] : null;
+        }
+    }
+
+    private (string Output, string Errors, int ExitCode) PlayRogue(bool built, string[] arguments, string keys) =>
+        PlaySample(built, Rogue, "rogue", arguments, keys);
+
+    private (string Output, string Errors, int ExitCode) PlaySample(bool built, string script, string name, string[] arguments, string keys)
+    {
+        if (!built)
+        {
+            return RunSource(File.ReadAllText(script), script, null, null, arguments, keys);
+        }
+
+        var bundle = BuildSample(script, name);
+        return RunSource(
+            bundle.Entry.Text,
+            bundle.EntryName,
+            BundleSourceStore.FullPathOf(bundle.EntryName),
+            new BundleSourceStore(bundle),
+            arguments,
+            keys);
+    }
+
+    private Bundle BuildSample(string script, string name)
+    {
+        var baseExecutable = PathOf("pyrop-base");
+        File.WriteAllBytes(baseExecutable, "base"u8.ToArray());
+        var executable = PathOf(OperatingSystem.IsWindows() ? $"{name}.exe" : name);
+        Assert.Equal(0, BuildCommand.Build(script, executable, baseExecutable));
+        return Bundle.ReadFrom(executable)!;
+    }
+
+    private static string Keys(string keys) => string.Concat(keys.Split(' ').Select(key => key + "\n"));
+
+    private static int CountOf(string text, string part)
+    {
+        var count = 0;
+        for (var found = text.IndexOf(part, StringComparison.Ordinal); found >= 0; found = text.IndexOf(part, found + 1, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
 
     private static string FindSamples()
     {

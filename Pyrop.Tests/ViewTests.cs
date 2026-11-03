@@ -1,0 +1,282 @@
+namespace Pyrop.Tests;
+
+public sealed class ViewTests
+{
+    private const string Terminal = "use terminal library\nimport from terminal View show write_view read_key read_key_within end\n";
+
+    private static string Views(string body, string input = "") => Run.Program(Terminal + body, input);
+
+    private static PyropError ViewFailure(string body, string input = "") => Run.Failure(Terminal + body, input);
+
+    [Fact]
+    public void TextIsWrittenAsItIs()
+    {
+        Assert.Equal("Hello\nworld\n", Views("write_view text \"Hello\\nworld\""));
+    }
+
+    [Fact]
+    public void ATableIsWrittenInWriteTablesPlainForm()
+    {
+        Assert.Equal(
+            "Name  Count\nlamp  1\n",
+            Views("write_view table list_of string \"Name\" \"Count\" end list_of list string list_of string \"lamp\" \"1\" end end"));
+    }
+
+    [Fact]
+    public void AMenuMarksItsSelectedEntry()
+    {
+        Assert.Equal("lamp\nrope (selected)\n", Views("write_view menu list_of string \"lamp\" \"rope\" end 1"));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(2)]
+    public void AMenuPositionWithoutAnEntrySelectsNothing(int position)
+    {
+        Assert.Equal("lamp\nrope\n", Views($"write_view menu list_of string \"lamp\" \"rope\" end {position}"));
+    }
+
+    [Fact]
+    public void AnEmptyMenuWritesNothing()
+    {
+        Assert.Equal("", Views("write_view menu list_of string end 0"));
+    }
+
+    [Theory]
+    [InlineData("bar \"Health\" 7 20", "Health: 7 of 20\n")]
+    [InlineData("bar \"Health\" -3 20", "Health: -3 of 20\n")]
+    [InlineData("bar \"Lines\" 0 0", "Lines: 0 of 0\n")]
+    public void ABarShowsItsNumbersAsGiven(string view, string expected)
+    {
+        Assert.Equal(expected, Views($"write_view {view}"));
+    }
+
+    [Fact]
+    public void APanelWritesItsTitleAndThenItsContents()
+    {
+        Assert.Equal("Hero\nHealth: 7 of 20\nPoisoned\n", Views(
+            "write_view panel \"Hero\" rows list_of View bar \"Health\" 7 20 text \"Poisoned\" end"));
+    }
+
+    [Fact]
+    public void ColumnsWriteTheirViewsOneAfterAnother()
+    {
+        Assert.Equal("left\nright\n", Views("write_view columns list_of View text \"left\" text \"right\" end"));
+    }
+
+    [Fact]
+    public void EmptyRowsWriteNothing()
+    {
+        Assert.Equal("", Views("write_view rows list_of View end"));
+    }
+
+    [Fact]
+    public void AGridWritesItsLinesWithoutPadding()
+    {
+        Assert.Equal("#..#\n#@\n", Views("write_view grid list_of string \"#..#\" \"#@\" end 9 9"));
+    }
+
+    [Fact]
+    public void InStyleGivesAPartItsOwnStyleAndTheInnermostWins()
+    {
+        Assert.Equal(
+            "<warning>Hero\n</warning><danger>Poisoned\n</danger><warning>ok\n</warning>",
+            Views("styled \"warning\" write_view panel \"Hero\" rows list_of View in_style \"danger\" text \"Poisoned\" text \"ok\" end"));
+    }
+
+    [Fact]
+    public void AComputedStyleIsUsed()
+    {
+        Assert.Equal("<success>done\n</success>", Views("def string mood \"success\"\nwrite_view in_style mood text \"done\""));
+    }
+
+    [Fact]
+    public void WriteViewStartsOnALineOfItsOwn()
+    {
+        Assert.Equal("Loading\nHi\n", Views("write \"Loading\"\nwrite_view text \"Hi\""));
+    }
+
+    [Fact]
+    public void ShowWritesTheViewAndAnEmptyLineInPlainMode()
+    {
+        Assert.Equal("one\n\ntwo\n\n", Views("show text \"one\"\nshow text \"two\""));
+    }
+
+    [Fact]
+    public void AViewsTextFormShowsHowItWasMade()
+    {
+        Assert.Equal(
+            "panel \"Hero\" (rows [bar \"Health\" 7 20, in_style \"danger\" (text \"Poisoned\")])\n",
+            Views("write_line panel \"Hero\" rows list_of View bar \"Health\" 7 20 in_style \"danger\" text \"Poisoned\" end"));
+    }
+
+    [Fact]
+    public void ViewsAreComparedAndTakenApartLikeAnyChoice()
+    {
+        Assert.Equal("true\nbar Health\n", Views(
+            "def View health bar \"Health\" 7 20\n" +
+            "write_line equal health bar \"Health\" 7 20\n" +
+            "match health\n" +
+            "    when bar label value maximum write_line add \"bar \" label\n" +
+            "    when text t write_line t\n" +
+            "    when table h r write_line \"table\"\n" +
+            "    when menu e p write_line \"menu\"\n" +
+            "    when panel t v write_line \"panel\"\n" +
+            "    when rows v write_line \"rows\"\n" +
+            "    when columns v write_line \"columns\"\n" +
+            "    when grid l c r write_line \"grid\"\n" +
+            "    when in_style s v write_line \"in_style\"\n" +
+            "end"));
+    }
+
+    [Fact]
+    public void ViewsWorkQualifiedWithoutAnImport()
+    {
+        Assert.Equal("x\n", Run.Program(
+            "use terminal library\ndef from terminal View v from terminal text \"x\"\nfrom terminal write_view v"));
+    }
+
+    [Fact]
+    public void AVariantCannotBeImportedOnItsOwn()
+    {
+        Assert.Contains(
+            "'text' is a variant of the choice 'View'; import the choice with import from terminal View end",
+            Run.Failure("use terminal library\nimport from terminal text end").Message);
+    }
+
+    [Fact]
+    public void AnUnimportedVariantGetsTheLibraryHint()
+    {
+        Assert.Equal(
+            "'panel' comes from the library terminal: add use terminal library and import from terminal View end, or write from terminal panel.",
+            Run.Failure("write_line panel").Message);
+    }
+
+    [Fact]
+    public void ViewNamesStayFreeWithoutAnImport()
+    {
+        Assert.Equal("3\n", Run.Program("use terminal library\ndef int text 3\nwrite_line text"));
+    }
+
+    [Fact]
+    public void AnUnknownStyleLiteralIsATypeError()
+    {
+        var error = ViewFailure("write_view in_style \"loud\" text \"x\"");
+
+        Assert.Equal(ErrorStage.Type, error.Stage);
+        Assert.Contains("loud", error.Message);
+        Assert.Equal(3, error.Position.Line);
+        Assert.Equal(21, error.Position.Column);
+    }
+
+    [Fact]
+    public void AnUnknownComputedStyleFailsWhenShown()
+    {
+        var error = ViewFailure("def string mood \"loud\"\nwrite_view in_style mood text \"x\"");
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Contains("loud", error.Message);
+    }
+
+    [Fact]
+    public void ATableWithoutHeadersFailsWhenShown()
+    {
+        Assert.Equal(
+            "A table needs at least one header.",
+            ViewFailure("show table list_of string end list_of list string end").Message);
+    }
+
+    [Fact]
+    public void ATableRowOfTheWrongSizeFailsBeforeAnythingIsWritten()
+    {
+        var output = new StringOutput();
+        var session = new PyropSession(new StringReader(""), output);
+
+        Assert.Throws<PyropException>(() => session.Run(Terminal +
+            "write_view rows list_of View text \"before\" table list_of string \"a\" \"b\" end list_of list string list_of string \"1\" \"2\" end list_of string \"1\" \"2\" \"3\" end end end"));
+        Assert.Equal("", output.ToString());
+        Assert.Equal(
+            "Row 1 of a table has 3 cells, but the table has 2 headers; rows are numbered from 0.",
+            ViewFailure("write_view table list_of string \"a\" \"b\" end list_of list string list_of string \"1\" \"2\" end list_of string \"1\" \"2\" \"3\" end end").Message);
+    }
+
+    [Fact]
+    public void AttemptGivesFalseForAViewThatCannotBeShown()
+    {
+        Assert.Equal("false\n", Views("write_line attempt show table list_of string end list_of list string end"));
+        Assert.Equal("x\ntrue\n", Views("def bool shown attempt write_view text \"x\"\nwrite_line shown"));
+    }
+
+    [Fact]
+    public void AViewNestedTooDeeplyIsNotShown()
+    {
+        const string build = "def View view text \"core\"\ndef int depth 0\nwhile less depth {0} block\n    set view panel \"p\" view\n    set depth add depth 1\nend\n";
+
+        var deep = ViewFailure(string.Format(build, 1000) + "write_view view");
+        Assert.Equal(ErrorStage.Runtime, deep.Stage);
+        Assert.Equal("This view is nested too deeply to be shown.", deep.Message);
+        Assert.Equal("false\n", Views(string.Format(build, 1000) + "write_line attempt show view"));
+        Assert.EndsWith("p\ncore\n", Views(string.Format(build, 999) + "write_view view"));
+    }
+
+    [Fact]
+    public void ReadKeyReadsOneLinePerKey()
+    {
+        Assert.Equal("down\nenter\n", Views("write_line read_key\nwrite_line read_key", "down\nenter\n"));
+    }
+
+    [Fact]
+    public void ReadKeyFailsAtTheEndOfInput()
+    {
+        var error = ViewFailure("write_line read_key");
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal("'read_key' reached the end of input.", error.Message);
+        Assert.Equal("none\n", Views("write_line attempt read_key"));
+    }
+
+    [Fact]
+    public void ReadKeyWithinGivesAKeyOrATimeout()
+    {
+        Assert.Equal("some \"q\"\nnone\nnone\n", Views(
+            "write_line read_key_within 1000\nwrite_line read_key_within 1000\nwrite_line read_key_within 0", "q\n\n"));
+    }
+
+    [Fact]
+    public void ReadKeyWithinWaitsAtTheEndOfInput()
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        Assert.Equal("none\n", Views("write_line read_key_within 200"));
+        Assert.True(watch.ElapsedMilliseconds >= 150);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("2147483648")]
+    public void ReadKeyWithinRejectsATimeOutOfRange(string time)
+    {
+        var error = ViewFailure($"write_line read_key_within {time}");
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal($"'read_key_within' needs a time from 0 to 2147483647 milliseconds, found {time}.", error.Message);
+    }
+
+    [Fact]
+    public void ADashboardLoopReadsKeysOnATimer()
+    {
+        Assert.Equal("Lines: 0 of 0\n\nLines: 1 of 1\n\nbye\n", Views(
+            "def int count 0\n" +
+            "while true block\n" +
+            "    show bar \"Lines\" count count\n" +
+            "    if_some string key read_key_within 1000 block\n" +
+            "        if equal key \"q\" block\n" +
+            "            write_line \"bye\"\n" +
+            "            exit 0\n" +
+            "        end\n" +
+            "    end\n" +
+            "    else set count add count 1\n" +
+            "end",
+            "\nq\n"));
+    }
+}

@@ -16,7 +16,7 @@ def string report_path "report.txt"
 if greater length_of arguments 1 set report_path get arguments 1
 
 if not exists log_path block
-    with_style "danger" write_error_line add "No such file: " log_path
+    styled "danger" write_error_line add "No such file: " log_path
     exit 3
 end
 
@@ -46,8 +46,8 @@ save report_path join report "\n"
 write_line summary
 
 if greater errors 0 block
-    with_style "danger" write_line add "Errors found; see " add report_path "."
+    styled "danger" write_line add "Errors found; see " add report_path "."
     exit 1
 end
 
-with_style "success" write_line "No errors."
+styled "success" write_line "No errors."

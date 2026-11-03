@@ -46,5 +46,9 @@ public static class ScriptRunner
             ErrorRenderer.Render(exception, path, session.SourceText);
             return 1;
         }
+        finally
+        {
+            output.LeaveScreen();
+        }
     }
 }

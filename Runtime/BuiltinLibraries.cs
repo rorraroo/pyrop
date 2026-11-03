@@ -4,14 +4,22 @@ namespace Pyrop.Runtime;
 
 public sealed class BuiltinLibrary
 {
-    public BuiltinLibrary(string name, IReadOnlyList<BuiltinOperation> operations, IReadOnlyDictionary<string, string> formerNames)
+    public BuiltinLibrary(
+        string name,
+        IReadOnlyList<BuiltinOperation> operations,
+        IReadOnlyDictionary<string, string> formerNames,
+        Module? module = null,
+        IReadOnlyList<ChoiceType>? choices = null)
     {
         Name = name;
-        Module = new Module(null, $"the library {name}");
+        Module = module ?? ModuleFor(name);
         Operations = operations.ToDictionary(operation => operation.Name);
         FormerNames = formerNames;
-        Loaded = new LoadedModule(Module, ModuleNamespace.ForLibrary(Module, Operations), null);
+        Choices = choices ?? [];
+        Loaded = new LoadedModule(Module, ModuleNamespace.ForLibrary(Module, Operations).With([], [], [], null, Choices), null);
     }
+
+    public static Module ModuleFor(string name) => new(null, $"the library {name}");
 
     public string Name { get; }
 
@@ -21,9 +29,20 @@ public sealed class BuiltinLibrary
 
     public IReadOnlyDictionary<string, string> FormerNames { get; }
 
+    public IReadOnlyList<ChoiceType> Choices { get; }
+
     public LoadedModule Loaded { get; }
 
-    public bool Exports(string name) => Operations.ContainsKey(name);
+    public bool Exports(string name) => ImportNameFor(name) is not null;
+
+    public string? ImportNameFor(string name) =>
+        Operations.ContainsKey(name) || Choices.Any(choice => choice.Name == name) ? name
+        : Choices.FirstOrDefault(choice => choice.FindVariant(name) is not null)?.Name;
+
+    public string KindOf(string name) =>
+        Operations.ContainsKey(name) ? "an operation"
+        : Choices.Any(choice => choice.Name == name) ? "a type"
+        : "a variant";
 }
 
 public sealed class BuiltinLibraries
@@ -39,6 +58,7 @@ public sealed class BuiltinLibraries
         LibraryOperations.Program,
         LibraryOperations.Math,
         LibraryOperations.Random,
+        LibraryOperations.Terminal,
     ]);
 
     public static BuiltinLibraries None { get; } = new([]);
@@ -75,9 +95,11 @@ public sealed class BuiltinLibraries
         return null;
     }
 
+    public string KindOf(string word) => All.FirstOrDefault(library => library.Exports(word))?.KindOf(word) ?? "an operation";
+
     private static string HowToReach(BuiltinLibrary library, string name, ModuleNamespace names)
     {
-        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {name} {Keywords.End}";
+        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {library.ImportNameFor(name) ?? name} {Keywords.End}";
         var qualified = $"{Keywords.From} {library.Name} {name}";
         return names.Uses.TryGetValue(library.Name, out var use) && use.Target.Module == library.Module
             ? $"add {import}, or write {qualified}"

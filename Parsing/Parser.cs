@@ -292,7 +292,7 @@ public sealed class Parser
             Keywords.WriteError => ParseWrite(appendNewLine: false, toStandardError: true),
             Keywords.WriteErrorLine => ParseWrite(appendNewLine: true, toStandardError: true),
             Keywords.Exit => ParseExit(),
-            Keywords.WithStyle => ParseWithStyle(),
+            Keywords.Styled => ParseStyled(),
             Keywords.Block => ParseNestedBlock(),
             Keywords.End => throw _cursor.Error("'end' without a matching 'block'."),
             Keywords.Else => throw _cursor.Error($"'else' without a matching 'if' or '{Keywords.IfSome}'."),
@@ -354,7 +354,7 @@ public sealed class Parser
         ReferenceEquals(token, _cursor.Current)
         && _cursor.Behind(1) is { Kind: TokenKind.Word } previous
         && _names.LibraryHint(previous.Text) is { } hint
-            ? $" If '{previous.Text}' was meant as an operation: {hint}"
+            ? $" If '{previous.Text}' was meant as {_names.Libraries.KindOf(previous.Text)}: {hint}"
             : "";
 
     private Statement ParseDef(HashSet<string> declared, OuterNames outer)
@@ -674,11 +674,11 @@ public sealed class Parser
         return new ExitStatement(ParseExpression(), start.Position);
     }
 
-    private Statement ParseWithStyle()
+    private Statement ParseStyled()
     {
         var start = _cursor.Advance();
         var style = ParseExpression();
-        return new WithStyleStatement(style, ParseBody("a with_style"), start.Position);
+        return new StyledStatement(style, ParseBody("a styled"), start.Position);
     }
 
     private Statement ParseNestedBlock()

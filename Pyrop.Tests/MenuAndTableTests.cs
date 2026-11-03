@@ -59,7 +59,7 @@ public class MenuAndTableTests
     [Fact]
     public void ChooseAppliesTheStyleToEverythingButTheWarning()
     {
-        var output = Run.Program($"with_style \"info\" write_line choose \"Pick\" list_of string \"a\" end", "x\n1\n");
+        var output = Run.Program($"styled \"info\" write_line choose \"Pick\" list_of string \"a\" end", "x\n1\n");
 
         Assert.Equal(
             "<info>Pick\n</info><info>1. a\n</info><info>Choose number 1: </info>" +
@@ -174,7 +174,7 @@ public class MenuAndTableTests
     [Fact]
     public void WriteTableAppliesTheStyle()
     {
-        const string source = "with_style \"muted\" write_table list_of string \"a\" end list_of list string list_of string \"b\" end end";
+        const string source = "styled \"muted\" write_table list_of string \"a\" end list_of list string list_of string \"b\" end end";
 
         Assert.Equal("<muted>a\n</muted><muted>b\n</muted>", Run.Program(source));
     }
