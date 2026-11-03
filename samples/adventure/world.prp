@@ -2,7 +2,7 @@ use items "items.prp"
 import from items ItemKind end
 
 export choice Direction north east south west end
-export choice Place hall cellar library tower garden end
+export choice Place hall cellar study tower garden end
 
 export record Room
     string title
@@ -20,12 +20,12 @@ export function map Place Room build_world block
     set rooms put rooms hall Room
         "Great Hall"
         "Dust lies thick on a long table. Doors lead north, south and east."
-        map_of Direction Place north library south cellar east garden end
+        map_of Direction Place north study south cellar east garden end
         list_of ItemKind end
         false
         none ItemKind
-    set rooms put rooms library Room
-        "Library"
+    set rooms put rooms study Room
+        "Study"
         "Shelves of rotting books lean against each other. A narrow door leads east."
         map_of Direction Place south hall east tower end
         list_of ItemKind lamp end
@@ -41,8 +41,8 @@ export function map Place Room build_world block
     set rooms put rooms tower Room
         "Tower"
         "Wind howls through the arrow slits of the round tower room."
-        map_of Direction Place west library end
-        list_of ItemKind crown end
+        map_of Direction Place west study end
+        list_of ItemKind crown  end
         false
         some key
     set rooms put rooms garden Room

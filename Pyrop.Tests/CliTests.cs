@@ -78,7 +78,7 @@ public sealed class CliTests : IDisposable
     [Fact]
     public void PlainComesBeforeTheScriptAndLaterArgumentsBelongToTheScript()
     {
-        var (output, errors, exitCode) = Pyrop("--plain", Script("write_line argument_at 0"), "--plain");
+        var (output, errors, exitCode) = Pyrop("--plain", Script("use program library\nwrite_line get from program arguments 0"), "--plain");
 
         Assert.Equal("--plain\n", output);
         Assert.Equal("", errors);
@@ -139,7 +139,7 @@ public sealed class CliTests : IDisposable
     public void AScriptNamedBuildRuns()
     {
         var path = Path.Combine(_directory, "build");
-        File.WriteAllText(path, "write_line argument_at 0");
+        File.WriteAllText(path, "use program library\nwrite_line get from program arguments 0");
         var start = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = _directory,

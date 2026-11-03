@@ -334,20 +334,24 @@ public class OptionTests
     public void TreePrintsOptionsAttemptAndIfSome()
     {
         const string source = """
+            use files library
+            import from files load end
             if_some int age attempt convert int read write_line age
-            else if_some string text attempt read_file "notes.txt" write_line text
+            else if_some string text attempt load "notes.txt" write_line text
             else write_line value_or none int 0
-            if not attempt write_file "save.txt" "data" write_line some "x"
+            if not attempt from files save "save.txt" "data" write_line some "x"
             """;
 
         Assert.Equal(
+            "use files library\n" +
+            "import from files load end\n" +
             "if_some int age (attempt (convert int read))\n" +
             "    write_line age\n" +
-            "else if_some string text (attempt (read_file \"notes.txt\"))\n" +
+            "else if_some string text (attempt (load \"notes.txt\"))\n" +
             "    write_line text\n" +
             "else\n" +
             "    write_line (value_or (none int) 0)\n" +
-            "if (not (attempt (write_file \"save.txt\" \"data\")))\n" +
+            "if (not (attempt (from files save \"save.txt\" \"data\")))\n" +
             "    write_line (some \"x\")\n",
             Tree(source));
 

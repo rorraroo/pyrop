@@ -9,7 +9,8 @@ public sealed record LiteralExpression(Value Value, SourcePosition Position) : E
 
 public sealed record VariableExpression(string Name, SourcePosition Position) : Expression(Position);
 
-public sealed record BuiltinCallExpression(BuiltinOperation Operation, IReadOnlyList<Expression> Arguments, SourcePosition Position)
+public sealed record BuiltinCallExpression(
+    BuiltinOperation Operation, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null)
     : Expression(Position);
 
 public sealed record FunctionCallExpression(

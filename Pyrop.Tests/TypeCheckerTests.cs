@@ -15,7 +15,7 @@ public class TypeCheckerTests
     [InlineData("function int f int x return x\nwrite_line f 1.5", "Argument 'x' of 'f' must be int")]
     [InlineData("write_line later\ndef int later 1", "Undeclared variable 'later'")]
     [InlineData("block def int inner 1 end\nfunction int f return inner", "Undeclared variable 'inner'")]
-    [InlineData("write_line argumentcount", "did you mean 'argument_count'?")]
+    [InlineData("write_line lengthof", "did you mean 'length_of'?")]
     public void RejectsTypeErrors(string source, string message)
     {
         var error = Run.Failure(source);

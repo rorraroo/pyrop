@@ -33,10 +33,11 @@
     "import": {
       "patterns": [
         {
-          "match": "\\b(use)\\b(?:\\s+([^\\W\\d]\\w*))?",
+          "match": "\\b(use)\\b(?:\\s+([^\\W\\d]\\w*))?(?:\\s+(library)\\b)?",
           "captures": {
             "1": { "name": "keyword.control.import.pyrop" },
-            "2": { "name": "entity.name.namespace.pyrop" }
+            "2": { "name": "entity.name.namespace.pyrop" },
+            "3": { "name": "keyword.control.import.pyrop" }
           }
         },
         {
@@ -56,7 +57,7 @@
           }
         },
         {
-          "match": "\\b(import|export)\\b",
+          "match": "\\b(import|export|library)\\b",
           "name": "keyword.control.import.pyrop"
         }
       ]
@@ -219,7 +220,7 @@
       "name": "constant.language.boolean.pyrop"
     },
     "builtin": {
-      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|argument_count|argument_at|read_environment|read_file|write_file|append_file|file_exists|read_lines|list_files|at_least|at_most|smaller|larger|abs|to_power|square_root|round_down|round|random|roll_dice|seed_random|length_of|substring|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|fill|get|push|put|remove|has|keys_of|some|value_or)\\b",
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|at_least|at_most|smaller|larger|length_of|substring|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|fill|get|push|put|remove|has|keys_of|some|value_or)\\b",
       "name": "support.function.builtin.pyrop"
     },
     "user-type": {

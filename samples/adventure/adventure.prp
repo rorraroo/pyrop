@@ -2,6 +2,8 @@ use items "items.prp"
 use world "world.prp"
 use state "state.prp"
 use saving "saving.prp"
+use files library
+use program library
 import from items item_description ItemKind end
 import from world Direction Place Room compass build_world end
 import from state Player new_player carries can_see items_in end
@@ -11,7 +13,8 @@ choice Opening fresh_start saved_start leave_game end
 choice Action go Direction take ItemKind show_inventory save quit end
 
 def string save_path "adventure.save"
-if greater argument_count 0 set save_path argument_at 0
+def list string arguments from program arguments
+if greater length_of arguments 0 set save_path get arguments 0
 
 def map Place Room rooms build_world
 
@@ -88,7 +91,7 @@ function void save_to string path Player player
     else with_style "warning" write_line "The game could not be saved."
 
 function Player restored string path block
-    if not file_exists path block
+    if not from files exists path block
         with_style "warning" write_line "There is no saved game yet, so a new game begins."
         return new_player
     end

@@ -9,21 +9,25 @@ public sealed class FileTests : IDisposable
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
+    private const string Libraries =
+        "use files library\nimport from files load save append exists end\n" +
+        "use program library\nimport from program arguments end\n";
+
     private string PathOf(string name) => Path.Combine(_directory, name);
 
     private static HostContext Arguments(params string[] arguments) => new(arguments, _ => null);
 
     private string RunWith(string source, params string[] files) =>
-        Run.Program(source, host: Arguments(files.Select(PathOf).ToArray()));
+        Run.Program(Libraries + source, host: Arguments(files.Select(PathOf).ToArray()));
 
     private PyropError FailWith(string source, params string[] files) =>
-        Run.Failure(source, host: Arguments(files.Select(PathOf).ToArray()));
+        Run.Failure(Libraries + source, host: Arguments(files.Select(PathOf).ToArray()));
 
     [Fact]
     public void WritesAFileAndReadsItBack()
     {
         var output = RunWith(
-            "write_file argument_at 0 \"Příliš\\nžluťoučký\"\nwrite_line read_file argument_at 0",
+            "save get arguments 0 \"Příliš\\nžluťoučký\"\nwrite_line load get arguments 0",
             "notes.txt");
 
         Assert.Equal("Příliš\nžluťoučký\n", output);
@@ -31,48 +35,48 @@ public sealed class FileTests : IDisposable
     }
 
     [Fact]
-    public void WriteFileReplacesExistingContent()
+    public void SaveReplacesExistingContent()
     {
         File.WriteAllText(PathOf("log.txt"), "old content");
 
-        RunWith("write_file argument_at 0 \"new\"", "log.txt");
+        RunWith("save get arguments 0 \"new\"", "log.txt");
 
         Assert.Equal("new", File.ReadAllText(PathOf("log.txt")));
     }
 
     [Fact]
-    public void AppendFileCreatesTheFileAndAppendsToIt()
+    public void AppendCreatesTheFileAndAppendsToIt()
     {
-        RunWith("append_file argument_at 0 \"žluť\\n\"\nappend_file argument_at 0 \"two\\n\"", "log.txt");
+        RunWith("append get arguments 0 \"žluť\\n\"\nappend get arguments 0 \"two\\n\"", "log.txt");
 
         Assert.Equal(Encoding.UTF8.GetBytes("žluť\ntwo\n"), File.ReadAllBytes(PathOf("log.txt")));
     }
 
     [Fact]
-    public void WriteFileReplacesAHiddenFile()
+    public void SaveReplacesAHiddenFile()
     {
         File.WriteAllText(PathOf("hidden.txt"), "old content");
         File.SetAttributes(PathOf("hidden.txt"), FileAttributes.Hidden);
 
-        RunWith("write_file argument_at 0 \"new\"", "hidden.txt");
+        RunWith("save get arguments 0 \"new\"", "hidden.txt");
 
         Assert.Equal("new", File.ReadAllText(PathOf("hidden.txt")));
     }
 
     [Fact]
-    public void ReadFileNormalizesLineEndings()
+    public void LoadNormalizesLineEndings()
     {
         File.WriteAllBytes(PathOf("mixed.txt"), Encoding.ASCII.GetBytes("a\r\nb\rc\nd"));
 
-        Assert.Equal("a\nb\nc\nd", RunWith("write read_file argument_at 0", "mixed.txt"));
+        Assert.Equal("a\nb\nc\nd", RunWith("write load get arguments 0", "mixed.txt"));
     }
 
     [Fact]
-    public void ReadFileSkipsAByteOrderMark()
+    public void LoadSkipsAByteOrderMark()
     {
         File.WriteAllBytes(PathOf("bom.txt"), [0xEF, 0xBB, 0xBF, (byte)'h', (byte)'i']);
 
-        Assert.Equal("hi", RunWith("write read_file argument_at 0", "bom.txt"));
+        Assert.Equal("hi", RunWith("write load get arguments 0", "bom.txt"));
     }
 
     [Fact]
@@ -80,7 +84,7 @@ public sealed class FileTests : IDisposable
     {
         File.WriteAllBytes(PathOf("legacy.txt"), [(byte)'P', 0xF8, (byte)'i']);
 
-        var error = FailWith("write_line read_file argument_at 0", "legacy.txt");
+        var error = FailWith("write_line load get arguments 0", "legacy.txt");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"File \"{PathOf("legacy.txt")}\" is not valid UTF-8 text.", error.Message);
@@ -89,7 +93,7 @@ public sealed class FileTests : IDisposable
     [Fact]
     public void RejectsReadingAMissingFile()
     {
-        var error = FailWith("write_line read_file argument_at 0", "missing.txt");
+        var error = FailWith("write_line load get arguments 0", "missing.txt");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"File \"{PathOf("missing.txt")}\" does not exist.", error.Message);
@@ -98,7 +102,7 @@ public sealed class FileTests : IDisposable
     [Fact]
     public void RejectsWritingIntoAMissingDirectoryWithoutCreatingIt()
     {
-        var error = FailWith("write_file argument_at 0 \"x\"", Path.Combine("out", "report.txt"));
+        var error = FailWith("save get arguments 0 \"x\"", Path.Combine("out", "report.txt"));
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal(
@@ -108,9 +112,9 @@ public sealed class FileTests : IDisposable
     }
 
     [Theory]
-    [InlineData("write_line read_file argument_at 0")]
-    [InlineData("write_file argument_at 0 \"x\"")]
-    [InlineData("append_file argument_at 0 \"x\"")]
+    [InlineData("write_line load get arguments 0")]
+    [InlineData("save get arguments 0 \"x\"")]
+    [InlineData("append get arguments 0 \"x\"")]
     public void RejectsADirectoryAsAFile(string source)
     {
         Directory.CreateDirectory(PathOf("folder"));
@@ -122,11 +126,11 @@ public sealed class FileTests : IDisposable
     }
 
     [Theory]
-    [InlineData("write_line read_file \"\"")]
-    [InlineData("write_file \"\" \"x\"")]
+    [InlineData("write_line load \"\"")]
+    [InlineData("save \"\" \"x\"")]
     public void RejectsAnEmptyPath(string source)
     {
-        var error = Run.Failure(source);
+        var error = Run.Failure(Libraries + source);
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal("A file path cannot be empty.", error.Message);
@@ -135,7 +139,7 @@ public sealed class FileTests : IDisposable
     [Fact]
     public void RejectsAPathContainingAControlCharacter()
     {
-        var error = FailWith("write_file argument_at 0 \"x\"", "a\tb");
+        var error = FailWith("save get arguments 0 \"x\"", "a\tb");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"\"{PathOf("a\tb")}\" is not a valid file path; it contains a control character.", error.Message);
@@ -150,7 +154,7 @@ public sealed class FileTests : IDisposable
             return;
         }
 
-        var error = FailWith("write_file argument_at 0 \"x\"", "a*b.txt");
+        var error = FailWith("save get arguments 0 \"x\"", "a*b.txt");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"\"{PathOf("a*b.txt")}\" is not a valid file path.", error.Message);
@@ -159,7 +163,7 @@ public sealed class FileTests : IDisposable
     [Fact]
     public void NamesTheMissingDirectoryAsWritten()
     {
-        var error = FailWith("write_file \"no_such_directory/inner/x.txt\" \"x\"");
+        var error = FailWith("save \"no_such_directory/inner/x.txt\" \"x\"");
 
         Assert.Equal("Directory \"no_such_directory/inner\" does not exist, so \"no_such_directory/inner/x.txt\" cannot be written.", error.Message);
     }
@@ -169,14 +173,14 @@ public sealed class FileTests : IDisposable
     {
         File.WriteAllText(PathOf("plain.txt"), "");
 
-        var error = FailWith("write_file argument_at 0 \"x\"", Path.Combine("plain.txt", "x.txt"));
+        var error = FailWith("save get arguments 0 \"x\"", Path.Combine("plain.txt", "x.txt"));
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.StartsWith($"\"{PathOf("plain.txt")}\" is a file, not a directory", error.Message);
     }
 
     [Fact]
-    public void FileExistsIsTrueOnlyForFiles()
+    public void ExistsIsTrueOnlyForFiles()
     {
         File.WriteAllText(PathOf("present.txt"), "");
         Directory.CreateDirectory(PathOf("folder"));
@@ -184,17 +188,17 @@ public sealed class FileTests : IDisposable
         Assert.Equal(
             "true\nfalse\nfalse\nfalse\n",
             RunWith(
-                "write_line file_exists argument_at 0\nwrite_line file_exists argument_at 1\n" +
-                "write_line file_exists argument_at 2\nwrite_line file_exists \"\"",
+                "write_line exists get arguments 0\nwrite_line exists get arguments 1\n" +
+                "write_line exists get arguments 2\nwrite_line exists \"\"",
                 "present.txt", "absent.txt", "folder"));
     }
 
     [Theory]
-    [InlineData("write_line write_file \"a\" \"b\"")]
-    [InlineData("def string s append_file \"a\" \"b\"")]
+    [InlineData("write_line save \"a\" \"b\"")]
+    [InlineData("def string s append \"a\" \"b\"")]
     public void RejectsAVoidOperationUsedAsAValue(string source)
     {
-        var error = Run.Failure(source);
+        var error = Run.Failure(Libraries + source);
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Contains("returns void and cannot be used as a value", error.Message);
@@ -203,9 +207,9 @@ public sealed class FileTests : IDisposable
     [Fact]
     public void ChecksFileOperationOperandTypes()
     {
-        var error = Run.Failure("write_file \"a\" 1");
+        var error = Run.Failure(Libraries + "save \"a\" 1");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
-        Assert.Equal("'write_file' cannot take string int. It accepts: string string.", error.Message);
+        Assert.Equal("'save' cannot take string int. It accepts: string string.", error.Message);
     }
 }

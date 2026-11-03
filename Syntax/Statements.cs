@@ -40,7 +40,7 @@ public sealed record BlockStatement(IReadOnlyList<Statement> Statements, SourceP
 
 public sealed record CallStatement(Expression Call, SourcePosition Position) : Statement(Position);
 
-public sealed record UseStatement(string Name, string Path, SourcePosition Position) : Statement(Position);
+public sealed record UseStatement(string Name, string? Path, SourcePosition Position) : Statement(Position);
 
 public sealed record ImportStatement(string Module, IReadOnlyList<string> Names, SourcePosition Position) : Statement(Position);
 
@@ -55,7 +55,7 @@ public sealed record SyntaxTree(IReadOnlyList<Statement> Statements)
     public IEnumerable<DefStatement> Globals => Statements.OfType<DefStatement>();
 }
 
-public sealed record ModuleTree(Module Module, SyntaxTree Tree);
+public sealed record ModuleTree(Module Module, SyntaxTree Tree, ModuleNamespace Names);
 
 public sealed record ParsedProgram(IReadOnlyList<ModuleTree> Modules, ModuleTree Main)
 {

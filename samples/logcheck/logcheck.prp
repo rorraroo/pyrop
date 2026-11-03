@@ -1,16 +1,21 @@
 use lines "lines.prp"
+use files library
+use program library
 import from lines counted end
+import from files exists load_lines save end
 
-if less argument_count 1 block
+def list string arguments from program arguments
+
+if less length_of arguments 1 block
     write_error_line "usage: logcheck <log file> [report file]"
     exit 2
 end
 
-def string log_path argument_at 0
+def string log_path get arguments 0
 def string report_path "report.txt"
-if greater argument_count 1 set report_path argument_at 1
+if greater length_of arguments 1 set report_path get arguments 1
 
-if not file_exists log_path block
+if not exists log_path block
     with_style "danger" write_error_line add "No such file: " log_path
     exit 3
 end
@@ -21,7 +26,7 @@ def int errors 0
 def int warnings 0
 def list string report list_of string add "Errors in " log_path "" end
 
-for string text in read_lines log_path block
+for string text in load_lines log_path block
     set line_number add line_number 1
     def string line trim text
     if equal line "" continue
@@ -37,7 +42,7 @@ def string summary add counted total "line" add ", " add counted errors "error" 
 set report push report ""
 set report push report summary
 set report push report ""
-write_file report_path join report "\n"
+save report_path join report "\n"
 write_line summary
 
 if greater errors 0 block

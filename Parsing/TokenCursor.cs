@@ -51,7 +51,7 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompl
         if (token.IsWord(Keywords.From))
         {
             throw Error(
-                $"A {role} must be a plain name; '{Keywords.From}' starts a qualified name, which can only name an exported function, record, choice or variant.",
+                $"A {role} must be a plain name; '{Keywords.From}' starts a qualified name, which can only name an exported function, record, choice or variant, or an operation of a library.",
                 token);
         }
 

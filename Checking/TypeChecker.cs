@@ -18,6 +18,7 @@ public sealed class TypeChecker
     private readonly Dictionary<AttemptExpression, PyropType> _attempts = new(ReferenceEqualityComparer.Instance);
     private Dictionary<string, PyropType> _globals = new();
     private FunctionSignature? _currentFunction;
+    private ModuleNamespace? _names;
 
     private TypeChecker()
     {
@@ -28,10 +29,10 @@ public sealed class TypeChecker
         var checker = new TypeChecker();
         foreach (var module in program.Modules)
         {
-            checker.CheckModule(module.Tree, NoGlobals);
+            checker.CheckModule(module, NoGlobals);
         }
 
-        var globals = checker.CheckModule(program.Main.Tree, sessionGlobals);
+        var globals = checker.CheckModule(program.Main, sessionGlobals);
         if (checker._errors.Count > 0)
         {
             throw new PyropException(checker._errors);
@@ -40,8 +41,10 @@ public sealed class TypeChecker
         return new CheckResult(checker._overloads, checker._attempts, globals);
     }
 
-    private Dictionary<string, PyropType> CheckModule(SyntaxTree tree, IReadOnlyDictionary<string, PyropType> sessionGlobals)
+    private Dictionary<string, PyropType> CheckModule(ModuleTree module, IReadOnlyDictionary<string, PyropType> sessionGlobals)
     {
+        _names = module.Names;
+        var tree = module.Tree;
         _globals = new Dictionary<string, PyropType>(sessionGlobals);
         foreach (var global in tree.Globals)
         {
@@ -366,7 +369,9 @@ public sealed class TypeChecker
                 if (type is null)
                 {
                     Report(
-                        Keywords.UnderscoredSpelling(variable.Name) is { } spelling
+                        _names?.LibraryHint(variable.Name) is { } hint
+                            ? hint
+                            : Keywords.UnderscoredSpelling(variable.Name) is { } spelling
                             ? Keywords.UnderscoreHint(variable.Name, spelling)
                             : $"Undeclared variable '{variable.Name}'.",
                         variable.Position);

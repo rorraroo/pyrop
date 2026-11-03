@@ -13,12 +13,12 @@ public static class SignatureScanner
         ModuleLoading? loading = null,
         IReadOnlyCollection<string>? globals = null)
     {
-        var scan = new ScanState(loading);
+        var scan = new ScanState(loading, existing.Libraries);
         var names = scan.ScanModule(tokens, existing, loading?.BaseDirectory, isUsedModule: false, globals ?? []);
         return new ScanResult(names, scan.Loaded);
     }
 
-    private sealed class ScanState(ModuleLoading? loading)
+    private sealed class ScanState(ModuleLoading? loading, BuiltinLibraries libraries)
     {
         private readonly List<Module> _inProgress = [];
         private readonly Dictionary<string, LoadedModule> _scanned = new(SourceLoader.PathComparer);
@@ -70,12 +70,13 @@ public static class SignatureScanner
             while (!cursor.IsAtEnd)
             {
                 var token = cursor.Advance();
-                if (!token.IsWord(Keywords.Use) || cursor.Current.Kind != TokenKind.Word || cursor.Peek(1).Kind != TokenKind.String)
+                var isLibrary = cursor.Peek(1).IsWord(Keywords.Library);
+                if (!token.IsWord(Keywords.Use) || cursor.Current.Kind != TokenKind.Word || (cursor.Peek(1).Kind != TokenKind.String && !isLibrary))
                 {
                     continue;
                 }
 
-                if (loading is null || directory is null)
+                if (!isLibrary && (loading is null || directory is null))
                 {
                     throw cursor.Error($"'{Keywords.Use}' is not available here.", token);
                 }
@@ -94,7 +95,9 @@ public static class SignatureScanner
                         throw cursor.Error($"Module name '{nameToken.Text}' is already used in this file.", nameToken);
                     }
 
-                    var target = Load(cursor, pathToken, directory);
+                    var target = isLibrary
+                        ? libraries.Find(nameToken.Text)?.Loaded ?? throw cursor.Error(libraries.Unknown(nameToken.Text), nameToken)
+                        : Load(cursor, pathToken, directory!);
                     if (existing.Uses.TryGetValue(nameToken.Text, out var earlier))
                     {
                         if (earlier.Target.Module == target.Module)
@@ -134,7 +137,7 @@ public static class SignatureScanner
 
             var file = loading.Loader.Load(pathToken.Text, directory, pathToken.Position);
             var module = new Module(file.FullPath, file.DisplayName);
-            var names = ScanModule(file.Tokens, ModuleNamespace.For(module), file.Directory, isUsedModule: true, []);
+            var names = ScanModule(file.Tokens, ModuleNamespace.For(module, libraries), file.Directory, isUsedModule: true, []);
             var result = new LoadedModule(module, names, file);
             _scanned[fullPath] = result;
             Loaded.Add(result);

@@ -1,6 +1,8 @@
 # Every highlighted construct in one file
 use shapes "shapes.prp"
+use files library
 import from shapes circle_area Size end
+import from files exists load_lines end
 
 export function int factorial int n
     if less n 2 return 1
@@ -53,8 +55,8 @@ for string name in keys_of prices write_line name
 
 def list string words split "a,b,c" ","
 write_line join words " "
-if file_exists "notes.txt" for string line in read_lines "notes.txt" write_line line
-for string file in list_files "." write_line file
+if exists "notes.txt" for string line in load_lines "notes.txt" write_line line
+for string file in from files listing "." write_line file
 with_style "warning" write_error "careful: "
 write_error_line "usage: sample <file>"
 
@@ -71,6 +73,6 @@ if equal facing convert Direction "north" write_line facing
 
 if_some int age attempt convert int read write_line age
 else write_line "not a number"
-if not attempt write_file "save.txt" "data" write_error_line "could not save"
+if not attempt from files save "save.txt" "data" write_error_line "could not save"
 def option Point spot none Point
 write_line value_or spot Point 1.0 2.0

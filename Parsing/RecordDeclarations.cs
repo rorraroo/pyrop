@@ -63,7 +63,7 @@ public static class RecordDeclarations
 
         if (NamePositions.Contains(previous.Text)
             || ValuePositions.Contains(previous.Text)
-            || (Builtins.All.TryGetValue(previous.Text, out var operation) && operation.Arity > 0))
+            || (types.Names.FindOperation(previous.Text) is { Arity: > 0 }))
         {
             return true;
         }

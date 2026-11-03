@@ -151,7 +151,7 @@ public sealed class AcceptanceTests : IDisposable
             "Choose a number from 1 to 5: Save before you leave? [y/n] Goodbye.\n");
         Assert.EndsWith("Save before you leave? [y/n] Goodbye.\n", first);
         Assert.Equal(
-            "pyrop adventure save 1\nplace library\nmoves 5\ncarrying lamp\n",
+            "pyrop adventure save 1\nplace study\nmoves 5\ncarrying lamp\n",
             File.ReadAllText(PathOf("game.save")));
 
         var (second, secondErrors, secondExit) = Play(built, "2", "2", "3", "2", "1", "1", "1", "2", "1", "2", "2");
@@ -160,7 +160,7 @@ public sealed class AcceptanceTests : IDisposable
         Assert.Equal("", secondErrors);
         AssertInOrder(
             second,
-            "Choose a number from 1 to 3: Your saved game is restored after 5 moves.\n\n<emphasis>Library\n</emphasis>",
+            "Choose a number from 1 to 3: Your saved game is restored after 5 moves.\n\n<emphasis>Study\n</emphasis>",
             "You see the key.\n",
             "You unlock the door with the key.\n",
             "<success>You carry the crown out into the sunlight. You won in 15 moves.\n</success>");
@@ -176,7 +176,7 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.EndsWith("Save before you leave? [y/n] <success>The game is saved.\n</success>Goodbye.\n", output);
-        Assert.Equal("pyrop adventure save 1\nplace library\nmoves 1\n", File.ReadAllText(PathOf("game.save")));
+        Assert.Equal("pyrop adventure save 1\nplace study\nmoves 1\n", File.ReadAllText(PathOf("game.save")));
     }
 
     [Theory]
@@ -362,7 +362,7 @@ public sealed class AcceptanceTests : IDisposable
         6. Quit
         Choose a number from 1 to 6: You go north.
 
-        <emphasis>Library
+        <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
         You see the lamp.
         What do you do?
@@ -374,7 +374,7 @@ public sealed class AcceptanceTests : IDisposable
         6. Quit
         Choose a number from 1 to 6: You take the lamp.
 
-        <emphasis>Library
+        <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
         What do you do?
         1. Go east
@@ -426,7 +426,7 @@ public sealed class AcceptanceTests : IDisposable
         6. Quit
         Choose a number from 1 to 6: You go north.
 
-        <emphasis>Library
+        <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
         What do you do?
         1. Go east
@@ -470,7 +470,7 @@ public sealed class AcceptanceTests : IDisposable
         4. Quit
         Choose a number from 1 to 4: You go west.
 
-        <emphasis>Library
+        <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
         What do you do?
         1. Go east

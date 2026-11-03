@@ -332,7 +332,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("block export function int f return 1 end", "'export' is only allowed at the top level.")]
     [InlineData("export def int x 1", "'export' must be followed by a function, record or choice definition, found 'def'.")]
     [InlineData("export write_line 1", "'export' must be followed by a function, record or choice definition, found 'write_line'.")]
-    [InlineData("def string path \"lib.prp\"\nuse lib path", "'use' takes a module name and then a string literal path: use lib \"<path>\", found 'path'.")]
+    [InlineData("def string path \"lib.prp\"\nuse lib path", "'use' takes a module name and then a string literal path or the word library: use lib \"<path>\" or use lib library, found 'path'.")]
     [InlineData("use \"lib.prp\"", "Expected a module name after 'use', found string \"lib.prp\".")]
     [InlineData("use if \"lib.prp\"", "'if' is a reserved word and cannot be used as a module name.")]
     [InlineData("function void f use t \"nope.prp\"", "'use' is only allowed at the top level.")]
@@ -367,7 +367,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("use lib \"lib.prp\"\ndef int lib 1", "'lib' is a module and cannot be used as a variable name.", 2, 9)]
     [InlineData("use lib \"lib.prp\"\nfunction int f int lib return lib", "'lib' is a module and cannot be used as a parameter name.", 2, 20)]
     [InlineData("use lib \"lib.prp\"\nimport from lib answer end\nfunction int f int answer return answer", "'answer' is an imported function and cannot be used as a parameter name.", 3, 20)]
-    [InlineData("use lib \"lib.prp\"\nset from lib answer 1", "A variable name must be a plain name; 'from' starts a qualified name, which can only name an exported function, record, choice or variant.", 2, 5)]
+    [InlineData("use lib \"lib.prp\"\nset from lib answer 1", "A variable name must be a plain name; 'from' starts a qualified name, which can only name an exported function, record, choice or variant, or an operation of a library.", 2, 5)]
     public void RejectsClashingNames(string main, string message, int line, int column)
     {
         WriteFile("lib.prp", "export function int answer return 42");

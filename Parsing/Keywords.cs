@@ -30,6 +30,7 @@ public static class Keywords
     public const string Import = "import";
     public const string Export = "export";
     public const string From = "from";
+    public const string Library = "library";
     public const string Record = "record";
     public const string Choice = "choice";
     public const string The = "the";
@@ -63,8 +64,8 @@ public static class Keywords
     private static readonly HashSet<string> Reserved =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Record, Choice, The,
-        Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
+        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, WithStyle, Use, Import, Export, From, Library, Record, Choice,
+        The, Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
         .. Retired.Keys,

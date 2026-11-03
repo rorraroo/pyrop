@@ -12,7 +12,10 @@ public sealed class Module(string? fullPath, string displayName)
     public override string ToString() => DisplayName;
 }
 
-public sealed record LoadedModule(Module Module, ModuleNamespace Names, SourceFile File);
+public sealed record LoadedModule(Module Module, ModuleNamespace Names, SourceFile? File)
+{
+    public bool IsLibrary => File is null;
+}
 
 public sealed record ModuleUse(string Name, LoadedModule Target, SourcePosition Position, Token Statement);
 
@@ -24,10 +27,13 @@ public sealed record ModuleImport(string Module, string Name, object Target, Sou
 
     public ChoiceType? Choice => Target as ChoiceType;
 
+    public BuiltinOperation? Operation => Target as BuiltinOperation;
+
     public string Kind => Target switch
     {
         RecordType => "record",
         ChoiceType => "choice",
+        BuiltinOperation => "operation",
         _ => "function",
     };
 }
@@ -62,6 +68,7 @@ public sealed class ModuleNamespace
     private static readonly IReadOnlyDictionary<string, RecordType> NoRecords = new Dictionary<string, RecordType>();
     private static readonly IReadOnlyDictionary<string, ChoiceType> NoChoices = new Dictionary<string, ChoiceType>();
     private static readonly IReadOnlyDictionary<string, ChoiceVariant> NoVariants = new Dictionary<string, ChoiceVariant>();
+    private static readonly IReadOnlyDictionary<string, BuiltinOperation> NoOperations = new Dictionary<string, BuiltinOperation>();
 
     private ModuleNamespace(
         Module module,
@@ -71,9 +78,13 @@ public sealed class ModuleNamespace
         IReadOnlyDictionary<string, ChoiceVariant> variants,
         IReadOnlyDictionary<string, ModuleUse> uses,
         IReadOnlyDictionary<string, ModuleImport> imports,
-        ModuleFailures failures)
+        ModuleFailures failures,
+        IReadOnlyDictionary<string, BuiltinOperation> operations,
+        BuiltinLibraries libraries)
     {
         Module = module;
+        Operations = operations;
+        Libraries = libraries;
         Functions = functions;
         Records = records;
         Choices = choices;
@@ -83,8 +94,13 @@ public sealed class ModuleNamespace
         Failures = failures;
     }
 
-    public static ModuleNamespace For(Module module) =>
-        new(module, FunctionTable.Empty, NoRecords, NoChoices, NoVariants, NoUses, NoImports, ModuleFailures.None);
+    public static ModuleNamespace For(Module module, BuiltinLibraries? libraries = null) =>
+        new(module, FunctionTable.Empty, NoRecords, NoChoices, NoVariants, NoUses, NoImports, ModuleFailures.None, NoOperations,
+            libraries ?? BuiltinLibraries.Standard);
+
+    public static ModuleNamespace ForLibrary(Module module, IReadOnlyDictionary<string, BuiltinOperation> operations) =>
+        new(module, FunctionTable.Empty, NoRecords, NoChoices, NoVariants, NoUses, NoImports, ModuleFailures.None, operations,
+            new BuiltinLibraries([]));
 
     public Module Module { get; }
 
@@ -102,8 +118,17 @@ public sealed class ModuleNamespace
 
     public ModuleFailures Failures { get; }
 
+    public IReadOnlyDictionary<string, BuiltinOperation> Operations { get; }
+
+    public BuiltinLibraries Libraries { get; }
+
     public FunctionSignature? FindCallable(string name) =>
         Functions.Find(name) ?? Imports.GetValueOrDefault(name)?.Function;
+
+    public BuiltinOperation? FindOperation(string name) =>
+        Builtins.All.GetValueOrDefault(name) ?? Imports.GetValueOrDefault(name)?.Operation;
+
+    public string? LibraryHint(string name) => Libraries.Hint(name, this);
 
     public RecordType? FindRecord(string name) =>
         Records.GetValueOrDefault(name) ?? Imports.GetValueOrDefault(name)?.Record;
@@ -179,9 +204,11 @@ public sealed class ModuleNamespace
             combinedVariants,
             combinedUses,
             combinedImports,
-            ModuleFailures.None);
+            ModuleFailures.None,
+            Operations,
+            Libraries);
     }
 
     public ModuleNamespace WithFailures(ModuleFailures failures) =>
-        new(Module, Functions, Records, Choices, Variants, Uses, Imports, failures);
+        new(Module, Functions, Records, Choices, Variants, Uses, Imports, failures, Operations, Libraries);
 }

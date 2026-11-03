@@ -7,6 +7,8 @@ public class ProcessTests
     private static HostContext Host(string[] arguments, Dictionary<string, string>? environment = null) =>
         new(arguments, name => environment?.GetValueOrDefault(name));
 
+    private const string Program = "use program library\nimport from program arguments environment end\n";
+
     [Fact]
     public void ReadsCommandLineArguments()
     {
@@ -14,7 +16,7 @@ public class ProcessTests
 
         Assert.Equal(
             "2\nreport.txt\n--verbose\n",
-            Run.Program("write_line argument_count\nwrite_line argument_at 0\nwrite_line argument_at 1", host: host));
+            Run.Program(Program + "write_line length_of arguments\nwrite_line get arguments 0\nwrite_line get arguments 1", host: host));
     }
 
     [Fact]
@@ -26,15 +28,15 @@ public class ProcessTests
     [Fact]
     public void HasNoArgumentsByDefault()
     {
-        Assert.Equal("0\n", Run.Program("write_line argument_count"));
+        Assert.Equal("0\n", Run.Program(Program + "write_line length_of arguments"));
     }
 
     [Theory]
-    [InlineData("write_line argument_at 1", "Argument index 1 is out of range; the program received 1 argument, numbered from 0.")]
-    [InlineData("write_line argument_at -1", "Argument index -1 is out of range")]
+    [InlineData("write_line get arguments 1", "List index 1 is out of range for a list of 1 item, numbered from 0.")]
+    [InlineData("write_line get arguments -1", "List index -1 is out of range")]
     public void RejectsArgumentIndexesOutOfRange(string source, string message)
     {
-        var exception = Assert.Throws<PyropException>(() => Run.Program(source, host: Host(["only"])));
+        var exception = Assert.Throws<PyropException>(() => Run.Program(Program + source, host: Host(["only"])));
 
         var error = Assert.Single(exception.Errors);
         Assert.Equal(ErrorStage.Runtime, error.Stage);
@@ -49,26 +51,26 @@ public class ProcessTests
         Assert.Equal(
             "/home/ann\nunset\n",
             Run.Program(
-                "write_line read_environment \"HOME\"\nif equal read_environment \"MISSING\" \"\" write_line \"unset\"",
+                Program + "write_line environment \"HOME\"\nif equal environment \"MISSING\" \"\" write_line \"unset\"",
                 host: host));
     }
 
     [Fact]
     public void RejectsAnEmptyEnvironmentVariableName()
     {
-        var error = Run.Failure("write_line read_environment \"\"");
+        var error = Run.Failure(Program + "write_line environment \"\"");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Contains("cannot be empty", error.Message);
     }
 
     [Theory]
-    [InlineData("write_line read_environment \"A=B\"")]
-    [InlineData("write_line read_environment \"=C:\"")]
-    [InlineData("write_line read_environment \"A\\nB\"")]
+    [InlineData("write_line environment \"A=B\"")]
+    [InlineData("write_line environment \"=C:\"")]
+    [InlineData("write_line environment \"A\\nB\"")]
     public void RejectsInvalidEnvironmentVariableNames(string source)
     {
-        var error = Run.Failure(source, host: Host([], new Dictionary<string, string> { ["=C:"] = "C:\\" }));
+        var error = Run.Failure(Program + source, host: Host([], new Dictionary<string, string> { ["=C:"] = "C:\\" }));
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Contains("is not a valid environment variable name", error.Message);
@@ -221,13 +223,24 @@ public class ProcessTests
 
     [Theory]
     [InlineData("def int exit 1")]
-    [InlineData("def string argument_count \"\"")]
+    [InlineData("def string library \"\"")]
     public void ReservesTheNewNames(string source)
     {
         var error = Run.Failure(source);
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Contains("reserved word", error.Message);
+    }
+
+    [Theory]
+    [InlineData("argument_count")]
+    [InlineData("argument_at")]
+    [InlineData("read_environment")]
+    [InlineData("arguments")]
+    [InlineData("environment")]
+    public void ProcessNamesOutsideTheCoreAreFreeVariableNames(string name)
+    {
+        Assert.Equal("x\n", Run.Program($"def string {name} \"x\"\nwrite_line {name}"));
     }
 
     [Fact]

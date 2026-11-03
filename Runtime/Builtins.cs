@@ -130,24 +130,6 @@ public static class Builtins
                 c, c.Argument(0).AsList(), c.Argument(1).AsList()))),
         Operation("input_ended",
             Overload([], B, c => BoolValue.Of(c.Input.HasEnded()))),
-        Operation("argument_count",
-            Overload([], I, c => new IntValue(c.Host.Arguments.Count))),
-        Operation("argument_at",
-            Overload([I], S, c => new StringValue(ArgumentAt(c, c.Argument(0).AsInt())))),
-        Operation("read_environment",
-            Overload([S], S, c => new StringValue(ReadEnvironment(c, c.Argument(0).AsString())))),
-        Operation("read_file",
-            Overload([S], S, c => new StringValue(TextFiles.Read(c, c.Argument(0).AsString())))),
-        Operation("write_file",
-            Overload([S, S], V, c => TextFiles.Write(c, c.Argument(0).AsString(), c.Argument(1).AsString(), append: false))),
-        Operation("append_file",
-            Overload([S, S], V, c => TextFiles.Write(c, c.Argument(0).AsString(), c.Argument(1).AsString(), append: true))),
-        Operation("file_exists",
-            Overload([S], B, c => BoolValue.Of(File.Exists(c.Argument(0).AsString())))),
-        Operation("read_lines",
-            Overload([S], PyropTypes.ListOf(S), c => TextFiles.ReadLines(c, c.Argument(0).AsString()))),
-        Operation("list_files",
-            Overload([S], PyropTypes.ListOf(S), c => TextFiles.ListFiles(c, c.Argument(0).AsString()))),
         Operation("length_of",
             Overload([S], I, c => new IntValue(TextOperations.LengthOf(c.Argument(0).AsString()))),
             Overload([ListT], I, c => new IntValue(c.Argument(0).AsList().Count)),
@@ -211,26 +193,8 @@ public static class Builtins
                 TextOperations.Join(c, c.Argument(0).AsList(), c.Argument(1).AsString())))),
         Operation("fill",
             Overload([S, ListT], S, c => new StringValue(TextOperations.Fill(c, c.Argument(0).AsString(), c.Argument(1).AsList())))),
-        Operation("abs",
-            Overload([I], I, c => Int(c, () => Math.Abs(c.Argument(0).AsInt()))),
-            Overload([F], F, c => new FloatValue(Math.Abs(c.Argument(0).AsFloat())))),
         Operation("smaller", Choices(smaller: true)),
         Operation("larger", Choices(smaller: false)),
-        Operation("to_power",
-            Overload([I, I], I, c => Power(c, c.Argument(0).AsInt(), c.Argument(1).AsInt())),
-            Overload([F, F], F, c => Float(c, Math.Pow(c.Argument(0).AsFloat(), c.Argument(1).AsFloat())))),
-        Operation("square_root",
-            Overload([F], F, c => new FloatValue(Math.Sqrt(NonNegative(c, c.Argument(0).AsFloat()))))),
-        Operation("round",
-            Overload([F], I, c => Conversions.FloatToInt(Math.Round(c.Argument(0).AsFloat(), MidpointRounding.AwayFromZero), c.Fail))),
-        Operation("round_down",
-            Overload([F], I, c => Conversions.FloatToInt(Math.Floor(c.Argument(0).AsFloat()), c.Fail))),
-        Operation("random",
-            Overload([F, F], F, c => new FloatValue(RandomBetween(c, c.Argument(0).AsFloat(), c.Argument(1).AsFloat())))),
-        Operation("roll_dice",
-            Overload([I, I], I, c => new IntValue(RollDice(c, c.Argument(0).AsInt(), c.Argument(1).AsInt())))),
-        Operation("seed_random",
-            Overload([I], V, c => SeedRandom(c, c.Argument(0).AsInt()))),
     }.ToDictionary(operation => operation.Name);
 
     private static BuiltinOverload[] Comparisons(Func<int, bool> holds) =>
@@ -255,13 +219,13 @@ public static class Builtins
         return (smaller ? order <= 0 : order >= 0) ? first : second;
     }
 
-    private static BuiltinOperation Operation(string name, params BuiltinOverload[] overloads) =>
+    internal static BuiltinOperation Operation(string name, params BuiltinOverload[] overloads) =>
         new(name, overloads[0].Parameters.Count, overloads);
 
-    private static BuiltinOverload Overload(PyropType[] parameters, PyropType result, BuiltinImplementation implementation) =>
+    internal static BuiltinOverload Overload(PyropType[] parameters, PyropType result, BuiltinImplementation implementation) =>
         new(parameters, result, implementation);
 
-    private static IntValue Int(IBuiltinInvocation invocation, Func<long> compute)
+    internal static IntValue Int(IBuiltinInvocation invocation, Func<long> compute)
     {
         try
         {
@@ -273,67 +237,12 @@ public static class Builtins
         }
     }
 
-    private static FloatValue Float(IBuiltinInvocation invocation, double result) => result switch
+    internal static FloatValue Float(IBuiltinInvocation invocation, double result) => result switch
     {
         double.NaN => throw invocation.Fail("Float result is not a real number."),
         _ when double.IsFinite(result) => new FloatValue(result),
         _ => throw invocation.Fail("Float result is out of range."),
     };
-
-    private static IntValue Power(IBuiltinInvocation invocation, long number, long exponent)
-    {
-        if (exponent < 0)
-        {
-            throw invocation.Fail($"'to_power' on ints cannot take a negative exponent ({exponent}); use floats instead.");
-        }
-
-        return Int(invocation, () =>
-        {
-            var result = 1L;
-            while (true)
-            {
-                if ((exponent & 1) == 1)
-                {
-                    result = checked(result * number);
-                }
-
-                exponent >>= 1;
-                if (exponent == 0)
-                {
-                    return result;
-                }
-
-                number = checked(number * number);
-            }
-        });
-    }
-
-    private static double NonNegative(IBuiltinInvocation invocation, double number) =>
-        number >= 0 ? number : throw invocation.Fail($"Cannot take the square root of a negative number ({new FloatValue(number).ToText()}).");
-
-    private static double RandomBetween(IBuiltinInvocation invocation, double lower, double upper)
-    {
-        if (!(lower < upper))
-        {
-            throw invocation.Fail(
-                $"'random' needs a lower bound below its upper bound, found {new FloatValue(lower).ToText()} and {new FloatValue(upper).ToText()}.");
-        }
-
-        var fraction = invocation.Random.NextFraction();
-        var result = lower * (1 - fraction) + upper * fraction;
-        return result < upper ? Math.Max(result, lower) : Math.BitDecrement(upper);
-    }
-
-    private static long RollDice(IBuiltinInvocation invocation, long lower, long upper) =>
-        lower <= upper
-            ? invocation.Random.NextInRange(lower, upper)
-            : throw invocation.Fail($"'roll_dice' needs a lower bound no greater than its upper bound, found {lower} and {upper}.");
-
-    private static Value? SeedRandom(IBuiltinInvocation invocation, long seed)
-    {
-        invocation.Random.Seed(seed);
-        return null;
-    }
 
     private static string ReadLine(IBuiltinInvocation invocation, string endOfInputMessage)
     {
@@ -365,34 +274,6 @@ public static class Builtins
                     break;
             }
         }
-    }
-
-    private static string ArgumentAt(IBuiltinInvocation invocation, long index)
-    {
-        var arguments = invocation.Host.Arguments;
-        if (index < 0 || index >= arguments.Count)
-        {
-            var received = arguments.Count == 1 ? "1 argument" : $"{arguments.Count} arguments";
-            throw invocation.Fail($"Argument index {index} is out of range; the program received {received}, numbered from 0.");
-        }
-
-        return arguments[(int)index];
-    }
-
-    private static string ReadEnvironment(IBuiltinInvocation invocation, string name)
-    {
-        if (name.Length == 0)
-        {
-            throw invocation.Fail("An environment variable name cannot be empty.");
-        }
-
-        if (name.Any(character => character == '=' || char.IsControl(character)))
-        {
-            throw invocation.Fail($"\"{name}\" is not a valid environment variable name; it cannot contain '=' or control characters.");
-        }
-
-        return invocation.Host.ReadEnvironment(name)
-            ?? (invocation.IsAttempted ? throw invocation.Fail($"Environment variable \"{name}\" is not set.") : "");
     }
 
     private static long Remainder(long dividend, long divisor) => divisor == -1 ? 0 : dividend % divisor;

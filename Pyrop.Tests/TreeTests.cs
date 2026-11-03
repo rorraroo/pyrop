@@ -27,11 +27,11 @@ public class TreeTests
     {
         const string source =
             "function void greet string name write_line name\n" +
-            "greet ask \"Name? \"\nwrite_line read\nwrite_line convert int argument_at 0";
+            "greet ask \"Name? \"\nwrite_line read\nuse program library\nwrite_line convert int get from program arguments 0";
 
         Assert.Equal(
             "function void greet string name\n    write_line name\ngreet (ask \"Name? \")\nwrite_line read\n" +
-            "write_line (convert int (argument_at 0))\n",
+            "use program library\nwrite_line (convert int (get from program arguments 0))\n",
             Tree(source));
     }
 
@@ -136,13 +136,14 @@ public class TreeTests
     public void PrintsDeeplyNestedProgramsWithoutRunningOutOfStack()
     {
         const int depth = 20_000;
-        var source = $"write_line {string.Concat(Enumerable.Repeat("abs ", depth))}1\n" +
+        var source = "use math library\nimport from math abs end\n" +
+            $"write_line {string.Concat(Enumerable.Repeat("abs ", depth))}1\n" +
             $"def int n length_of list_of {string.Concat(Enumerable.Repeat("list ", depth))}int end";
 
         var inspected = Inspect(source);
 
         Assert.Null(inspected.Error);
-        Assert.StartsWith("write_line (abs (abs ", inspected.Text);
+        Assert.StartsWith("use math library\nimport from math abs end\nwrite_line (abs (abs ", inspected.Text);
         Assert.EndsWith(" list int end))\n", inspected.Text);
     }
 

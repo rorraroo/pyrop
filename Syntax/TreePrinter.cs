@@ -121,7 +121,7 @@ public static class TreePrinter
             BreakStatement => Keywords.Break,
             ContinueStatement => Keywords.Continue,
             CallStatement call => Bare(call.Call),
-            UseStatement use => $"{Keywords.Use} {use.Name} {TextForm.Quote(use.Path)}",
+            UseStatement use => $"{Keywords.Use} {use.Name} {(use.Path is null ? Keywords.Library : TextForm.Quote(use.Path))}",
             ImportStatement import => $"{Keywords.Import} {Keywords.From} {import.Module} {string.Join(' ', import.Names)} {Keywords.End}",
             RecordStatement record => RecordHeader(record.Record),
             ChoiceStatement choice => ChoiceHeader(choice.Choice),
@@ -250,7 +250,7 @@ public static class TreePrinter
                     builder.Append(variable.Name);
                     break;
                 case BuiltinCallExpression call:
-                    AppendApplied(builder, call.Operation.Name, call.Arguments);
+                    AppendApplied(builder, Callee(call.Module, call.Operation.Name), call.Arguments);
                     break;
                 case FunctionCallExpression call:
                     AppendApplied(builder, Callee(call.Module, call.Function.Name), call.Arguments);

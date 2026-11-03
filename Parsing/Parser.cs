@@ -116,10 +116,10 @@ public sealed class Parser
         }
 
         var pathToken = _cursor.Current;
-        if (pathToken.Kind != TokenKind.String)
+        if (pathToken.Kind != TokenKind.String && !pathToken.IsWord(Keywords.Library))
         {
             throw _cursor.Error(
-                $"'{Keywords.Use}' takes a module name and then a string literal path: {Keywords.Use} {nameToken.Text} \"<path>\", found {pathToken.Describe()}.");
+                $"'{Keywords.Use}' takes a module name and then a string literal path or the word {Keywords.Library}: {Keywords.Use} {nameToken.Text} \"<path>\" or {Keywords.Use} {nameToken.Text} {Keywords.Library}, found {pathToken.Describe()}.");
         }
 
         _cursor.Advance();
@@ -128,7 +128,7 @@ public sealed class Parser
             throw new InvalidOperationException($"Module '{nameToken.Text}' was not registered by the signature pre-pass.");
         }
 
-        return new UseStatement(nameToken.Text, pathToken.Text, start.Position);
+        return new UseStatement(nameToken.Text, pathToken.Kind == TokenKind.String ? pathToken.Text : null, start.Position);
     }
 
     private Statement ParseImport()
@@ -279,7 +279,7 @@ public sealed class Parser
                 $"{Keywords.Copy} {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>."),
             Keywords.Attempt => throw _cursor.Error(
                 $"'{Keywords.Attempt}' cannot be a statement: its result tells whether the operation succeeded. " +
-                $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} write_file \"save.txt\" text …."),
+                $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} {Keywords.From} files save \"save.txt\" text …."),
             Keywords.While => ParseWhile(),
             Keywords.For => ParseFor(NoDeclarations, NoOuterNames),
             Keywords.In => throw _cursor.Error($"'{Keywords.In}' without a matching '{Keywords.For}'."),
@@ -297,7 +297,7 @@ public sealed class Parser
             Keywords.End => throw _cursor.Error("'end' without a matching 'block'."),
             Keywords.Else => throw _cursor.Error($"'else' without a matching 'if' or '{Keywords.IfSome}'."),
             Keywords.From => new CallStatement(ParseQualified(allowVoid: true, asStatement: true), token.Position),
-            _ when Builtins.All.ContainsKey(token.Text) || _names.FindCallable(token.Text) is not null =>
+            _ when _names.FindOperation(token.Text) is not null || _names.FindCallable(token.Text) is not null =>
                 new CallStatement(ParseCall(allowVoid: true), token.Position),
             _ when _names.FindRecord(token.Text) is not null => throw ConstructorStatement(token, token.Text),
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
@@ -306,6 +306,7 @@ public sealed class Parser
             _ when _names.Uses.ContainsKey(token.Text) => throw ModuleUsedAsValue(token),
             _ when Keywords.RetiredHint(token.Text) is { } retired => throw _cursor.Error(retired),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
+            _ when token.Kind == TokenKind.Word && _names.LibraryHint(token.Text) is { } hint => throw _cursor.Error(hint),
             _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
                 throw _cursor.Error(Keywords.UnderscoreHint(token.Text, spelling)),
             _ => throw StrayValue(token),
@@ -345,8 +346,16 @@ public sealed class Parser
     private PyropException StrayValue(Token token, string? described = null) =>
         _cursor.Error(
             $"{described ?? token.Describe()} cannot stand alone as a statement. " +
-            "This usually means the expression before it was given more arguments than its operation takes.",
+            "This usually means the expression before it was given more arguments than its operation takes." +
+            LibraryHintBefore(token),
             token);
+
+    private string LibraryHintBefore(Token token) =>
+        ReferenceEquals(token, _cursor.Current)
+        && _cursor.Behind(1) is { Kind: TokenKind.Word } previous
+        && _names.LibraryHint(previous.Text) is { } hint
+            ? $" If '{previous.Text}' was meant as an operation: {hint}"
+            : "";
 
     private Statement ParseDef(HashSet<string> declared, OuterNames outer)
     {
@@ -766,7 +775,7 @@ public sealed class Parser
             return ParseQualified(allowVoid: false, asStatement: false);
         }
 
-        if (Builtins.All.ContainsKey(token.Text) || _names.FindCallable(token.Text) is not null)
+        if (_names.FindOperation(token.Text) is not null || _names.FindCallable(token.Text) is not null)
         {
             return ParseCall(allowVoid: false);
         }
@@ -831,9 +840,21 @@ public sealed class Parser
             return new AttemptExpression(ParseExpression(), start.Position);
         }
 
-        if (operand.Kind == TokenKind.Word && Builtins.All.ContainsKey(operand.Text))
+        if (operand.Kind == TokenKind.Word && _names.FindOperation(operand.Text) is not null)
         {
             return new AttemptExpression(ParseCall(allowVoid: true), start.Position);
+        }
+
+        if (operand.IsWord(Keywords.From))
+        {
+            var qualifiedStart = _cursor.Index;
+            if (QualifiedNames.Resolve(_names, QualifiedNames.Read(_cursor), _cursor) is BuiltinOperation)
+            {
+                _cursor.MoveTo(qualifiedStart);
+                return new AttemptExpression(ParseQualified(allowVoid: true, asStatement: false), start.Position);
+            }
+
+            _cursor.MoveTo(qualifiedStart);
         }
 
         if (operand.Kind == TokenKind.Word && Keywords.RetiredHint(operand.Text) is { } retired)
@@ -841,14 +862,21 @@ public sealed class Parser
             throw _cursor.Error(retired);
         }
 
-        var found = operand.Kind == TokenKind.Word && _names.FindCallable(operand.Text) is not null
+        var qualifiedFunction = operand.IsWord(Keywords.From) && _names.Uses.TryGetValue(_cursor.Peek(1).Text, out var use)
+            && use.Target.Names.Functions.Find(_cursor.Peek(2).Text) is not null;
+        var hint = operand.Kind == TokenKind.Word && _names.FindCallable(operand.Text) is null && _names.LibraryHint(operand.Text) is { } found
+            ? $" {found}"
+            : "";
+        var described = operand.Kind == TokenKind.Word && _names.FindCallable(operand.Text) is not null
             ? $"the function '{operand.Text}'; a function's own failures are runtime errors, so that a bug in it is never mistaken for bad input"
+            : qualifiedFunction
+            ? $"the function '{_cursor.Peek(2).Text}' of module '{_cursor.Peek(1).Text}'; a function's own failures are runtime errors, so that a bug in it is never mistaken for bad input"
             : operand.IsWord(Keywords.From)
-            ? $"the qualified name starting at '{Keywords.From}'; only built-in operations can follow '{Keywords.Attempt}'"
+            ? $"the qualified name starting at '{Keywords.From}'; only built-in operations, including a library's, can follow '{Keywords.Attempt}'"
             : operand.Describe();
         throw _cursor.Error(
             $"'{Keywords.Attempt}' takes a built-in operation or a convert, such as {Keywords.Attempt} {Keywords.Convert} int read " +
-            $"or {Keywords.Attempt} read_file \"notes.txt\"; found {found}.",
+            $"or {Keywords.Attempt} {Keywords.From} files load \"notes.txt\"; found {described}.{hint}",
             operand);
     }
 
@@ -918,14 +946,9 @@ public sealed class Parser
     private Expression ParseCall(bool allowVoid)
     {
         var token = _cursor.Advance();
-        if (Builtins.All.TryGetValue(token.Text, out var operation))
+        if (_names.FindOperation(token.Text) is { } operation)
         {
-            if (operation.ReturnsVoid && !allowVoid)
-            {
-                throw _cursor.Error($"Operation '{operation.Name}' returns void and cannot be used as a value.", token);
-            }
-
-            return new BuiltinCallExpression(operation, ParseArguments(operation.Arity), token.Position);
+            return ParseOperationCall(operation, token, null, allowVoid);
         }
 
         return ParseFunctionCall(_names.FindCallable(token.Text)!, token, null, allowVoid);
@@ -945,8 +968,19 @@ public sealed class Parser
             ChoiceVariant variant => new VariantExpression(
                 variant, ParseArguments(variant.Arity), qualified.From.Position, qualified.Module.Text),
             FunctionSignature function => ParseFunctionCall(function, qualified.From, qualified.Module.Text, allowVoid),
+            BuiltinOperation operation => ParseOperationCall(operation, qualified.From, qualified.Module.Text, allowVoid),
             var other => throw new InvalidOperationException($"Unknown qualified target {other.GetType().Name}."),
         };
+    }
+
+    private Expression ParseOperationCall(BuiltinOperation operation, Token start, string? module, bool allowVoid)
+    {
+        if (operation.ReturnsVoid && !allowVoid)
+        {
+            throw _cursor.Error($"Operation '{operation.Name}' returns void and cannot be used as a value.", start);
+        }
+
+        return new BuiltinCallExpression(operation, ParseArguments(operation.Arity), start.Position, module);
     }
 
     private Expression ParseConstruct(RecordType record, Token start, string? module) =>

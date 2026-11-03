@@ -1,9 +1,11 @@
 use items "items.prp"
 use world "world.prp"
 use state "state.prp"
+use files library
 import from items ItemKind end
 import from world Place end
 import from state Player end
+import from files save load_lines end
 
 def string header "pyrop adventure save 1"
 
@@ -15,11 +17,11 @@ export function bool save_game string path Player player block
     end
     for ItemKind item in the inventory of player
         set lines push lines add "carrying " convert string item
-    return attempt write_file path add join lines "\n" "\n"
+    return attempt save path add join lines "\n" "\n"
 end
 
 export function option Player load_game string path block
-    if_some list string lines attempt read_lines path block
+    if_some list string lines attempt load_lines path block
         if equal length_of lines 0 return none Player
         if not equal get lines 0 header return none Player
         def option Place place none Place

@@ -22,6 +22,7 @@ public sealed class PyropSession
 {
     private readonly Interpreter _interpreter;
     private readonly ISourceStore _store;
+    private readonly BuiltinLibraries _libraries;
     private readonly Dictionary<string, string> _sources = new();
     private ModuleNamespace? _names;
     private IReadOnlyDictionary<string, PyropType> _globals = new Dictionary<string, PyropType>();
@@ -30,7 +31,9 @@ public sealed class PyropSession
 
     public PyropSession(LineInput input, IProgramOutput output, HostContext? host = null, ISourceStore? store = null)
     {
-        _interpreter = new Interpreter(input, output, host ?? HostContext.Isolated);
+        host ??= HostContext.Isolated;
+        _interpreter = new Interpreter(input, output, host);
+        _libraries = host.Libraries;
         _store = store ?? FileSourceStore.Instance;
     }
 
@@ -206,7 +209,7 @@ public sealed class PyropSession
             baseDirectory = Path.GetDirectoryName(fullPath)!;
         }
 
-        var existing = _names ?? ModuleNamespace.For(new Module(fullPath, sourcePath ?? "input"));
+        var existing = _names ?? ModuleNamespace.For(new Module(fullPath, sourcePath ?? "input"), _libraries);
         var loader = new SourceLoader(_store);
         try
         {
@@ -227,10 +230,10 @@ public sealed class PyropSession
 
             var modules = parseError is null && parsesModules
                 ? scan.Loaded
-                    .Select(module => new ModuleTree(module.Module, Parser.Parse(module.File.Tokens, module.Names, reportsIncompleteInput: false)))
+                    .Select(module => new ModuleTree(module.Module, Parser.Parse(module.File!.Tokens, module.Names, reportsIncompleteInput: false), module.Names))
                     .ToList()
                 : [];
-            var program = new ParsedProgram(modules, new ModuleTree(scan.Names.Module, tree));
+            var program = new ParsedProgram(modules, new ModuleTree(scan.Names.Module, tree, scan.Names));
             return new ParsedInput(program, scan.Names, scan.Loaded, [.. loader.Files], parseError);
         }
         finally

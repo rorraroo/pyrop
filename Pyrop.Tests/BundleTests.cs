@@ -31,7 +31,7 @@ public sealed class BundleTests : IDisposable
     private void WriteProgram()
     {
         Write(Path.Combine("lib", "text.prp"), "export function string shout string text return add upper text \"!\"");
-        Write(Path.Combine("tools", "filter.prp"), "use text \"../lib/text.prp\"\nwrite_line from text shout argument_at 0\nwrite_line divide 1 0");
+        Write(Path.Combine("tools", "filter.prp"), "use text \"../lib/text.prp\"\nuse program library\nwrite_line from text shout get from program arguments 0\nwrite_line divide 1 0");
     }
 
     [Fact]

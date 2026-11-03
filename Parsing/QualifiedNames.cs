@@ -59,6 +59,16 @@ public static class QualifiedNames
             return Exported(function, function.IsExported, "Function", "definition", use, qualified, cursor);
         }
 
+        if (target.Operations.TryGetValue(name, out var operation))
+        {
+            return operation;
+        }
+
+        if (use.Target.IsLibrary)
+        {
+            throw cursor.Error(LibraryLacks(names, use, module, name), qualified.Name);
+        }
+
         throw cursor.Error(
             target.Imports.ContainsKey(name) || target.Variants.ContainsKey(name)
                 ? $"Module '{module}' only imports '{name}' and cannot pass it on; use the module that exports it."
@@ -84,6 +94,8 @@ public static class QualifiedNames
 
         throw cursor.Error(
             target.Functions.Contains(name) ? $"'{name}' of module '{module}' is a function, not a type."
+            : target.Operations.ContainsKey(name) ? $"'{name}' of the library {module} is an operation, not a type."
+            : use.Target.IsLibrary ? LibraryLacks(names, use, module, name)
             : target.OwnVariant(name) is { } variant ? $"'{name}' of module '{module}' is a variant of the choice '{variant.Choice.Name}', not a type."
             : target.Imports.ContainsKey(name) || target.Variants.ContainsKey(name) ? $"Module '{module}' only imports '{name}' and cannot pass it on; use the module that exports it."
             : $"Module '{module}' has no record or choice '{name}'.",
@@ -96,11 +108,19 @@ public static class QualifiedNames
         if (!names.Uses.TryGetValue(module, out var use))
         {
             throw names.Failures.OfName(module) ?? cursor.Error(
-                $"'{module}' is not a module of this file; load it with {Keywords.Use} {module} \"<path>\".", qualified.Module);
+                names.Libraries.Find(module) is not null
+                    ? $"'{module}' is not a module of this file; load the library with {Keywords.Use} {module} {Keywords.Library}."
+                    : $"'{module}' is not a module of this file; load it with {Keywords.Use} {module} \"<path>\".", qualified.Module);
         }
 
         return use;
     }
+
+    private static string LibraryLacks(ModuleNamespace names, ModuleUse use, string module, string name) =>
+        names.Libraries.All.FirstOrDefault(library => library.Module == use.Target.Module) is { } library
+        && library.FormerNames.TryGetValue(name, out var current)
+            ? $"The library {module} has no '{name}'; it is now called '{current}'."
+            : $"The library {module} has no '{name}'; it offers {string.Join(", ", use.Target.Names.Operations.Keys)}.";
 
     private static ChoiceVariant ExportedVariant(ChoiceVariant variant, ModuleUse use, QualifiedName qualified, TokenCursor cursor)
     {

@@ -62,7 +62,8 @@ public static class SemanticClassifier
                     classified.Add(Classified(module, SemanticKind.Module, SemanticModifiers.None));
                     if (ExportedKind(use.Target.Names, name.Text) is { } exported)
                     {
-                        classified.Add(Classified(name, exported, SemanticModifiers.Imported));
+                        var imported = index > 0 && tokens[index - 1].IsWord(Keywords.Import) ? SemanticModifiers.Imported : SemanticModifiers.None;
+                        classified.Add(Classified(name, exported.Kind, exported.Modifiers | imported));
                     }
                 }
 
@@ -104,6 +105,11 @@ public static class SemanticClassifier
             return (SemanticKind.Module, SemanticModifiers.None);
         }
 
+        if (names.Imports.GetValueOrDefault(text)?.Operation is not null)
+        {
+            return (SemanticKind.Function, SemanticModifiers.BuiltIn | SemanticModifiers.Imported);
+        }
+
         if (names.FindCallable(text) is { } function)
         {
             return (SemanticKind.Function, Origin(names, function.Module));
@@ -126,10 +132,11 @@ public static class SemanticClassifier
             : (SemanticKind.Variable, SemanticModifiers.None);
     }
 
-    private static SemanticKind? ExportedKind(ModuleNamespace target, string name) =>
-        target.Records.ContainsKey(name) || target.Choices.ContainsKey(name) ? SemanticKind.Type
-        : target.OwnVariant(name) is not null ? SemanticKind.Variant
-        : target.Functions.Contains(name) ? SemanticKind.Function
+    private static (SemanticKind Kind, SemanticModifiers Modifiers)? ExportedKind(ModuleNamespace target, string name) =>
+        target.Records.ContainsKey(name) || target.Choices.ContainsKey(name) ? (SemanticKind.Type, SemanticModifiers.Imported)
+        : target.OwnVariant(name) is not null ? (SemanticKind.Variant, SemanticModifiers.Imported)
+        : target.Functions.Contains(name) ? (SemanticKind.Function, SemanticModifiers.Imported)
+        : target.Operations.ContainsKey(name) ? (SemanticKind.Function, SemanticModifiers.BuiltIn)
         : null;
 
     private static SemanticModifiers Origin(ModuleNamespace names, Module module) =>

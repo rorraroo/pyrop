@@ -10,15 +10,19 @@ public sealed class ListTextTests : IDisposable
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
+    private const string Libraries =
+        "use files library\nimport from files load_lines listing end\n" +
+        "use program library\nimport from program arguments end\n";
+
     private string PathOf(string name) => Path.Combine(_directory, name);
 
     private static HostContext Arguments(params string[] arguments) => new(arguments, _ => null);
 
     private string RunWith(string source, params string[] paths) =>
-        Run.Program(source, host: Arguments(paths.Select(PathOf).ToArray()));
+        Run.Program(Libraries + source, host: Arguments(paths.Select(PathOf).ToArray()));
 
     private PyropError FailWith(string source, params string[] paths) =>
-        Run.Failure(source, host: Arguments(paths.Select(PathOf).ToArray()));
+        Run.Failure(Libraries + source, host: Arguments(paths.Select(PathOf).ToArray()));
 
     private static PyropError RuntimeFailure(string source)
     {
@@ -57,7 +61,8 @@ public sealed class ListTextTests : IDisposable
         var host = new HostContext(["a\r\nb"], _ => null);
 
         Assert.Equal("1\ntrue\n", Run.Program(
-            "write_line length_of split argument_at 0 \"\\n\"\nwrite_line equal get split argument_at 0 \"\\n\" 0 argument_at 0",
+            "use program library\ndef string text get from program arguments 0\n" +
+            "write_line length_of split text \"\\n\"\nwrite_line equal get split text \"\\n\" 0 text",
             host: host));
     }
 
@@ -158,68 +163,68 @@ public sealed class ListTextTests : IDisposable
     [InlineData("\n\n", "[\"\", \"\"]")]
     [InlineData("a\r\n\r\nb\rc\r\n", "[\"a\", \"\", \"b\", \"c\"]")]
     [InlineData("\uFEFFžluť\n", "[\"žluť\"]")]
-    public void ReadLinesGivesTheLinesOfAFile(string content, string expected)
+    public void LoadLinesGivesTheLinesOfAFile(string content, string expected)
     {
         File.WriteAllText(PathOf("lines.txt"), content, new UTF8Encoding(false));
 
-        Assert.Equal(expected + "\n", RunWith("write_line read_lines argument_at 0", "lines.txt"));
+        Assert.Equal(expected + "\n", RunWith("write_line load_lines get arguments 0", "lines.txt"));
     }
 
     [Fact]
-    public void ReadLinesWorksWithFor()
+    public void LoadLinesWorksWithFor()
     {
         File.WriteAllText(PathOf("todo.txt"), "- milk\nnote\n- bread\n");
 
         Assert.Equal(
             "- milk\n- bread\n",
-            RunWith("for string line in read_lines argument_at 0 if starts_with line \"- \" write_line line", "todo.txt"));
+            RunWith("for string line in load_lines get arguments 0 if starts_with line \"- \" write_line line", "todo.txt"));
     }
 
     [Theory]
     [InlineData("missing.txt", "File \"{0}\" does not exist.")]
     [InlineData("", "A file path cannot be empty.")]
-    public void ReadLinesFailsLikeReadFile(string name, string message)
+    public void LoadLinesFailsLikeLoad(string name, string message)
     {
         var path = name.Length == 0 ? "" : PathOf(name);
-        var error = Run.Failure("write_line read_lines argument_at 0", host: Arguments(path));
+        var error = Run.Failure(Libraries + "write_line load_lines get arguments 0", host: Arguments(path));
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal(string.Format(message, path), error.Message);
     }
 
     [Fact]
-    public void ReadLinesRejectsADirectory()
+    public void LoadLinesRejectsADirectory()
     {
         Directory.CreateDirectory(PathOf("folder"));
 
-        Assert.Equal($"\"{PathOf("folder")}\" is a directory, not a file.", FailWith("write_line read_lines argument_at 0", "folder").Message);
+        Assert.Equal($"\"{PathOf("folder")}\" is a directory, not a file.", FailWith("write_line load_lines get arguments 0", "folder").Message);
     }
 
     [Fact]
-    public void ReadLinesRejectsAFileThatIsNotUtf8()
+    public void LoadLinesRejectsAFileThatIsNotUtf8()
     {
         File.WriteAllBytes(PathOf("binary.bin"), [0x61, 0x0A, 0xFF, 0xFE]);
 
-        Assert.Equal($"File \"{PathOf("binary.bin")}\" is not valid UTF-8 text.", FailWith("write_line read_lines argument_at 0", "binary.bin").Message);
+        Assert.Equal($"File \"{PathOf("binary.bin")}\" is not valid UTF-8 text.", FailWith("write_line load_lines get arguments 0", "binary.bin").Message);
     }
 
     [Fact]
-    public void ReadLinesRespectsTheSizeLimit()
+    public void LoadLinesRespectsTheSizeLimit()
     {
         File.WriteAllText(PathOf("four.txt"), "a\nb\nc\nd\n");
         File.WriteAllText(PathOf("three.txt"), "a\nb\nc\n");
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output, Arguments(PathOf("three.txt"), PathOf("four.txt"))) { CollectionLimit = 3 };
 
-        session.Run("write_line read_lines argument_at 0");
-        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run("write_line read_lines argument_at 1")).Errors);
+        session.Run(Libraries + "write_line load_lines get arguments 0");
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(Libraries + "write_line load_lines get arguments 1")).Errors);
 
         Assert.Equal("A list cannot hold more than 3 items.", error.Message);
         Assert.Equal("[\"a\", \"b\", \"c\"]\n", output.ToString());
     }
 
     [Fact]
-    public void ListFilesGivesSortedFileNamesOnly()
+    public void ListingGivesSortedFileNamesOnly()
     {
         Directory.CreateDirectory(PathOf("saves"));
         foreach (var name in new[] { "b.save", "a.txt", "ž.save", "_x" })
@@ -230,11 +235,11 @@ public sealed class ListTextTests : IDisposable
         Directory.CreateDirectory(Path.Combine(PathOf("saves"), "nested"));
         File.WriteAllText(Path.Combine(PathOf("saves"), "nested", "deep.save"), "");
 
-        Assert.Equal("[\"_x\", \"a.txt\", \"b.save\", \"ž.save\"]\n", RunWith("write_line list_files argument_at 0", "saves"));
+        Assert.Equal("[\"_x\", \"a.txt\", \"b.save\", \"ž.save\"]\n", RunWith("write_line listing get arguments 0", "saves"));
     }
 
     [Fact]
-    public void ListFilesSortsOrdinally()
+    public void ListingSortsOrdinally()
     {
         Directory.CreateDirectory(PathOf("mixed"));
         foreach (var name in new[] { "b", "A", "a1", "Z", "10", "9", "ä" })
@@ -242,29 +247,29 @@ public sealed class ListTextTests : IDisposable
             File.WriteAllText(Path.Combine(PathOf("mixed"), name), "");
         }
 
-        Assert.Equal("[\"10\", \"9\", \"A\", \"Z\", \"a1\", \"b\", \"ä\"]\n", RunWith("write_line list_files argument_at 0", "mixed"));
+        Assert.Equal("[\"10\", \"9\", \"A\", \"Z\", \"a1\", \"b\", \"ä\"]\n", RunWith("write_line listing get arguments 0", "mixed"));
     }
 
     [Fact]
-    public void ListFilesIncludesHiddenFiles()
+    public void ListingIncludesHiddenFiles()
     {
         Directory.CreateDirectory(PathOf("hidden"));
         File.WriteAllText(Path.Combine(PathOf("hidden"), ".secret"), "");
         File.SetAttributes(Path.Combine(PathOf("hidden"), ".secret"), FileAttributes.Hidden);
 
-        Assert.Equal("[\".secret\"]\n", RunWith("write_line list_files argument_at 0", "hidden"));
+        Assert.Equal("[\".secret\"]\n", RunWith("write_line listing get arguments 0", "hidden"));
     }
 
     [Fact]
-    public void ListFilesOfAnEmptyDirectoryIsEmpty()
+    public void ListingOfAnEmptyDirectoryIsEmpty()
     {
         Directory.CreateDirectory(PathOf("nothing"));
 
-        Assert.Equal("[]\n", RunWith("write_line list_files argument_at 0", "nothing"));
+        Assert.Equal("[]\n", RunWith("write_line listing get arguments 0", "nothing"));
     }
 
     [Fact]
-    public void ListFilesWorksWithFor()
+    public void ListingWorksWithFor()
     {
         Directory.CreateDirectory(PathOf("saves"));
         File.WriteAllText(Path.Combine(PathOf("saves"), "one.save"), "");
@@ -272,47 +277,47 @@ public sealed class ListTextTests : IDisposable
 
         Assert.Equal(
             "one.save\n",
-            RunWith("for string name in list_files argument_at 0 if ends_with name \".save\" write_line name", "saves"));
+            RunWith("for string name in listing get arguments 0 if ends_with name \".save\" write_line name", "saves"));
     }
 
     [Fact]
-    public void ListFilesRejectsAMissingDirectory()
+    public void ListingRejectsAMissingDirectory()
     {
-        var error = FailWith("write_line list_files argument_at 0", "nowhere");
+        var error = FailWith("write_line listing get arguments 0", "nowhere");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"Directory \"{PathOf("nowhere")}\" does not exist.", error.Message);
     }
 
     [Fact]
-    public void ListFilesRejectsAFile()
+    public void ListingRejectsAFile()
     {
         File.WriteAllText(PathOf("notes.txt"), "");
 
-        Assert.Equal($"\"{PathOf("notes.txt")}\" is a file, not a directory.", FailWith("write_line list_files argument_at 0", "notes.txt").Message);
+        Assert.Equal($"\"{PathOf("notes.txt")}\" is a file, not a directory.", FailWith("write_line listing get arguments 0", "notes.txt").Message);
     }
 
     [Theory]
-    [InlineData("write_line list_files \"\"", "A directory path cannot be empty.")]
-    [InlineData("write_line list_files \"a\\tb\"", "\"a\tb\" is not a valid directory path; it contains a control character.")]
-    public void ListFilesRejectsInvalidPaths(string source, string message)
+    [InlineData("write_line listing \"\"", "A directory path cannot be empty.")]
+    [InlineData("write_line listing \"a\\tb\"", "\"a\tb\" is not a valid directory path; it contains a control character.")]
+    public void ListingRejectsInvalidPaths(string source, string message)
     {
-        Assert.Equal(message, RuntimeFailure(source).Message);
+        Assert.Equal(message, RuntimeFailure(Libraries + source).Message);
     }
 
     [Fact]
-    public void ListFilesRejectsAPathTheSystemCannotUse()
+    public void ListingRejectsAPathTheSystemCannotUse()
     {
         if (!OperatingSystem.IsWindows())
         {
             return;
         }
 
-        Assert.Equal("\"a*b\" is not a valid directory path.", RuntimeFailure("write_line list_files \"a*b\"").Message);
+        Assert.Equal("\"a*b\" is not a valid directory path.", RuntimeFailure(Libraries + "write_line listing \"a*b\"").Message);
     }
 
     [Fact]
-    public void ListFilesRespectsTheSizeLimit()
+    public void ListingRespectsTheSizeLimit()
     {
         Directory.CreateDirectory(PathOf("many"));
         foreach (var name in new[] { "a", "b", "c", "d" })
@@ -321,7 +326,7 @@ public sealed class ListTextTests : IDisposable
         }
 
         var session = new PyropSession(new StringReader(""), new StringOutput(), Arguments(PathOf("many"))) { CollectionLimit = 3 };
-        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run("write_line list_files argument_at 0")).Errors);
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(Libraries + "write_line listing get arguments 0")).Errors);
 
         Assert.Equal("A list cannot hold more than 3 items.", error.Message);
     }
@@ -329,12 +334,20 @@ public sealed class ListTextTests : IDisposable
     [Theory]
     [InlineData("split")]
     [InlineData("join")]
-    [InlineData("read_lines")]
-    [InlineData("list_files")]
     [InlineData("write_error")]
     [InlineData("write_error_line")]
     public void ReservesTheNewNames(string name)
     {
         Assert.Equal(ErrorStage.Parse, Run.Failure($"def string {name} \"x\"").Stage);
+    }
+
+    [Theory]
+    [InlineData("read_lines")]
+    [InlineData("list_files")]
+    [InlineData("load_lines")]
+    [InlineData("listing")]
+    public void FileListNamesThatLeftTheCoreAreFreeVariableNames(string name)
+    {
+        Assert.Equal("x\n", Run.Program($"def string {name} \"x\"\nwrite_line {name}"));
     }
 }
