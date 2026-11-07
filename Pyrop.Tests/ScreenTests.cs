@@ -326,6 +326,58 @@ public sealed class ScreenTests
     }
 
     [Fact]
+    public void AColorIsTheTerminalsOwnForegroundColor()
+    {
+        var line = Assert.Single(ViewLayout.Screen(new StyledView(OutputStyle.BrightBlue, Text("water")), OutputStyle.None, 20, 3));
+
+        Assert.Equal("\e[94mwater\e[0m", line.ToAnsi());
+    }
+
+    [Fact]
+    public void AColoredGridColorsItsCharactersAndLeavesTheRestInTheSurroundingStyle()
+    {
+        var colors = new Dictionary<string, OutputStyle> { ["#"] = OutputStyle.Grey, ["g"] = OutputStyle.Green };
+        var grid = new GridView(["##g.@"], 0, 0, colors);
+
+        var line = Assert.Single(ViewLayout.Screen(grid, OutputStyle.Muted, 20, 3));
+
+        Assert.Equal("\e[90m##\e[0m\e[32mg\e[0m\e[90m.@\e[0m", line.ToAnsi());
+    }
+
+    [Fact]
+    public void AColoredGridIsCroppedLikeAGrid()
+    {
+        var map = Enumerable.Range(0, 10).Select(row => new string('#', 30) + "g").ToList();
+        var colors = new Dictionary<string, OutputStyle> { ["g"] = OutputStyle.Green };
+
+        var plain = Lines(ViewLayout.Screen(new GridView(map, 29, 9), OutputStyle.None, 21, 4));
+        var colored = Lines(ViewLayout.Screen(new GridView(map, 29, 9, colors), OutputStyle.None, 21, 4));
+
+        Assert.Equal(plain, colored);
+    }
+
+    [Fact]
+    public void WriteViewDrawsAColoredMapInColor()
+    {
+        var (text, _) = RunRich(
+            "write_view colored_grid list_of string \"#g#\" end map_of string string \"g\" \"green\" \"#\" \"grey\" end 0 0",
+            new FakeScreen(30, 5));
+
+        Assert.Contains("\e[90m#\e[0m\e[32mg\e[0m\e[90m#\e[0m", text);
+    }
+
+    [Fact]
+    public void AColorInsideAStyledPanelKeepsItsColor()
+    {
+        var view = new StyledView(OutputStyle.Danger, new PanelView("P", new StyledView(OutputStyle.Cyan, Text("x"))));
+
+        var lines = ViewLayout.Screen(view, OutputStyle.None, 20, 3);
+
+        Assert.Contains(lines[1].Segments, segment => segment.Text == "x" && segment.Style == OutputStyle.Cyan);
+        Assert.All(lines[1].Segments.Where(segment => segment.Text.Contains('│')), segment => Assert.Equal(OutputStyle.Danger, segment.Style));
+    }
+
+    [Fact]
     public void WriteViewDrawsIntoOrdinaryOutput()
     {
         var (text, _) = RunRich("write \"a\"\nwrite_view panel \"P\" text \"x\"", new FakeScreen(30, 5));

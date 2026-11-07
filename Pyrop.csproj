@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.18.1</Version>
+    <Version>0.19.0</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>pyrop</ToolCommandName>
     <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**</DefaultItemExcludes>

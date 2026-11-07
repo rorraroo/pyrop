@@ -121,17 +121,7 @@ public static class ViewLayout
 
     public static string? CodeOf(OutputStyle style, bool inverted)
     {
-        var code = style switch
-        {
-            OutputStyle.Emphasis => "1",
-            OutputStyle.Muted => "90",
-            OutputStyle.Success => "32",
-            OutputStyle.Warning => "33",
-            OutputStyle.Danger => "31",
-            OutputStyle.Info => "36",
-            _ => null,
-        };
-
+        var code = OutputStyles.AnsiCode(style);
         return inverted ? (code is null ? "7" : $"{code};7") : code;
     }
 
@@ -390,8 +380,41 @@ public static class ViewLayout
         return grid.Lines
             .Skip(top)
             .Take(shownHeight)
-            .Select(line => Line(Slice(Pad(line, longest), left, shownWidth).TrimEnd(), style))
+            .Select(line => GridLine(Slice(Pad(line, longest), left, shownWidth).TrimEnd(), grid.Colors, style))
             .ToList();
+    }
+
+    private static ScreenLine GridLine(string text, IReadOnlyDictionary<string, OutputStyle>? colors, OutputStyle style)
+    {
+        if (colors is null || colors.Count == 0)
+        {
+            return Line(text, style);
+        }
+
+        var segments = new List<Segment>();
+        var run = new StringBuilder();
+        var runStyle = style;
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
+        {
+            var element = elements.GetTextElement();
+            var elementStyle = colors.TryGetValue(element, out var color) ? color : style;
+            if (elementStyle != runStyle && run.Length > 0)
+            {
+                segments.Add(new Segment(run.ToString(), runStyle));
+                run.Clear();
+            }
+
+            runStyle = elementStyle;
+            run.Append(element);
+        }
+
+        if (run.Length > 0)
+        {
+            segments.Add(new Segment(run.ToString(), runStyle));
+        }
+
+        return new ScreenLine(segments);
     }
 
     private static int Window(long focus, int length, int shown)

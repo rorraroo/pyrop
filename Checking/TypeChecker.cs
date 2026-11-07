@@ -284,6 +284,24 @@ public sealed class TypeChecker
             Report(OutputStyles.UnknownMessage(style), literal.Position);
         }
 
+        if (Views.IsInColor(variant.Variant))
+        {
+            CheckColorLiteral(variant.Arguments[0]);
+        }
+
+        if (Views.IsColoredGrid(variant.Variant) && variant.Arguments[1] is MapOfExpression colors)
+        {
+            foreach (var entry in colors.Entries)
+            {
+                if (entry.Key is LiteralExpression { Value: StringValue { Value: var key } } && !OutputStyles.IsColorKey(key))
+                {
+                    Report(OutputStyles.ColorKeyMessage(key), entry.Key.Position);
+                }
+
+                CheckColorLiteral(entry.Value);
+            }
+        }
+
         for (var index = 0; index < variant.Arguments.Count; index++)
         {
             if (TypeOf(variant.Arguments[index], scope) is { } type && type != data[index])
@@ -295,6 +313,14 @@ public sealed class TypeChecker
                         : $"Value {index + 1} of the variant '{variant.Variant.Name}' must be {declared}, found {found}.",
                     variant.Arguments[index].Position);
             }
+        }
+    }
+
+    private void CheckColorLiteral(Expression color)
+    {
+        if (color is LiteralExpression { Value: StringValue { Value: var name } } && OutputStyles.FindColor(name) is null)
+        {
+            Report(OutputStyles.UnknownColorMessage(name), color.Position);
         }
     }
 

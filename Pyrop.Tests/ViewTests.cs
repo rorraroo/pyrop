@@ -126,6 +126,8 @@ public sealed class ViewTests
             "    when columns v write_line \"columns\"\n" +
             "    when grid l c r write_line \"grid\"\n" +
             "    when in_style s v write_line \"in_style\"\n" +
+            "    when in_color s v write_line \"in_color\"\n" +
+            "    when colored_grid l m c r write_line \"colored_grid\"\n" +
             "end"));
     }
 
@@ -176,6 +178,92 @@ public sealed class ViewTests
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Contains("loud", error.Message);
+    }
+
+    [Fact]
+    public void InColorIsDroppedLikeAStyleButTheInnermostWins()
+    {
+        Assert.Equal(
+            "<warning>Hero\n</warning><bright_red>Dragon\n</bright_red><warning>ok\n</warning>",
+            Views("styled \"warning\" write_view panel \"Hero\" rows list_of View in_color \"bright_red\" text \"Dragon\" text \"ok\" end"));
+    }
+
+    [Fact]
+    public void AStyleInsideAColorKeepsItsStyle()
+    {
+        Assert.Equal("<danger>x\n</danger>", Views("write_view in_color \"green\" in_style \"danger\" text \"x\""));
+    }
+
+    [Fact]
+    public void AColoredGridWritesItsLinesWithoutColor()
+    {
+        Assert.Equal(
+            "#g#\n#.\n",
+            Views("write_view colored_grid list_of string \"#g#\" \"#.\" end map_of string string \"g\" \"green\" \"#\" \"grey\" end 0 0"));
+    }
+
+    [Fact]
+    public void AColoredGridsTextFormShowsItsMap()
+    {
+        Assert.Equal(
+            "colored_grid [\"@\"] {\"@\": \"bright_white\"} 0 0\n",
+            Views("write_line colored_grid list_of string \"@\" end map_of string string \"@\" \"bright_white\" end 0 0"));
+    }
+
+    [Theory]
+    [InlineData("write_view in_color \"pink\" text \"x\"", "Unknown color \"pink\"")]
+    [InlineData("write_view in_color \"Red\" text \"x\"", "Unknown color \"Red\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"#\" \"danger\" end 0 0", "Unknown color \"danger\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"##\" \"grey\" end 0 0", "must be one character that is not a control character, found \"##\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\" \"grey\" end 0 0", "must be one character that is not a control character, found \"\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\\t\" \"grey\" end 0 0", "found \"\\t\"")]
+    public void ColorLiteralsAreChecked(string body, string message)
+    {
+        var error = ViewFailure(body);
+
+        Assert.Equal(ErrorStage.Type, error.Stage);
+        Assert.Contains(message, error.Message);
+    }
+
+    [Fact]
+    public void AStyleNameIsNotAColor()
+    {
+        var error = ViewFailure("write_view in_color \"warning\" text \"x\"");
+
+        Assert.Equal(ErrorStage.Type, error.Stage);
+        Assert.Contains("the colors are black, red, green", error.Message);
+    }
+
+    [Fact]
+    public void AColorNameIsNotAStyle()
+    {
+        Assert.Equal(ErrorStage.Type, ViewFailure("write_view in_style \"red\" text \"x\"").Stage);
+        Assert.Equal(ErrorStage.Type, Run.Failure("styled \"red\" write_line \"x\"").Stage);
+    }
+
+    [Theory]
+    [InlineData("def string tint \"pink\"\nwrite_view in_color tint text \"x\"", "Unknown color \"pink\"")]
+    [InlineData("def string tint \"pink\"\nwrite_view colored_grid list_of string \"#\" end map_of string string \"#\" tint end 0 0", "Unknown color \"pink\"")]
+    [InlineData("def string key \"ab\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"grey\" end 0 0", "found \"ab\"")]
+    [InlineData("def string key \"\\n\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"grey\" end 0 0", "found \"\\n\"")]
+    public void ComputedColorsAreCheckedWhenShown(string body, string message)
+    {
+        var error = ViewFailure(body);
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Contains(message, error.Message);
+    }
+
+    [Fact]
+    public void AKeyOfOneCharacterIsCountedLikeLengthOf()
+    {
+        Assert.Equal("é\n", Views("write_view colored_grid list_of string \"é\" end map_of string string \"é\" \"red\" end 0 0"));
+    }
+
+    [Fact]
+    public void AttemptGivesFalseForABadColor()
+    {
+        Assert.Equal("false\n", Views("def string tint \"pink\"\nwrite_line attempt write_view in_color tint text \"x\""));
     }
 
     [Fact]

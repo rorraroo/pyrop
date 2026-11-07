@@ -17,6 +17,8 @@ public static class Views
     public const int Columns = 6;
     public const int Grid = 7;
     public const int InStyle = 8;
+    public const int InColor = 9;
+    public const int ColoredGrid = 10;
 
     public static ChoiceType Declare(Module module)
     {
@@ -32,6 +34,8 @@ public static class Views
             new("columns", position, 1),
             new("grid", position, 3),
             new("in_style", position, 2),
+            new("in_color", position, 2),
+            new("colored_grid", position, 4),
         ]);
         var s = PyropType.String;
         var i = PyropType.Int;
@@ -48,6 +52,8 @@ public static class Views
             [views],
             [strings, i, i],
             [s, view],
+            [s, view],
+            [strings, PyropTypes.MapOf(s, s), i, i],
         ];
         foreach (var (variant, types) in view.Variants.Zip(data))
         {
@@ -60,6 +66,10 @@ public static class Views
     public static ChoiceType Choice => LibraryOperations.TerminalView;
 
     public static bool IsInStyle(ChoiceVariant variant) => variant.Choice == Choice && variant.Index == InStyle;
+
+    public static bool IsInColor(ChoiceVariant variant) => variant.Choice == Choice && variant.Index == InColor;
+
+    public static bool IsColoredGrid(ChoiceVariant variant) => variant.Choice == Choice && variant.Index == ColoredGrid;
 
     public static Value? Show(IBuiltinInvocation invocation, Value view)
     {
@@ -136,16 +146,40 @@ public static class Views
                     data[0].AsList().Items.Select(inner => Build(invocation, (ChoiceValue)inner, depth + 1)).ToList());
             case Grid:
                 return new GridView(Strings(data[0]), data[1].AsInt(), data[2].AsInt());
+            case ColoredGrid:
+                return new GridView(Strings(data[0]), data[2].AsInt(), data[3].AsInt(), Colors(invocation, data[1].AsMap()));
             case InStyle:
                 var name = data[0].AsString();
                 var style = OutputStyles.Find(name) ?? throw invocation.Fail(OutputStyles.UnknownMessage(name));
                 return new StyledView(style, Build(invocation, (ChoiceValue)data[1], depth + 1));
+            case InColor:
+                var colorName = data[0].AsString();
+                var color = OutputStyles.FindColor(colorName) ?? throw invocation.Fail(OutputStyles.UnknownColorMessage(colorName));
+                return new StyledView(color, Build(invocation, (ChoiceValue)data[1], depth + 1));
             default:
                 throw new InvalidOperationException($"Unknown view kind {view.Name}.");
         }
     }
 
     private static IReadOnlyList<string> Strings(Value list) => list.AsList().Items.Select(item => item.AsString()).ToList();
+
+    private static IReadOnlyDictionary<string, OutputStyle> Colors(IBuiltinInvocation invocation, MapValue map)
+    {
+        var colors = new Dictionary<string, OutputStyle>();
+        foreach (var (key, value) in map.Entries)
+        {
+            var character = key.AsString();
+            if (!OutputStyles.IsColorKey(character))
+            {
+                throw invocation.Fail(OutputStyles.ColorKeyMessage(character));
+            }
+
+            var name = value.AsString();
+            colors[character] = OutputStyles.FindColor(name) ?? throw invocation.Fail(OutputStyles.UnknownColorMessage(name));
+        }
+
+        return colors;
+    }
 }
 
 public abstract record ViewNode;
@@ -163,6 +197,7 @@ public sealed record PanelView(string Title, ViewNode Content) : ViewNode;
 
 public sealed record StackView(bool SideBySide, IReadOnlyList<ViewNode> Views) : ViewNode;
 
-public sealed record GridView(IReadOnlyList<string> Lines, long Column, long Row) : ViewNode;
+public sealed record GridView(
+    IReadOnlyList<string> Lines, long Column, long Row, IReadOnlyDictionary<string, OutputStyle>? Colors = null) : ViewNode;
 
 public sealed record StyledView(OutputStyle Style, ViewNode Content) : ViewNode;

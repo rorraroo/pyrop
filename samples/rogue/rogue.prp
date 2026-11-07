@@ -44,11 +44,24 @@ function View status Hero hero block
     return panel "Hero" rows parts
 end
 
+function map string string map_colors
+    return map_of string string
+        "#" "grey"
+        ">" "white"
+        "@" "bright_white"
+        "r" "yellow"
+        "g" "green"
+        "o" "red"
+        "$" "bright_yellow"
+        "!" "magenta"
+        "/" "cyan"
+    end
+
 function View exploring_screen Game game block
     def Hero hero the hero of game
     def list string lines map_lines the level of game the x of hero the y of hero
     return columns list_of View
-        panel "The crypt" grid lines the x of hero the y of hero
+        panel "The crypt" colored_grid lines map_colors the x of hero the y of hero
         rows list_of View
             status hero
             panel "Log" text join last_of the log of game 4 "\n"
