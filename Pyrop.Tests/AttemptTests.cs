@@ -63,6 +63,7 @@ public class AttemptTests
     [InlineData("pad_right \"a\" 3 \"\"")]
     [InlineData("split \"a\" \"\"")]
     [InlineData("get list_of int 1 end 1")]
+    [InlineData("slice list_of int 1 end 0 2")]
     [InlineData("put list_of int 1 end -1 2")]
     [InlineData("remove list_of int end 0")]
     [InlineData("get map_of string int end \"lamp\"")]
@@ -141,7 +142,7 @@ public class AttemptTests
             """;
 
         Assert.Equal(
-            "some 3\nsome 42\nsome west\nsome \"3.0\"\nsome \"key\"\nsome 5\nsome \"typed\"\nsome [\"a\", \"b\"]\nsome false\n? some \"again\"\nsome true\n",
+            "some 3\nsome 42\nsome west\nsome \"3.0\"\nsome \"key\"\nsome 5\nsome \"typed\"\nsome [\"a\", \"b\"]\nsome false\n? \nsome \"again\"\nsome true\n",
             Run.Program(source, "typed\nagain\n"));
     }
 

@@ -148,8 +148,8 @@ public sealed class AcceptanceTests : IDisposable
             "The door is locked. You need the key.\n",
             "You take the lamp.\n",
             "<success>The game is saved.\n</success>",
-            "Choose a number from 1 to 5: Save before you leave? [y/n] Goodbye.\n");
-        Assert.EndsWith("Save before you leave? [y/n] Goodbye.\n", first);
+            "Choose a number from 1 to 5: \nSave before you leave? [y/n] \nGoodbye.\n");
+        Assert.EndsWith("Save before you leave? [y/n] \nGoodbye.\n", first);
         Assert.Equal(
             "pyrop adventure save 2\nPlayer place study moves 5 inventory [lamp]\n",
             File.ReadAllText(PathOf("game.save")));
@@ -160,7 +160,7 @@ public sealed class AcceptanceTests : IDisposable
         Assert.Equal("", secondErrors);
         AssertInOrder(
             second,
-            "Choose a number from 1 to 3: Your saved game is restored after 5 moves.\n\n<emphasis>Study\n</emphasis>",
+            "Choose a number from 1 to 3: \nYour saved game is restored after 5 moves.\n\n<emphasis>Study\n</emphasis>",
             "You see the key.\n",
             "You unlock the door with the key.\n",
             "<success>You carry the crown out into the sunlight. You won in 15 moves.\n</success>");
@@ -175,7 +175,7 @@ public sealed class AcceptanceTests : IDisposable
         var (output, _, exitCode) = Play(built, "1", "1", "6", "y");
 
         Assert.Equal(0, exitCode);
-        Assert.EndsWith("Save before you leave? [y/n] <success>The game is saved.\n</success>Goodbye.\n", output);
+        Assert.EndsWith("Save before you leave? [y/n] \n<success>The game is saved.\n</success>Goodbye.\n", output);
         Assert.Equal("pyrop adventure save 2\nPlayer place study moves 1 inventory []\n", File.ReadAllText(PathOf("game.save")));
     }
 
@@ -188,7 +188,7 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.Contains(
-            "Choose a number from 1 to 3: <warning>There is no saved game yet, so a new game begins.\n</warning>\n<emphasis>Great Hall\n</emphasis>",
+            "Choose a number from 1 to 3: \n<warning>There is no saved game yet, so a new game begins.\n</warning>\n<emphasis>Great Hall\n</emphasis>",
             output);
     }
 
@@ -223,7 +223,7 @@ public sealed class AcceptanceTests : IDisposable
             Assert.Equal(0, exitCode);
             Assert.Equal("", errors);
             Assert.Contains(
-                "Choose a number from 1 to 3: <warning>The saved game is damaged, so a new game begins.\n</warning>\n<emphasis>Great Hall\n</emphasis>",
+                "Choose a number from 1 to 3: \n<warning>The saved game is damaged, so a new game begins.\n</warning>\n<emphasis>Great Hall\n</emphasis>",
                 output);
         }
     }
@@ -263,7 +263,7 @@ public sealed class AcceptanceTests : IDisposable
         Assert.Equal(0, exitCode);
         Assert.Equal("", errors);
         Assert.EndsWith(
-            "Choose a number from 1 to 3: Your saved game is restored after 1000000 moves.\n\n" +
+            "Choose a number from 1 to 3: \nYour saved game is restored after 1000000 moves.\n\n" +
             "<emphasis>Garden\n</emphasis>Sunlight falls on an overgrown garden. The gate to the world stands open.\n" +
             "<success>You carry the crown out into the sunlight. You won in 1000000 moves.\n</success>",
             output);
@@ -280,7 +280,7 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.Equal("", errors);
-        Assert.Contains("Choose a number from 1 to 6: <warning>The game could not be saved.\n</warning>", output);
+        Assert.Contains("Choose a number from 1 to 6: \n<warning>The game could not be saved.\n</warning>", output);
         Assert.False(File.Exists(unwritable));
     }
 
@@ -290,7 +290,7 @@ public sealed class AcceptanceTests : IDisposable
         var (output, _, exitCode) = Play(false, "3");
 
         Assert.Equal(0, exitCode);
-        Assert.EndsWith("3. Leave\nChoose a number from 1 to 3: ", output);
+        Assert.EndsWith("3. Leave\nChoose a number from 1 to 3: \n", output);
     }
 
     [Fact]
@@ -353,6 +353,7 @@ public sealed class AcceptanceTests : IDisposable
         2. Load the saved game
         3. Leave
         Choose a number from 1 to 3: 
+
         <emphasis>Great Hall
         </emphasis>Dust lies thick on a long table. Doors lead north, south and east.
         What do you do?
@@ -362,7 +363,8 @@ public sealed class AcceptanceTests : IDisposable
         4. Show the inventory
         5. Save the game
         6. Quit
-        Choose a number from 1 to 6: You go north.
+        Choose a number from 1 to 6: 
+        You go north.
 
         <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
@@ -374,7 +376,8 @@ public sealed class AcceptanceTests : IDisposable
         4. Show the inventory
         5. Save the game
         6. Quit
-        Choose a number from 1 to 6: You take the lamp.
+        Choose a number from 1 to 6: 
+        You take the lamp.
 
         <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
@@ -384,7 +387,8 @@ public sealed class AcceptanceTests : IDisposable
         3. Show the inventory
         4. Save the game
         5. Quit
-        Choose a number from 1 to 5: You go south.
+        Choose a number from 1 to 5: 
+        You go south.
 
         <emphasis>Great Hall
         </emphasis>Dust lies thick on a long table. Doors lead north, south and east.
@@ -395,7 +399,8 @@ public sealed class AcceptanceTests : IDisposable
         4. Show the inventory
         5. Save the game
         6. Quit
-        Choose a number from 1 to 6: You go south.
+        Choose a number from 1 to 6: 
+        You go south.
 
         <emphasis>Cellar
         </emphasis>Barrels and broken crates fill the damp cellar.
@@ -406,7 +411,8 @@ public sealed class AcceptanceTests : IDisposable
         3. Show the inventory
         4. Save the game
         5. Quit
-        Choose a number from 1 to 5: You take the key.
+        Choose a number from 1 to 5: 
+        You take the key.
 
         <emphasis>Cellar
         </emphasis>Barrels and broken crates fill the damp cellar.
@@ -415,7 +421,8 @@ public sealed class AcceptanceTests : IDisposable
         2. Show the inventory
         3. Save the game
         4. Quit
-        Choose a number from 1 to 4: You go north.
+        Choose a number from 1 to 4: 
+        You go north.
 
         <emphasis>Great Hall
         </emphasis>Dust lies thick on a long table. Doors lead north, south and east.
@@ -426,7 +433,8 @@ public sealed class AcceptanceTests : IDisposable
         4. Show the inventory
         5. Save the game
         6. Quit
-        Choose a number from 1 to 6: You go north.
+        Choose a number from 1 to 6: 
+        You go north.
 
         <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
@@ -436,7 +444,8 @@ public sealed class AcceptanceTests : IDisposable
         3. Show the inventory
         4. Save the game
         5. Quit
-        Choose a number from 1 to 5: You unlock the door with the key.
+        Choose a number from 1 to 5: 
+        You unlock the door with the key.
         You go east.
 
         <emphasis>Tower
@@ -448,7 +457,8 @@ public sealed class AcceptanceTests : IDisposable
         3. Show the inventory
         4. Save the game
         5. Quit
-        Choose a number from 1 to 5: You take the crown.
+        Choose a number from 1 to 5: 
+        You take the crown.
 
         <emphasis>Tower
         </emphasis>Wind howls through the arrow slits of the round tower room.
@@ -470,7 +480,8 @@ public sealed class AcceptanceTests : IDisposable
         2. Show the inventory
         3. Save the game
         4. Quit
-        Choose a number from 1 to 4: You go west.
+        Choose a number from 1 to 4: 
+        You go west.
 
         <emphasis>Study
         </emphasis>Shelves of rotting books lean against each other. A narrow door leads east.
@@ -480,7 +491,8 @@ public sealed class AcceptanceTests : IDisposable
         3. Show the inventory
         4. Save the game
         5. Quit
-        Choose a number from 1 to 5: You go south.
+        Choose a number from 1 to 5: 
+        You go south.
 
         <emphasis>Great Hall
         </emphasis>Dust lies thick on a long table. Doors lead north, south and east.
@@ -491,7 +503,8 @@ public sealed class AcceptanceTests : IDisposable
         4. Show the inventory
         5. Save the game
         6. Quit
-        Choose a number from 1 to 6: You go east.
+        Choose a number from 1 to 6: 
+        You go east.
 
         <emphasis>Garden
         </emphasis>Sunlight falls on an overgrown garden. The gate to the world stands open.
@@ -564,7 +577,8 @@ public sealed class AcceptanceTests : IDisposable
             "\nThe run is over\nYou slay the orc.\nYou find the crypt's back door and escape!\nYou escaped from the crypt!\n" +
             "Gold this run 22   Gold banked 22\nRuns 1   Escapes 1   Deepest 3\n",
             output);
-        Assert.Equal(78, CountOf(output, "\nThe crypt\n") + 1);
+        Assert.Equal(78, CountOf(output, "q quit\n</muted>\n"));
+        Assert.Equal(71, CountOf(output, "\nThe crypt\n") + 1);
         Assert.Equal("Progress runs 1 escapes 1 best_depth 3 gold_banked 22\n", File.ReadAllText(ProgressFile));
     }
 
@@ -693,10 +707,11 @@ public sealed class AcceptanceTests : IDisposable
         Assert.Equal(0, exitCode);
         Assert.Equal("", errors);
         Assert.Equal(
-            Dashboard(ServerLog, "watching", 11, 6, 2, 1, 0) +
-            Dashboard(ServerLog, "watching", 11, 6, 2, 2, 0) +
-            Dashboard(ServerLog, "watching", 11, 6, 2, 3, 0) +
-            Dashboard(ServerLog, "watching", 11, 6, 2, 4, 1),
+            Screens(
+                Dashboard(ServerLog, "watching", 11, 6, 2, 1, 0),
+                Dashboard(ServerLog, "watching", 11, 6, 2, 2, 0),
+                Dashboard(ServerLog, "watching", 11, 6, 2, 3, 0),
+                Dashboard(ServerLog, "watching", 11, 6, 2, 4, 1)),
             output);
     }
 
@@ -714,9 +729,10 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.Equal(
-            Dashboard(log, "watching", 11, 6, 2, 1, 0) +
-            Dashboard(log, "watching", 13, 7, 2, 2, 0, "ERROR 09:20:00 Database connection lost") +
-            Dashboard(log, "watching", 13, 7, 2, 3, 3, "ERROR 09:20:00 Database connection lost"),
+            Screens(
+                Dashboard(log, "watching", 11, 6, 2, 1, 0),
+                Dashboard(log, "watching", 13, 7, 2, 2, 0, "ERROR 09:20:00 Database connection lost"),
+                Dashboard(log, "watching", 13, 7, 2, 3, 3, "ERROR 09:20:00 Database connection lost")),
             output.ToString());
     }
 
@@ -729,11 +745,14 @@ public sealed class AcceptanceTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.Equal("", errors);
-        var empty =
-            "Levels\nInfo: 0 of 0\n<warning>Warnings: 0 of 0\n</warning><danger>Errors: 0 of 0\n</danger>" +
-            $"File\nField      Value\nPath       {log}\nState      missing\nLines      0\nRefreshes  {{0}}\n" +
-            "Errors\n<muted>up/down select   q quit\n</muted>\n";
-        Assert.Equal(string.Format(empty, 1) + string.Format(empty, 2), output);
+        string[] Empty(int refreshes) =>
+        [
+            "Levels\nInfo: 0 of 0\n<warning>Warnings: 0 of 0\n</warning><danger>Errors: 0 of 0\n</danger>",
+            $"File\nField      Value\nName       {Path.GetFileName(log)}\nState      missing\nLines      0\nRefreshes  {refreshes}\n",
+            "Errors\n",
+            "<muted>up/down select   q quit\n</muted>",
+        ];
+        Assert.Equal(Screens(Empty(1), Empty(2)), output);
     }
 
     [Fact]
@@ -757,7 +776,28 @@ public sealed class AcceptanceTests : IDisposable
 
         """;
 
-    private static string Dashboard(string path, string state, int lines, int infos, int warnings, int refreshes, int selected, params string[] moreErrors)
+    private static string Screens(params string[][] screens)
+    {
+        var written = "";
+        string[]? previous = null;
+        foreach (var screen in screens)
+        {
+            for (var index = 0; index < screen.Length; index++)
+            {
+                if (previous is null || index == screen.Length - 1 || screen[index] != previous[index])
+                {
+                    written += screen[index];
+                }
+            }
+
+            written += "\n";
+            previous = screen;
+        }
+
+        return written;
+    }
+
+    private static string[] Dashboard(string path, string state, int lines, int infos, int warnings, int refreshes, int selected, params string[] moreErrors)
     {
         string[] errors =
         [
@@ -768,9 +808,12 @@ public sealed class AcceptanceTests : IDisposable
         ];
         var menu = string.Concat(errors.Select((error, index) => index == selected ? $"{error} (selected)\n" : $"{error}\n"));
         return
-            $"Levels\nInfo: {infos} of {lines}\n<warning>Warnings: {warnings} of {lines}\n</warning><danger>Errors: {errors.Length} of {lines}\n</danger>" +
-            $"File\nField      Value\nPath       {path}\nState      {state}\nLines      {lines}\nRefreshes  {refreshes}\n" +
-            $"Errors\n{menu}<muted>up/down select   q quit\n</muted>\n";
+        [
+            $"Levels\nInfo: {infos} of {lines}\n<warning>Warnings: {warnings} of {lines}\n</warning><danger>Errors: {errors.Length} of {lines}\n</danger>",
+            $"File\nField      Value\nName       {Path.GetFileName(path)}\nState      {state}\nLines      {lines}\nRefreshes  {refreshes}\n",
+            $"Errors\n{menu}",
+            "<muted>up/down select   q quit\n</muted>",
+        ];
     }
 
     private sealed class KeysThatWriteToALog(string[] keys, Action write) : TextReader

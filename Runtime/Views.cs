@@ -74,16 +74,50 @@ public static class Views
     public static Value? Show(IBuiltinInvocation invocation, Value view)
     {
         var node = Build(invocation, (ChoiceValue)view, 0);
+        var memory = invocation.ShownScreen;
         if (invocation.Output.TryShow(node, invocation.Style))
         {
+            memory.Panels = null;
             return null;
         }
 
-        invocation.Output.EnsureLineStart();
-        WritePlain(invocation, node);
-        invocation.Output.Write("\n", OutputStyle.None);
+        var output = invocation.Output;
+        var parts = PlainParts(node, invocation.Style).ToList();
+        var panels = parts.Where(part => part.Title is not null).ToList();
+        var previous = memory.Panels is { } earlier
+            && output.Written >= 0
+            && memory.WrittenAt == output.Written
+            && earlier.Select(panel => panel.Title).SequenceEqual(panels.Select(panel => panel.Title))
+                ? earlier
+                : null;
+        output.EnsureLineStart();
+        var panelIndex = 0;
+        foreach (var part in parts)
+        {
+            if (part.Title is not null && previous is not null && previous[panelIndex++].Lines.Select(line => line.Text).SequenceEqual(part.Lines.Select(line => line.Text)))
+            {
+                continue;
+            }
+
+            foreach (var (text, style) in part.Lines)
+            {
+                output.Write(text, style);
+            }
+        }
+
+        output.Write("\n", OutputStyle.None);
+        memory.Panels = panels;
+        memory.WrittenAt = output.Written;
         return null;
     }
+
+    private static IEnumerable<PlainPart> PlainParts(ViewNode view, OutputStyle style) => view switch
+    {
+        PanelView panel => [new PlainPart(panel.Title, PlainLines(panel, style).ToList())],
+        StackView stack => stack.Views.SelectMany(inner => PlainParts(inner, style)),
+        StyledView styled => PlainParts(styled.Content, styled.Style),
+        _ => [new PlainPart(null, PlainLines(view, style).ToList())],
+    };
 
     public static Value? WriteView(IBuiltinInvocation invocation, Value view)
     {
@@ -180,6 +214,15 @@ public static class Views
 
         return colors;
     }
+}
+
+public sealed record PlainPart(string? Title, IReadOnlyList<(string Text, OutputStyle Style)> Lines);
+
+public sealed class ShownScreen
+{
+    public IReadOnlyList<PlainPart>? Panels { get; set; }
+
+    public long WrittenAt { get; set; } = -1;
 }
 
 public abstract record ViewNode;

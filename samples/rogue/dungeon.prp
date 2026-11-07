@@ -62,19 +62,19 @@ export function bool is_wall Level level int x int y
     return equal tile_at level x y "#"
 
 export function option int monster_at Level level int x int y block
-    def int index 0
-    for Monster monster in the monsters of level block
+    def list Monster monsters the monsters of level
+    for int index in positions_of monsters block
+        def Monster monster get monsters index
         if and equal the x of monster x equal the y of monster y return some index
-        set index add index 1
     end
     return none int
 end
 
 export function option int loot_at Level level int x int y block
-    def int index 0
-    for Loot found in the loot of level block
+    def list Loot loot the loot of level
+    for int index in positions_of loot block
+        def Loot found get loot index
         if and equal the x of found x equal the y of found y return some index
-        set index add index 1
     end
     return none int
 end
@@ -103,9 +103,7 @@ end
 
 function bool taken Level level int x int y block
     if not equal tile_at level x y "." return true
-    if_some int index monster_at level x y return true
-    if_some int index loot_at level x y return true
-    return false
+    return or is_some monster_at level x y is_some loot_at level x y
 end
 
 function Spot free_spot Level level

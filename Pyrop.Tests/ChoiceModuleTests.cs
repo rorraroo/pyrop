@@ -102,6 +102,67 @@ public sealed class ChoiceModuleTests : IDisposable
     }
 
     [Fact]
+    public void VariantsCanBeImportedOneByOne()
+    {
+        const string source = """
+            use items "items.prp"
+            import from items Item sword end
+            def Item shield from items shield
+            write_line list_of Item sword shield end
+            """;
+
+        Assert.Equal("[sword, shield]\n", RunFile(source));
+    }
+
+    [Fact]
+    public void ReplImportsOfAChoiceAfterOneOfItsVariantsBringOnlyTheNamedVariants()
+    {
+        var items = Path.Combine(_directory, "items.prp").Replace("\\", "\\\\");
+        _session.Run($"use items \"{items}\"\nimport from items sword end");
+
+        _session.Run("import from items Item sword end\nwrite_line list_of Item sword end");
+
+        Assert.Equal("[sword]\n", _output.ToString());
+    }
+
+    [Fact]
+    public void ReplRepeatingAPartlyImportedChoiceNamesTheMissingVariants()
+    {
+        var items = Path.Combine(_directory, "items.prp").Replace("\\", "\\\\");
+        _session.Run($"use items \"{items}\"\nimport from items Item sword end");
+
+        var error = Assert.Throws<PyropException>(() => _session.Run("import from items Item end")).Errors[0];
+
+        Assert.Equal("'Item' was imported earlier with only some of its variants; import the others by name, as in import from items shield lamp end.", error.Message);
+    }
+
+    [Fact]
+    public void AVariantCanBeImportedWithoutItsChoice()
+    {
+        const string source = """
+            use items "items.prp"
+            import from items lamp end
+            def from items Item item lamp
+            write_line from items describe item
+            """;
+
+        Assert.Equal("lamp\n", RunFile(source));
+    }
+
+    [Fact]
+    public void ANameSharedWithAModuleIsAllowed()
+    {
+        const string source = """
+            use items "items.prp"
+            import from items Item end
+            function string items Item item return from items describe item
+            write_line items lamp
+            """;
+
+        Assert.Equal("lamp\n", RunFile(source));
+    }
+
+    [Fact]
     public void AVariantOfOneModuleMayShareItsNameWithAVariantOfAnother()
     {
         const string source = """
@@ -116,11 +177,12 @@ public sealed class ChoiceModuleTests : IDisposable
 
     [Theory]
     [InlineData("use items \"items.prp\"\nwrite_line from items hidden", 2, 23, "Variant 'hidden' of module 'items' belongs to the choice 'Secret', which is not exported; mark its declaration in ")]
-    [InlineData("use items \"items.prp\"\nimport from items sword end", 2, 19, "'sword' is a variant of the choice 'Item'; import the choice with import from items Item end, which imports all its variants.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nimport from items sword end", 3, 19, "'sword' is a variant of the imported choice 'Item' and cannot also be imported.")]
+    [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items sword end", 3, 19, "'sword' is a function of this file and cannot also be imported.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item sword end\nwrite_line lamp", 3, 12, "Undeclared variable 'lamp'.")]
     [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items Item end", 3, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a function of this file.")]
     [InlineData("use items \"items.prp\"\nimport from items Item end\nchoice Mine lamp end", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a variant of this file.")]
     [InlineData("use items \"items.prp\"\nuse tools \"tools.prp\"\nimport from items Item end\nimport from tools Tool end", 4, 19, "Importing 'Tool' would also import its variant 'sword', but 'sword' is a variant of the imported choice 'Item'.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\nwrite_line sword\nuse sword \"tools.prp\"", 2, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a module name in this file.")]
     [InlineData("use items \"items.prp\"\nimport from items Item end\nimport from items Item end", 3, 19, "'Item' is already imported in this file.")]
     [InlineData("use items \"items.prp\"\nimport from items Item end\ndef int lamp 1", 3, 9, "'lamp' is an imported variant and cannot be used as a variable name.")]
     [InlineData("use items \"items.prp\"\nimport from items Item end\nfunction void f Item lamp write_line lamp", 3, 22, "'lamp' is an imported variant and cannot be used as a parameter name.")]
@@ -138,7 +200,7 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         var error = FailFile(source);
 
-        Assert.Equal(ErrorStage.Parse, error.Stage);
+        Assert.Equal(message.StartsWith("Undeclared", StringComparison.Ordinal) ? ErrorStage.Type : ErrorStage.Parse, error.Stage);
         Assert.StartsWith(message, error.Message);
         Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
     }

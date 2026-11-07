@@ -152,7 +152,21 @@ public sealed class DocsTests
         var file = Path.Combine(directory, module.Name);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, module.Source);
-        return null;
+        return Unformatted(module.Source, file);
+    }
+
+    private static string? Unformatted(string source, string path)
+    {
+        var session = new PyropSession(TextReader.Null, new ConsoleProgramOutput(TextWriter.Null, plain: true), HostContext.Isolated);
+        try
+        {
+            var formatted = session.Format(source, path, path);
+            return formatted == source ? null : $"is not formatted; pyrop --format would make it\n{formatted}";
+        }
+        catch (PyropException)
+        {
+            return null;
+        }
     }
 
     private static string? Run(Example example, string directory)
@@ -164,6 +178,11 @@ public sealed class DocsTests
 
         var main = Path.Combine(directory, "main.prp");
         File.WriteAllText(main, example.Source);
+        if (Unformatted(example.Source, main) is { } unformatted)
+        {
+            return unformatted;
+        }
+
         var writer = new StringWriter();
         var output = new ConsoleProgramOutput(writer, plain: true, errors: new ConsoleStream(writer, plain: true), sharedScreen: true);
         var session = new PyropSession(new StringReader(example.Input ?? ""), output, HostContext.Isolated);

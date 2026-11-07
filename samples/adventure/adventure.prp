@@ -70,8 +70,7 @@ end
 
 function Player take_item Player player ItemKind item block
     write_line fill "You take the {}." list_of ItemKind item end
-    def Player carrying copy player with inventory push the inventory of player item
-    return copy carrying with moves add the moves of carrying 1
+    return copy player with inventory push the inventory of player item with moves add the moves of player 1
 end
 
 function void show_inventory_of Player player block

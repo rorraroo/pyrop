@@ -32,7 +32,11 @@ public sealed class ConsoleProgramOutput(
     private (int Width, int Height) _frameSize;
     private ConsoleCancelEventHandler? _restoreOnCancel;
 
+    private long _written;
+
     public bool OnAlternateScreen => _onScreen;
+
+    public long Written => _written;
 
     public bool AtLineStart => _output.AtLineStart;
 
@@ -69,6 +73,11 @@ public sealed class ConsoleProgramOutput(
     {
         if (!inputEchoed)
         {
+            if (!_onScreen && _lastWritten is { AtLineStart: false } open)
+            {
+                WriteTo(open, open == _output ? _errors : _output, "\n", OutputStyle.None);
+            }
+
             return;
         }
 
@@ -147,6 +156,7 @@ public sealed class ConsoleProgramOutput(
 
         EnsureLineStart();
         richConsole.Write(table);
+        _written++;
         _output.AtLineStart = true;
         _lastWritten = _output;
         if (sharedScreen)
@@ -193,6 +203,7 @@ public sealed class ConsoleProgramOutput(
         }
 
         writer.Flush();
+        _written++;
         _output.AtLineStart = true;
         _lastWritten = _output;
         if (sharedScreen)
@@ -367,6 +378,8 @@ public sealed class ConsoleProgramOutput(
         {
             return;
         }
+
+        _written++;
 
         _lastWritten = stream;
         if (sharedScreen)

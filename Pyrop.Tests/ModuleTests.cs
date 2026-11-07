@@ -154,8 +154,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("use geometry \"geometry.prp\"\nimport from shapes square end", "'shapes' is not a module of this file")]
     [InlineData("use geometry \"geometry.prp\"\nwrite_line from geometry 5", "Expected a name after 'from geometry', found '5'.")]
     [InlineData("use geometry \"geometry.prp\"\nimport geometry square", "'import' takes a module and the names to import: import from <module> <name>… end, found 'geometry'.")]
-    [InlineData("use geometry \"geometry.prp\"\nwrite_line geometry", "'geometry' is a module; name one of its exported functions with from geometry <name>.")]
-    [InlineData("use geometry \"geometry.prp\"\ngeometry", "'geometry' is a module; name one of its exported functions with from geometry <name>.")]
+    [InlineData("use geometry \"geometry.prp\"\ngeometry", "'geometry' cannot stand alone as a statement.")]
     public void ReportsWrongQualifiedNames(string main, string message)
     {
         WriteFile("geometry.prp", Geometry);
@@ -361,11 +360,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("use lib \"lib.prp\"\nuse other \"other.prp\"\nimport from lib answer end\nimport from other answer end", "'answer' is already imported in this file.", 4, 19)]
     [InlineData("use lib \"lib.prp\"\nfunction int answer return 1\nimport from lib answer end", "'answer' is a function of this file and cannot also be imported.", 3, 17)]
     [InlineData("import from lib answer end\nuse lib \"lib.prp\"\nfunction int answer return 1", "'answer' is a function of this file and cannot also be imported.", 1, 17)]
-    [InlineData("use lib \"lib.prp\"\nuse answer \"other.prp\"\nimport from lib answer end", "'answer' is a module name in this file and cannot also be imported.", 3, 17)]
-    [InlineData("function int lib return 1\nuse lib \"lib.prp\"", "'lib' is a function of this file and cannot also name a module.", 2, 5)]
     [InlineData("use lib \"lib.prp\"\nimport from lib answer end\ndef int answer 1", "'answer' is an imported function and cannot be used as a variable name.", 3, 9)]
-    [InlineData("use lib \"lib.prp\"\ndef int lib 1", "'lib' is a module and cannot be used as a variable name.", 2, 9)]
-    [InlineData("use lib \"lib.prp\"\nfunction int f int lib return lib", "'lib' is a module and cannot be used as a parameter name.", 2, 20)]
     [InlineData("use lib \"lib.prp\"\nimport from lib answer end\nfunction int f int answer return answer", "'answer' is an imported function and cannot be used as a parameter name.", 3, 20)]
     [InlineData("use lib \"lib.prp\"\nset from lib answer 1", "A variable name must be a plain name; 'from' starts a qualified name, which can only name an exported function, record, choice or variant, or an operation of a library.", 2, 5)]
     public void RejectsClashingNames(string main, string message, int line, int column)
@@ -455,10 +450,54 @@ public sealed class ModuleTests : IDisposable
 
         Assert.StartsWith("Module name 'lib' already names ", Failure($"use lib {Quoted("other.prp")}").Message);
         Assert.Equal("'answer' is imported in this file and cannot also be a function name.", Failure("function int answer return 1").Message);
-        Assert.Equal("'lib' is a module name in this file and cannot also be a function name.", Failure("function int lib return 1").Message);
         Assert.Equal("'answer' is already imported in this file.", Failure($"use other {Quoted("other.prp")}\nimport from other answer end").Message);
-        Assert.Equal("'helper' is a function of this file and cannot also name a module.", Failure($"use helper {Quoted("other.prp")}").Message);
-        Assert.Equal("'total' is already a global variable and cannot be used as a module name.", Failure($"use total {Quoted("other.prp")}").Message);
+    }
+
+    [Fact]
+    public void ModuleNamesMayBeSharedByOtherNames()
+    {
+        WriteFile("lib.prp", "export function int answer return 42");
+        WriteFile("other.prp", "export function int answer return 43");
+
+        var output = RunFile(
+            "main.prp",
+            "use lib \"lib.prp\"\nuse answer \"other.prp\"\nimport from lib answer end\n" +
+            "function int twice int lib return multiply lib 2\ndef int other twice answer\nwrite_line other\nwrite_line from answer answer");
+
+        Assert.Equal("84\n43\n", output);
+    }
+
+    [Fact]
+    public void AStrayParameterNamedLikeAModuleIsReportedAsAStrayValue()
+    {
+        WriteFile("geometry.prp", Geometry);
+
+        var error = FailFile("main.prp", "use geometry \"geometry.prp\"\nfunction int f int geometry return add 1 2 geometry");
+
+        Assert.StartsWith("'geometry' cannot stand alone as a statement. This usually means", error.Message);
+        Assert.EndsWith("If 'geometry' was meant as the module, name one of its exported functions with from geometry <name>.", error.Message);
+    }
+
+    [Fact]
+    public void AModuleUsedAsAValueIsATypeErrorWithTheQualifiedForm()
+    {
+        WriteFile("geometry.prp", Geometry);
+
+        var error = FailFile("main.prp", "use geometry \"geometry.prp\"\nwrite_line geometry");
+
+        Assert.Equal(ErrorStage.Type, error.Stage);
+        Assert.Equal("'geometry' is a module; name one of its exported functions with from geometry <name>.", error.Message);
+    }
+
+    [Fact]
+    public void ReplModuleNamesMayMatchEarlierFunctionsAndGlobals()
+    {
+        WriteFile("other.prp", "export function int answer return 43");
+        _session.Run("def int total 0\nfunction int helper return 1");
+
+        _session.Run($"use helper {Quoted("other.prp")}\nuse total {Quoted("other.prp")}\nwrite_line add helper from total answer");
+
+        Assert.Equal("44\n", _output.ToString());
     }
 
     [Fact]

@@ -144,6 +144,8 @@ public sealed class PyropLanguageServer
                 writer.WriteEndObject();
                 writer.WriteBoolean("full", true);
                 writer.WriteEndObject();
+                writer.WriteBoolean("hoverProvider", true);
+                writer.WriteBoolean("documentFormattingProvider", true);
                 writer.WriteEndObject();
                 writer.WriteStartObject("serverInfo");
                 writer.WriteString("name", "pyrop");
@@ -164,6 +166,16 @@ public sealed class PyropLanguageServer
         {
             var tokens = SemanticTokensOf(StringAt(parameters, "textDocument", "uri"));
             WriteResult(id, writer => WriteSemanticTokens(writer, tokens));
+        }
+        else if (method == "textDocument/hover")
+        {
+            var hover = HoverOf(StringAt(parameters, "textDocument", "uri"), NumberAt(parameters, "position", "line"), NumberAt(parameters, "position", "character"));
+            WriteResult(id, writer => WriteHover(writer, hover));
+        }
+        else if (method == "textDocument/formatting")
+        {
+            var edit = FormattingOf(StringAt(parameters, "textDocument", "uri"));
+            WriteResult(id, writer => WriteEdits(writer, edit));
         }
         else if (method == "shutdown")
         {
@@ -258,7 +270,7 @@ public sealed class PyropLanguageServer
         }
     }
 
-    private IReadOnlyList<SemanticToken>? SemanticTokensOf(string? uri)
+    private (OpenDocument Document, PyropSession Session)? SessionFor(string? uri)
     {
         OpenDocument? document;
         Dictionary<string, string> texts;
@@ -272,7 +284,16 @@ public sealed class PyropLanguageServer
             texts = _documents.Values.ToDictionary(open => open.Path, open => open.Text, SourceLoader.PathComparer);
         }
 
-        var session = new PyropSession(TextReader.Null, new ConsoleProgramOutput(TextWriter.Null, plain: true), store: new DocumentSourceStore(texts));
+        return (document, new PyropSession(TextReader.Null, new ConsoleProgramOutput(TextWriter.Null, plain: true), store: new DocumentSourceStore(texts)));
+    }
+
+    private IReadOnlyList<SemanticToken>? SemanticTokensOf(string? uri)
+    {
+        if (SessionFor(uri) is not var (document, session))
+        {
+            return null;
+        }
+
         try
         {
             return session.Analyze(document.Text, document.Path, document.Path) is { } analyzed ? SemanticClassifier.Classify(analyzed) : null;
@@ -282,6 +303,110 @@ public sealed class PyropLanguageServer
             Log($"Highlighting {document.Path} failed: {exception.Message}");
             return null;
         }
+    }
+
+    private HoverResult? HoverOf(string? uri, int? line, int? character)
+    {
+        if (line is not { } zeroLine || character is not { } zeroCharacter || SessionFor(uri) is not var (document, session))
+        {
+            return null;
+        }
+
+        try
+        {
+            return session.Analyze(document.Text, document.Path, document.Path) is { } analyzed
+                ? LargeStack.Run(() => HoverProvider.Describe(analyzed, zeroLine + 1, zeroCharacter + 1))
+                : null;
+        }
+        catch (Exception exception) when (exception is not PyropException)
+        {
+            Log($"Hover in {document.Path} failed: {exception.Message}");
+            return null;
+        }
+    }
+
+    private (int Line, int Character, string Text)? FormattingOf(string? uri)
+    {
+        if (SessionFor(uri) is not var (document, session))
+        {
+            return null;
+        }
+
+        string formatted;
+        try
+        {
+            formatted = session.Format(document.Text, document.Path, document.Path);
+        }
+        catch (PyropException)
+        {
+            return null;
+        }
+        catch (Exception exception)
+        {
+            Log($"Formatting {document.Path} failed: {exception.Message}");
+            return null;
+        }
+
+        if (formatted == document.Text)
+        {
+            return null;
+        }
+
+        var (line, character) = EndOf(document.Text);
+        return (line, character, formatted);
+    }
+
+    private static (int Line, int Character) EndOf(string text)
+    {
+        var line = 0;
+        var lineStart = 0;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '\n' || (text[index] == '\r' && (index + 1 == text.Length || text[index + 1] != '\n')))
+            {
+                line++;
+                lineStart = index + 1;
+            }
+        }
+
+        return (line, text.Length - lineStart);
+    }
+
+    private static void WriteHover(Utf8JsonWriter writer, HoverResult? hover)
+    {
+        if (hover is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStartObject();
+        writer.WriteStartObject("contents");
+        writer.WriteString("kind", "markdown");
+        writer.WriteString("value", hover.Markdown);
+        writer.WriteEndObject();
+        writer.WriteStartObject("range");
+        WritePosition(writer, "start", hover.Line, hover.Start);
+        WritePosition(writer, "end", hover.Line, hover.Start + hover.Length);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteEdits(Utf8JsonWriter writer, (int Line, int Character, string Text)? edit)
+    {
+        writer.WriteStartArray();
+        if (edit is var (line, character, text))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("range");
+            WritePosition(writer, "start", 0, 0);
+            WritePosition(writer, "end", line, character);
+            writer.WriteEndObject();
+            writer.WriteString("newText", text);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
     }
 
     private static void WriteSemanticTokens(Utf8JsonWriter writer, IReadOnlyList<SemanticToken>? tokens)
@@ -532,6 +657,19 @@ public sealed class PyropLanguageServer
             .Where(change => change.ValueKind == JsonValueKind.Object && !change.TryGetProperty("range", out _))
             .Select(change => StringAt(change, "text"))
             .LastOrDefault(text => text is not null);
+    }
+
+    private static int? NumberAt(JsonElement element, params string[] path)
+    {
+        foreach (var name in path)
+        {
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(name, out element))
+            {
+                return null;
+            }
+        }
+
+        return element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var number) && number >= 0 ? number : null;
     }
 
     private static string? StringAt(JsonElement element, params string[] path)

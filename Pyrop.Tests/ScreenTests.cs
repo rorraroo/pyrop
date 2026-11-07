@@ -76,6 +76,22 @@ public sealed class ScreenTests
     }
 
     [Fact]
+    public void BarsFollowingEachOtherInRowsStartInTheSameColumn()
+    {
+        var rows = new StackView(false, [
+            new BarView("Info", 1, 2),
+            new StyledView(OutputStyle.Warning, new BarView("Warnings", 1, 2)),
+            new BarView("Err", 1, 2),
+            Text("x"),
+            new BarView("Solo", 1, 2),
+        ]);
+
+        var lines = Lines(ViewLayout.Screen(rows, OutputStyle.None, 24, 5));
+
+        Assert.Equal(["Info     ███░░░░ 1 of 2", "Warnings ███░░░░ 1 of 2", "Err      ███░░░░ 1 of 2", "x", "Solo █████░░░░░░ 1 of 2"], lines);
+    }
+
+    [Fact]
     public void ABarFillsInProportionAndShowsItsNumbers()
     {
         var line = Assert.Single(Lines(ViewLayout.Screen(new BarView("HP", 5, 10), OutputStyle.None, 23, 3)));

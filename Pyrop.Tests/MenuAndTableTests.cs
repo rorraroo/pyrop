@@ -14,7 +14,7 @@ public class MenuAndTableTests
     {
         var output = Run.Program($"def string room choose \"Where do you go?\" {Rooms}\nwrite_line add \"Going to \" room", "2\n");
 
-        Assert.Equal("Where do you go?\n1. Hall\n2. Cellar\n3. Tower\nChoose a number from 1 to 3: Going to Cellar\n", output);
+        Assert.Equal("Where do you go?\n1. Hall\n2. Cellar\n3. Tower\nChoose a number from 1 to 3: \nGoing to Cellar\n", output);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class MenuAndTableTests
         const string source = "write_line choose \"Pick\" list_of string \"a\" \"b\" \"c\" \"d\" \"e\" \"f\" \"g\" \"h\" \"i\" \"j\" end";
 
         Assert.Equal(
-            "Pick\n 1. a\n 2. b\n 3. c\n 4. d\n 5. e\n 6. f\n 7. g\n 8. h\n 9. i\n10. j\nChoose a number from 1 to 10: j\n",
+            "Pick\n 1. a\n 2. b\n 3. c\n 4. d\n 5. e\n 6. f\n 7. g\n 8. h\n 9. i\n10. j\nChoose a number from 1 to 10: \nj\n",
             Run.Program(source, "10\n"));
     }
 
@@ -38,22 +38,22 @@ public class MenuAndTableTests
     {
         var output = Run.Program($"write_line choose \"Pick\" {Rooms}", "\nabc\n0\n4\n-1\n+1\n1.0\n٣\n99999999999999999999\n 03 \n");
 
-        var retry = "<warning>Please choose a number from 1 to 3.\n</warning>Choose a number from 1 to 3: ";
+        var retry = "\n<warning>Please choose a number from 1 to 3.\n</warning>Choose a number from 1 to 3: ";
         Assert.Equal(
-            "Pick\n1. Hall\n2. Cellar\n3. Tower\nChoose a number from 1 to 3: " + string.Concat(Enumerable.Repeat(retry, 9)) + "Tower\n",
+            "Pick\n1. Hall\n2. Cellar\n3. Tower\nChoose a number from 1 to 3: " + string.Concat(Enumerable.Repeat(retry, 9)) + "\nTower\n",
             output);
     }
 
     [Fact]
     public void ChooseAllowsDuplicateEntries()
     {
-        Assert.EndsWith(": same\n", Run.Program("write_line choose \"Pick\" list_of string \"same\" \"same\" end", "2\n"));
+        Assert.EndsWith(": \nsame\n", Run.Program("write_line choose \"Pick\" list_of string \"same\" \"same\" end", "2\n"));
     }
 
     [Fact]
     public void ChooseAcceptsALineReadAheadByInputEnded()
     {
-        Assert.EndsWith(": Hall\n", Run.Program($"if not input_ended write_line choose \"Pick\" {Rooms}", "1\n"));
+        Assert.EndsWith(": \nHall\n", Run.Program($"if not input_ended write_line choose \"Pick\" {Rooms}", "1\n"));
     }
 
     [Fact]
@@ -62,8 +62,8 @@ public class MenuAndTableTests
         var output = Run.Program($"styled \"info\" write_line choose \"Pick\" list_of string \"a\" end", "x\n1\n");
 
         Assert.Equal(
-            "<info>Pick\n</info><info>1. a\n</info><info>Choose number 1: </info>" +
-            "<warning>Please choose number 1.\n</warning><info>Choose number 1: </info><info>a\n</info>",
+            "<info>Pick\n</info><info>1. a\n</info><info>Choose number 1: </info>\n" +
+            "<warning>Please choose number 1.\n</warning><info>Choose number 1: </info>\n<info>a\n</info>",
             output);
     }
 
@@ -96,7 +96,7 @@ public class MenuAndTableTests
             "write_line attempt choose \"b\" list_of string \"x\" end\n" +
             "write_line attempt choose \"c\" list_of string \"y\" end";
 
-        Assert.Equal("none\nb\n1. x\nChoose number 1: some \"x\"\nc\n1. y\nChoose number 1: none\n", Run.Program(source, "1\n"));
+        Assert.Equal("none\nb\n1. x\nChoose number 1: \nsome \"x\"\nc\n1. y\nChoose number 1: none\n", Run.Program(source, "1\n"));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class MenuAndTableTests
             "write \"more\"\nwrite_line choose \"Pick\" list_of string \"x\" \"y\" end\n" +
             "write_line \"done\"\nwrite_table list_of string \"b\" end list_of list string end";
 
-        Assert.Equal("partial\na\nmore\nPick\n1. x\n2. y\nChoose a number from 1 to 2: y\ndone\nb\n", Run.Program(source, "2\n"));
+        Assert.Equal("partial\na\nmore\nPick\n1. x\n2. y\nChoose a number from 1 to 2: \ny\ndone\nb\n", Run.Program(source, "2\n"));
     }
 
     [Fact]

@@ -17,6 +17,8 @@ end
 ## Features
 
 - **Errors while you type.** Syntax, parse and type errors are underlined as you write, in the file they are in, also when that is a module you have not saved yet. They are listed in the **Problems** panel too. Nothing is run.
+- **Grouping and types on hover.** Hover over a word to see how the call it starts groups, with brackets around each operand, the type it gives, and what it calls: every form of a built-in operation, a function's header, a record's fields or a variant's data. Hover over a variable, parameter or field to see its type.
+- **Format Document** indents every line by how the program parses, four spaces per level, and changes nothing else: your line breaks, blank lines and comments stay. A file that does not parse is left as it is. It works with format on save too.
 - **Highlighting that knows your program.** Built-in operations, your own functions, variables, parameters, record fields, types, variants and module names each get their own colour, and names imported from another module are shown in italics.
 - **Syntax highlighting** for `.prp` files: keywords, types, built-in operations, numbers, strings with escape sequences, and comments.
 - **Declarations stand out:** function names and parameters in `function` headers, record names and fields in `record` declarations, choice names and variants in `choice` declarations, new variables in `def`, loop variables in `for`, and unwrapped values in `if_some`.
@@ -31,7 +33,7 @@ end
 
 ## Requirements
 
-Errors and the program-aware highlighting come from the `pyrop` command-line tool, version 0.11.0 or later, which the extension starts in the background with `pyrop --lsp`. The Windows installer puts `pyrop` on your `Path`; otherwise set **pyrop.path** to the executable. Without it, the extension still highlights `.prp` files from its grammar.
+Errors and the program-aware highlighting come from the `pyrop` command-line tool, version 0.11.0 or later (0.20.1 or later for hover and formatting), which the extension starts in the background with `pyrop --lsp`. The Windows installer puts `pyrop` on your `Path`; otherwise set **pyrop.path** to the executable. Without it, the extension still highlights `.prp` files from its grammar.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |

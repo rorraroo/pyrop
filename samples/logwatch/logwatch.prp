@@ -5,7 +5,7 @@ use files library
 import from tally Tally tally_of end
 import from terminal View show read_key_within end
 import from program arguments end
-import from files exists load_lines end
+import from files exists load_lines name_of end
 
 if less length_of arguments 1 block
     write_error_line "usage: logwatch <log file>"
@@ -28,7 +28,7 @@ function View file_table Tally counted block
     def string state "watching"
     if not exists path set state "missing"
     return panel "File" table list_of string "Field" "Value" end list_of list string
-        list_of string "Path" path end
+        list_of string "Name" name_of path end
         list_of string "State" state end
         list_of string "Lines" convert string the lines of counted end
         list_of string "Refreshes" convert string refreshes end

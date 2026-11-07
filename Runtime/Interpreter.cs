@@ -14,6 +14,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     private readonly IProgramOutput _output = output;
     private readonly HostContext _host = host;
     private readonly RandomSource _random = new();
+    private readonly ShownScreen _shownScreen = new();
     private OutputStyle _style = OutputStyle.None;
     private readonly Dictionary<Module, Scope> _moduleScopes = new();
     private readonly Dictionary<FunctionSignature, FunctionStatement> _functions = new(ReferenceEqualityComparer.Instance);
@@ -27,6 +28,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
 
     public int? Execute(ParsedProgram program, CheckResult check)
     {
+        _shownScreen.Panels = null;
         try
         {
             ExecuteProgram(program, check);
@@ -567,6 +569,8 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         public IProgramOutput Output => interpreter._output;
 
         public OutputStyle Style => interpreter._style;
+
+        public ShownScreen ShownScreen => interpreter._shownScreen;
 
         public int CollectionLimit => interpreter.CollectionLimit;
 

@@ -168,7 +168,7 @@ public sealed class LibraryTests : IDisposable
     public void ANameALibraryDoesNotHaveIsReported()
     {
         Assert.Equal(
-            "The library math has no 'floor'; it offers abs, power, square_root, round, round_down.",
+            "The library math has no 'floor'; it offers abs, sign, power, square_root, round, round_down.",
             Run.Failure("use math library\nwrite_line from math floor 2.5").Message);
         Assert.Equal(
             "The library random has no 'roll_dice'; it is now called 'roll'.",

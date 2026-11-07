@@ -9,6 +9,15 @@ public sealed record CheckResult(
     IReadOnlyDictionary<AttemptExpression, PyropType> Attempts,
     IReadOnlyDictionary<string, PyropType> Globals);
 
+public sealed record TypeFacts(
+    IReadOnlyDictionary<Expression, PyropType> Types,
+    IReadOnlyDictionary<BuiltinCallExpression, BuiltinOverload> Overloads)
+{
+    public static TypeFacts None { get; } = new(
+        new Dictionary<Expression, PyropType>(ReferenceEqualityComparer.Instance),
+        new Dictionary<BuiltinCallExpression, BuiltinOverload>(ReferenceEqualityComparer.Instance));
+}
+
 public sealed class TypeChecker
 {
     private static readonly IReadOnlyDictionary<string, PyropType> NoGlobals = new Dictionary<string, PyropType>();
@@ -16,6 +25,7 @@ public sealed class TypeChecker
     private readonly List<PyropError> _errors = [];
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<AttemptExpression, PyropType> _attempts = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expression, PyropType> _types = new(ReferenceEqualityComparer.Instance);
     private Dictionary<string, PyropType> _globals = new();
     private FunctionSignature? _currentFunction;
     private ModuleNamespace? _names;
@@ -39,6 +49,13 @@ public sealed class TypeChecker
         }
 
         return new CheckResult(checker._overloads, checker._attempts, globals);
+    }
+
+    public static TypeFacts Describe(ModuleTree module)
+    {
+        var checker = new TypeChecker();
+        checker.CheckModule(module, NoGlobals);
+        return new TypeFacts(checker._types, checker._overloads);
     }
 
     private Dictionary<string, PyropType> CheckModule(ModuleTree module, IReadOnlyDictionary<string, PyropType> sessionGlobals)
@@ -393,6 +410,17 @@ public sealed class TypeChecker
 
     private PyropType? TypeOf(Expression expression, SymbolScope scope)
     {
+        var type = TypeOfUnrecorded(expression, scope);
+        if (type is not null)
+        {
+            _types[expression] = type;
+        }
+
+        return type;
+    }
+
+    private PyropType? TypeOfUnrecorded(Expression expression, SymbolScope scope)
+    {
         switch (expression)
         {
             case LiteralExpression literal:
@@ -402,7 +430,9 @@ public sealed class TypeChecker
                 if (type is null)
                 {
                     Report(
-                        _names?.LibraryHint(variable.Name) is { } hint
+                        _names?.Uses.ContainsKey(variable.Name) == true
+                            ? $"'{variable.Name}' is a module; name one of its exported functions with {Keywords.From} {variable.Name} <name>."
+                            : _names?.LibraryHint(variable.Name) is { } hint
                             ? hint
                             : Keywords.UnderscoredSpelling(variable.Name) is { } spelling
                             ? Keywords.UnderscoreHint(variable.Name, spelling)

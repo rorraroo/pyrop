@@ -89,7 +89,7 @@ public static class SemanticClassifier
             }
             else
             {
-                var (kind, modifiers) = KindOf(names, token, functions);
+                var (kind, modifiers) = KindOf(names, token, functions, index > 0 && tokens[index - 1].IsWord(Keywords.Use));
                 classified.Add(Classified(token, kind, modifiers));
             }
         }
@@ -97,10 +97,10 @@ public static class SemanticClassifier
         return classified;
     }
 
-    private static (SemanticKind, SemanticModifiers) KindOf(ModuleNamespace names, Token token, IReadOnlyList<FunctionExtent> functions)
+    private static (SemanticKind, SemanticModifiers) KindOf(ModuleNamespace names, Token token, IReadOnlyList<FunctionExtent> functions, bool afterUse)
     {
         var text = token.Text;
-        if (names.Uses.ContainsKey(text))
+        if (afterUse && names.Uses.ContainsKey(text))
         {
             return (SemanticKind.Module, SemanticModifiers.None);
         }

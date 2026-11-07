@@ -139,11 +139,74 @@ public sealed class ViewTests
     }
 
     [Fact]
-    public void AVariantCannotBeImportedOnItsOwn()
+    public void SomeVariantsOfViewCanBeImportedKeepingTheOtherWordsFree()
     {
-        Assert.Contains(
-            "'text' is a variant of the choice 'View'; import the choice with import from terminal View end",
-            Run.Failure("use terminal library\nimport from terminal text end").Message);
+        Assert.Equal("Hero\nHealth: 7 of 20\nPoisoned\n", Run.Program(
+            "use terminal library\nimport from terminal View panel rows bar write_view end\n" +
+            "function View status string text return panel \"Hero\" rows list_of View bar \"Health\" 7 20 from terminal text text end\n" +
+            "write_view status \"Poisoned\""));
+    }
+
+    private const string Panels =
+        "use terminal library\nimport from terminal View show text rows panel end\n" +
+        "function View screen int a int b return rows list_of View panel \"A\" text convert string a panel \"B\" text convert string b text \"keys\" end\n";
+
+    [Fact]
+    public void APlainShowLeavesOutPanelsThatDidNotChange()
+    {
+        Assert.Equal(
+            "A\n1\nB\n1\nkeys\n\nB\n2\nkeys\n\nkeys\n\nA\n3\nkeys\n\n",
+            Run.Program(Panels + "show screen 1 1\nshow screen 1 2\nshow screen 1 2\nshow screen 3 2"));
+    }
+
+    [Fact]
+    public void OutputBetweenShowsOrOtherPanelsWriteTheWholeScreen()
+    {
+        Assert.Equal(
+            "A\n1\nB\n1\nkeys\n\nbetween\nA\n1\nB\n1\nkeys\n\nA\n1\nkeys\n\nA\n1\nB\n1\nkeys\n\n",
+            Run.Program(Panels +
+                "show screen 1 1\nwrite_line \"between\"\nshow screen 1 1\n" +
+                "show rows list_of View panel \"A\" text \"1\" text \"keys\" end\nshow screen 1 1"));
+    }
+
+    [Fact]
+    public void AChangeOfStyleAloneLeavesAPlainPanelOut()
+    {
+        Assert.Equal(
+            "<info>A\n</info><info>1\n</info>keys\n\nkeys\n\n",
+            Run.Program(
+                "use terminal library\nimport from terminal View show text rows panel in_style end\n" +
+                "function View screen string style return rows list_of View in_style style panel \"A\" text \"1\" text \"keys\" end\n" +
+                "show screen \"info\"\nwrite \"\"\nshow screen \"danger\""));
+    }
+
+    [Fact]
+    public void EachRunStartsWithAWholeScreen()
+    {
+        var output = new StringOutput();
+        var session = new PyropSession(new StringReader(""), output);
+        session.Run("use terminal library\nimport from terminal show panel text end");
+
+        session.Run("show panel \"A\" text \"a\"");
+        session.Run("show panel \"A\" text \"a\"");
+
+        Assert.Equal("A\na\n\nA\na\n\n", output.ToString());
+    }
+
+    [Fact]
+    public void TheHintForAVariantOfAPartlyImportedViewNamesTheVariant()
+    {
+        Assert.Equal(
+            "'text' comes from the library terminal: add import from terminal text end, or write from terminal text.",
+            Run.Failure("use terminal library\nimport from terminal View panel end\nwrite_line text").Message);
+    }
+
+    [Fact]
+    public void WriteViewAlwaysWritesTheWholeView()
+    {
+        Assert.Equal(
+            "A\n1\nB\n1\nkeys\nA\n1\nB\n1\nkeys\n",
+            Run.Program(Panels.Replace("show text", "write_view text") + "write_view screen 1 1\nwrite_view screen 1 1"));
     }
 
     [Fact]

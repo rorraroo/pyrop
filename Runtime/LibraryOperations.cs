@@ -26,6 +26,8 @@ public static class LibraryOperations
             Overload([S], Strings, c => TextFiles.ReadLines(c, c.Argument(0).AsString()))),
         Operation("listing",
             Overload([S], Strings, c => TextFiles.ListFiles(c, c.Argument(0).AsString()))),
+        Operation("name_of",
+            Overload([S], S, c => new StringValue(NameOf(c.Argument(0).AsString())))),
     ], new Dictionary<string, string>
     {
         ["read_file"] = "load",
@@ -54,6 +56,9 @@ public static class LibraryOperations
         Operation("abs",
             Overload([I], I, c => Int(c, () => System.Math.Abs(c.Argument(0).AsInt()))),
             Overload([F], F, c => new FloatValue(System.Math.Abs(c.Argument(0).AsFloat())))),
+        Operation("sign",
+            Overload([I], I, c => new IntValue(System.Math.Sign(c.Argument(0).AsInt()))),
+            Overload([F], F, c => new FloatValue(System.Math.Sign(c.Argument(0).AsFloat())))),
         Operation("power",
             Overload([I, I], I, c => Power(c, c.Argument(0).AsInt(), c.Argument(1).AsInt())),
             Overload([F, F], F, c => Float(c, System.Math.Pow(c.Argument(0).AsFloat(), c.Argument(1).AsFloat())))),
@@ -126,6 +131,8 @@ public static class LibraryOperations
             }
         });
     }
+
+    private static string NameOf(string path) => path[(path.LastIndexOfAny(['/', '\\']) + 1)..];
 
     private static double NonNegative(IBuiltinInvocation invocation, double number) =>
         number >= 0 ? number : throw invocation.Fail($"Cannot take the square root of a negative number ({new FloatValue(number).ToText()}).");

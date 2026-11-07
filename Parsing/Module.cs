@@ -19,8 +19,17 @@ public sealed record LoadedModule(Module Module, ModuleNamespace Names, SourceFi
 
 public sealed record ModuleUse(string Name, LoadedModule Target, SourcePosition Position, Token Statement);
 
-public sealed record ModuleImport(string Module, string Name, object Target, SourcePosition Position, Token Statement)
+public sealed record ModuleImport(string Module, string Name, object Target, SourcePosition Position, Token Statement, bool AllVariants = true)
 {
+    public ChoiceVariant? Variant => Target as ChoiceVariant;
+
+    public IEnumerable<ChoiceVariant> BroughtVariants => Target switch
+    {
+        ChoiceType choice when AllVariants => choice.Variants,
+        ChoiceVariant variant => [variant],
+        _ => [],
+    };
+
     public FunctionSignature? Function => Target as FunctionSignature;
 
     public RecordType? Record => Target as RecordType;
@@ -34,6 +43,7 @@ public sealed record ModuleImport(string Module, string Name, object Target, Sou
         RecordType => "record",
         ChoiceType => "choice",
         BuiltinOperation => "operation",
+        ChoiceVariant => "variant",
         _ => "function",
     };
 }
@@ -149,7 +159,6 @@ public sealed class ModuleNamespace
         : Choices.ContainsKey(name) ? "a choice"
         : Imports.TryGetValue(name, out var import) ? $"an imported {import.Kind}"
         : Variants.TryGetValue(name, out var variant) ? (variant.Choice.Module == Module ? "a variant" : "an imported variant")
-        : Uses.ContainsKey(name) ? "a module"
         : null;
 
     public ModuleNamespace With(
@@ -191,7 +200,7 @@ public sealed class ModuleNamespace
             combinedVariants[variant.Name] = variant;
         }
 
-        foreach (var variant in addedImports.SelectMany(import => import.Choice?.Variants ?? []))
+        foreach (var variant in addedImports.SelectMany(import => import.BroughtVariants))
         {
             combinedVariants.TryAdd(variant.Name, variant);
         }

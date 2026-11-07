@@ -212,4 +212,19 @@ public sealed class FileTests : IDisposable
         Assert.Equal(ErrorStage.Type, error.Stage);
         Assert.Equal("'save' cannot take string int. It accepts: string string.", error.Message);
     }
+
+    [Theory]
+    [InlineData("logs/server.log", "server.log")]
+    [InlineData("C:\\\\logs\\\\server.log", "server.log")]
+    [InlineData("a\\\\b/c.txt", "c.txt")]
+    [InlineData("server.log", "server.log")]
+    [InlineData("logs/", "")]
+    [InlineData("/", "")]
+    [InlineData("", "")]
+    [InlineData("no such directory/no such file", "no such file")]
+    [InlineData("a\\tb", "a\tb")]
+    public void NameOfGivesTheTextAfterTheLastSeparator(string path, string expected)
+    {
+        Assert.Equal($"[{expected}]\n", Run.Program($"use files library\nwrite_line fill \"[{{}}]\" list_of string from files name_of \"{path}\" end"));
+    }
 }

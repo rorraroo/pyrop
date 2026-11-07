@@ -409,4 +409,33 @@ public class OptionTests
 
         Assert.Equal("none\nPoint x 1.0 y 2.0\n", Run.Program(source));
     }
+
+    [Theory]
+    [InlineData("is_some some 1", "true")]
+    [InlineData("is_some none int", "false")]
+    [InlineData("is_none none string", "true")]
+    [InlineData("is_none some \"\"", "false")]
+    [InlineData("is_some attempt convert int \"x\"", "false")]
+    [InlineData("is_some some none int", "true")]
+    [InlineData("is_none get list_of option int none int end 0", "true")]
+    public void IsSomeAndIsNoneTestForAValue(string expression, string expected)
+    {
+        Assert.Equal($"{expected}\n", Run.Program($"write_line {expression}"));
+    }
+
+    [Fact]
+    public void IsSomeTakesOnlyAnOption()
+    {
+        var error = Failure("write_line is_some 1", ErrorStage.Type, 1, 12);
+
+        Assert.Equal("'is_some' cannot take int. It accepts: option T (T stands for any type, the same wherever it appears).", error.Message);
+    }
+
+    [Theory]
+    [InlineData("is_some")]
+    [InlineData("is_none")]
+    public void TheTestsAreReservedWords(string word)
+    {
+        Assert.Equal(ErrorStage.Parse, Run.Failure($"def int {word} 1").Stage);
+    }
 }

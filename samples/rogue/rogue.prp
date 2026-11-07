@@ -24,15 +24,8 @@ function int seed_from string given_text block
     exit 2
 end
 
-function list string last_of list string items int count block
-    def list string tail list_of string end
-    def int index larger 0 subtract length_of items count
-    while less index length_of items block
-        set tail push tail get items index
-        set index add index 1
-    end
-    return tail
-end
+function list string last_of list string items int count
+    return slice items larger 0 subtract length_of items count smaller count length_of items
 
 function View status Hero hero block
     def list View parts list_of View

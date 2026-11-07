@@ -460,4 +460,55 @@ public class CollectionTests
         Assert.Equal("100000\n99999\n", output);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
     }
+
+    [Theory]
+    [InlineData("slice list_of int 1 2 3 4 end 1 2", "[2, 3]")]
+    [InlineData("slice list_of int 1 2 3 end 0 3", "[1, 2, 3]")]
+    [InlineData("slice list_of int 1 2 3 end 3 0", "[]")]
+    [InlineData("slice list_of int end 0 0", "[]")]
+    [InlineData("slice list_of string \"a\" \"b\" end 1 1", "[\"b\"]")]
+    [InlineData("positions_of list_of string \"a\" \"b\" \"c\" end", "[0, 1, 2]")]
+    [InlineData("positions_of list_of int end", "[]")]
+    public void SlicesAListAndGivesItsPositions(string expression, string expected)
+    {
+        Assert.Equal(expected, Evaluate(expression));
+    }
+
+    [Theory]
+    [InlineData("slice list_of int 1 2 3 end 4 0", "Position 4 is out of range for a list of 3 items, numbered from 0.")]
+    [InlineData("slice list_of int 1 2 3 end -1 1", "Position -1 is out of range for a list of 3 items, numbered from 0.")]
+    [InlineData("slice list_of int end 1 0", "Position 1 is out of range for an empty list, numbered from 0.")]
+    [InlineData("slice list_of int 1 2 3 end 1 -1", "'slice' cannot take a negative count (-1).")]
+    [InlineData("slice list_of int 1 2 3 end 2 5", "Cannot take 5 items from position 2 of a list of 3 items.")]
+    [InlineData("slice list_of int 1 end 1 1", "Cannot take 1 item from position 1 of a list of 1 item.")]
+    public void SliceFailsWhereSubstringWould(string expression, string message)
+    {
+        Assert.Equal(message, Failure($"write_line {expression}", ErrorStage.Runtime).Message);
+    }
+
+    [Fact]
+    public void SliceLeavesTheListUnchanged()
+    {
+        Assert.Equal(
+            "[1, 2, 3]\n[2]\n",
+            Run.Program("def list int a list_of int 1 2 3 end\ndef list int b slice a 1 1\nwrite_line a\nwrite_line b"));
+    }
+
+    [Fact]
+    public void ForWalksAListsPositions()
+    {
+        const string source =
+            "def list string items list_of string \"lamp\" \"key\" end\n" +
+            "for int index in positions_of items write_line fill \"{}: {}\" list_of string convert string index get items index end";
+
+        Assert.Equal("0: lamp\n1: key\n", Run.Program(source));
+    }
+
+    [Theory]
+    [InlineData("slice")]
+    [InlineData("positions_of")]
+    public void TheListOperationsAreReservedWords(string word)
+    {
+        Assert.Equal(ErrorStage.Parse, Run.Failure($"def int {word} 1").Stage);
+    }
 }

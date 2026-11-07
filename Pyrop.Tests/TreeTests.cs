@@ -23,6 +23,14 @@ public class TreeTests
     }
 
     [Fact]
+    public void PrintsTheChangesOfOneCopyOneAfterAnother()
+    {
+        Assert.Equal(
+            "record Point float x float y\ndef Point p (Point 1.0 2.0)\nset p (copy p with x 3.0 with y (add 1.0 1.0))\n",
+            Tree("record Point float x float y\ndef Point p Point 1.0 2.0\nset p copy p with x 3.0 with y add 1.0 1.0"));
+    }
+
+    [Fact]
     public void LeavesStatementCallsAndCallsWithoutArgumentsBare()
     {
         const string source =

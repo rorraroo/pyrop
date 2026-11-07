@@ -137,7 +137,6 @@ public sealed class RecordModuleTests : IDisposable
     [InlineData("use geo \"geo.prp\"\nwrite_line from geo Line 1", 2, 21, "Module 'geo' has no function, record, choice or variant 'Line'.")]
     [InlineData("def from shapes Point p 1", 1, 10, "'shapes' is not a module of this file; load it with use shapes \"<path>\".")]
     [InlineData("use geo \"geo.prp\"\nimport from geo Point end\nrecord Point int x", 2, 17, "'Point' is a record of this file and cannot also be imported.")]
-    [InlineData("use Point \"geo.prp\"\nrecord Point int x", 2, 8, "'Point' is a module name in this file and cannot also name a record.")]
     [InlineData("use geo \"geo.prp\"\nimport from geo Point end\ndef int Point 1", 3, 9, "'Point' is an imported record and cannot be used as a variable name.")]
     [InlineData("use geo \"nope.prp\"\nrecord R from geo Point p", 1, 9, "Cannot use \"nope.prp\": no file at")]
     [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nrecord R Pointt p", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]

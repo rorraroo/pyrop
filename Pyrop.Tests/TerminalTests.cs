@@ -128,21 +128,21 @@ public class TerminalTests
     [Fact]
     public void AskShowsThePromptAndReturnsTheAnswer()
     {
-        Assert.Equal("Name: Hi Ann\n", Run.Program("write_line add \"Hi \" ask \"Name: \"", "Ann\n"));
+        Assert.Equal("Name: \nHi Ann\n", Run.Program("write_line add \"Hi \" ask \"Name: \"", "Ann\n"));
     }
 
     [Fact]
     public void AskUsesTheCurrentStyleForItsPrompt()
     {
         Assert.Equal(
-            "<info>Name: </info>Ann\n",
+            "<info>Name: </info>\nAnn\n",
             Run.Program("def string name \"\"\nstyled \"info\" set name ask \"Name: \"\nwrite_line name", "Ann\n"));
     }
 
     [Fact]
     public void AskSharesTheInputBufferWithInputEnded()
     {
-        Assert.Equal("Q: a\n", Run.Program("if not input_ended write_line ask \"Q: \"", "a\n"));
+        Assert.Equal("Q: \na\n", Run.Program("if not input_ended write_line ask \"Q: \"", "a\n"));
     }
 
     [Theory]
@@ -152,15 +152,15 @@ public class TerminalTests
     [InlineData("No", "false")]
     public void ConfirmAcceptsYesAndNo(string answer, string expected)
     {
-        Assert.Equal($"Go? [y/n] {expected}\n", Run.Program("write_line confirm \"Go? \"", answer + "\n"));
+        Assert.Equal($"Go? [y/n] \n{expected}\n", Run.Program("write_line confirm \"Go? \"", answer + "\n"));
     }
 
     [Fact]
     public void ConfirmAsksAgainUntilItGetsAnAnswer()
     {
-        const string retry = "Go? [y/n] <warning>Please answer y or n.\n</warning>";
+        const string retry = "Go? [y/n] \n<warning>Please answer y or n.\n</warning>";
 
-        Assert.Equal(retry + retry + "Go? [y/n] true\n", Run.Program("write_line confirm \"Go?\"", "maybe\n\ny\n"));
+        Assert.Equal(retry + retry + "Go? [y/n] \ntrue\n", Run.Program("write_line confirm \"Go?\"", "maybe\n\ny\n"));
     }
 
     [Theory]

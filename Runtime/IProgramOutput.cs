@@ -16,6 +16,8 @@ public interface IProgramOutput
 
     bool TryWriteTable(IReadOnlyList<string> headers, IReadOnlyList<IReadOnlyList<string>> rows, OutputStyle style);
 
+    long Written => -1;
+
     void BeforeLineRead()
     {
     }

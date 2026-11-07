@@ -18,9 +18,42 @@ public static class TreePrinter
         return builder.ToString();
     }
 
+    public static string Expression(Expression expression, ModuleNamespace? names) => new Printer(new StringBuilder(), names).Bare(expression);
+
+    public static string Heading(Statement statement, ModuleNamespace? names) => new Printer(new StringBuilder(), names).Heading(statement);
+
+    public static string Type(PyropType type, ModuleNamespace? names) => new Printer(new StringBuilder(), names).TypeText(type);
+
+    public static string Signature(FunctionSignature signature, ModuleNamespace? names) =>
+        new Printer(new StringBuilder(), names).Header(signature);
+
+    public static string Declaration(DeclaredType declared, ModuleNamespace? names)
+    {
+        var printer = new Printer(new StringBuilder(), names);
+        return declared switch
+        {
+            RecordType record => printer.RecordHeader(record),
+            ChoiceType choice => printer.ChoiceHeader(choice),
+            _ => declared.Name,
+        };
+    }
+
     private sealed class Printer(StringBuilder output, ModuleNamespace? names)
     {
         private const string Indent = "    ";
+
+        public string Heading(Statement statement) => statement switch
+        {
+            IfStatement conditional => $"{Keywords.If} {Operand(conditional.Condition)}",
+            IfSomeStatement unwrap => $"{Keywords.IfSome} {TypeText(unwrap.ValueType)} {unwrap.Name} {Operand(unwrap.Option)}",
+            WhileStatement loop => $"{Keywords.While} {Operand(loop.Condition)}",
+            ForStatement loop => $"{Keywords.For} {TypeText(loop.VariableType)} {loop.Variable} {Keywords.In} {Operand(loop.List)}",
+            StyledStatement styled => $"{Keywords.Styled} {Operand(styled.Style)}",
+            FunctionStatement function => Header(function.Signature),
+            MatchStatement match => $"{Keywords.Match} {Operand(match.Value)}",
+            BlockStatement => Keywords.Block,
+            _ => Simple(statement),
+        };
 
         public void WriteStatement(Statement statement, int depth)
         {
@@ -136,7 +169,7 @@ public static class TreePrinter
             (true, true) => Keywords.WriteErrorLine,
         };
 
-        private string Header(FunctionSignature signature) =>
+        public string Header(FunctionSignature signature) =>
             string.Join(' ', [
                 .. signature.IsExported ? [Keywords.Export] : Array.Empty<string>(),
                 Keywords.Function,
@@ -145,7 +178,7 @@ public static class TreePrinter
                 .. signature.Parameters.SelectMany(parameter => new[] { TypeText(parameter.Type), parameter.Name }),
             ]);
 
-        private string RecordHeader(RecordType record) =>
+        public string RecordHeader(RecordType record) =>
             string.Join(' ', [
                 .. record.IsExported ? [Keywords.Export] : Array.Empty<string>(),
                 Keywords.Record,
@@ -153,7 +186,7 @@ public static class TreePrinter
                 .. record.Fields.SelectMany(field => new[] { TypeText(field.Type), field.Name }),
             ]);
 
-        private string ChoiceHeader(ChoiceType choice) =>
+        public string ChoiceHeader(ChoiceType choice) =>
             string.Join(' ', [
                 .. choice.IsExported ? [Keywords.Export] : Array.Empty<string>(),
                 Keywords.Choice,
@@ -162,7 +195,7 @@ public static class TreePrinter
                 Keywords.End,
             ]);
 
-        private string TypeText(PyropType type)
+        public string TypeText(PyropType type)
         {
             if (!type.DeclaredTypes.Any())
             {
@@ -214,7 +247,7 @@ public static class TreePrinter
             return builder.ToString();
         }
 
-        private string Bare(Expression expression)
+        public string Bare(Expression expression)
         {
             var builder = new StringBuilder();
             AppendBare(builder, expression);
@@ -275,6 +308,11 @@ public static class TreePrinter
                     break;
                 case GetFieldExpression read:
                     AppendApplied(builder, $"{Keywords.The} {read.Field} {Keywords.Of}", [read.Record]);
+                    break;
+                case WithFieldExpression { Chained: true } change:
+                    AppendBare(builder, change.Record);
+                    builder.Append(' ').Append(Keywords.With).Append(' ').Append(change.Field).Append(' ');
+                    AppendOperand(builder, change.Value);
                     break;
                 case WithFieldExpression change:
                     builder.Append(Keywords.Copy).Append(' ');

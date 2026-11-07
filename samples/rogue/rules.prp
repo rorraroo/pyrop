@@ -3,7 +3,7 @@ use random library
 use math library
 import from dungeon Item Treasure Monster Loot Level make_level tile_at is_wall monster_at loot_at item_name item_description end
 import from random roll end
-import from math abs end
+import from math abs sign end
 
 export record Hero int x int y int health int max_health int attack int gold int depth list Item items
 export record Game Hero hero Level level list string log
@@ -81,8 +81,7 @@ end
 
 function Game arrive Game game int x int y block
     def Hero hero the hero of game
-    set hero copy hero with x x
-    set hero copy hero with y y
+    set hero copy hero with x x with y y
     def Game moved copy game with hero hero
     if_some int found loot_at the level of game x y set moved pick_up moved found
     if equal tile_at the level of game x y ">" return descend moved
@@ -111,8 +110,7 @@ function Game descend Game game block
     def int depth add the depth of hero 1
     set hero copy hero with depth depth
     if greater depth 3 return said copy game with hero hero "You find the crypt's back door and escape!"
-    set hero copy hero with x 1
-    set hero copy hero with y 1
+    set hero copy hero with x 1 with y 1
     def Game deeper copy game with hero hero
     return said copy deeper with level make_level depth fill "You climb down to depth {}." list_of int depth end
 end
@@ -141,9 +139,8 @@ function Game monster_acts Game game int index block
     if at_least abs dx abs dy set x add x sign dx
     else set y add y sign dy
     if is_wall level x y return game
-    if_some int other monster_at level x y return game
-    set monster copy monster with x x
-    set monster copy monster with y y
+    if is_some monster_at level x y return game
+    set monster copy monster with x x with y y
     return copy game with level copy level with monsters put the monsters of level index monster
 end
 
@@ -155,8 +152,3 @@ function Game hit Game game Monster monster block
     if at_most the health of hero 0 return said hurt fill "The {} kills you." list_of string the name of monster end
     return said hurt fill "The {} hits you for {}." list_of string the name of monster convert string damage end
 end
-
-function int sign int n
-    if greater n 0 return 1
-    else if less n 0 return -1
-    else return 0

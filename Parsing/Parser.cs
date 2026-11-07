@@ -275,8 +275,8 @@ public sealed class Parser
             Keywords.Match => ParseMatch(NoDeclarations, NoOuterNames),
             Keywords.When => throw _cursor.Error($"'{Keywords.When}' without a matching '{Keywords.Match}'."),
             Keywords.With => throw _cursor.Error(
-                $"'{Keywords.With}' cannot start a statement. A {Keywords.Copy} changes one field; to change two, copy the copy: " +
-                $"{Keywords.Copy} {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>."),
+                $"'{Keywords.With}' cannot start a statement; it belongs to a {Keywords.Copy}, which changes several fields with one '{Keywords.With}' each: " +
+                $"{Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>."),
             Keywords.Attempt => throw _cursor.Error(
                 $"'{Keywords.Attempt}' cannot be a statement: its result tells whether the operation succeeded. " +
                 $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} {Keywords.From} files save \"save.txt\" text …."),
@@ -303,7 +303,6 @@ public sealed class Parser
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
             _ when _names.FindVariant(token.Text) is { Arity: > 0 } variant => throw VariantStatement(token, variant.Name),
             _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
-            _ when _names.Uses.ContainsKey(token.Text) => throw ModuleUsedAsValue(token),
             _ when Keywords.RetiredHint(token.Text) is { } retired => throw _cursor.Error(retired),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
             _ when token.Kind == TokenKind.Word && _names.LibraryHint(token.Text) is { } hint => throw _cursor.Error(hint),
@@ -312,11 +311,6 @@ public sealed class Parser
             _ => throw StrayValue(token),
         };
     }
-
-    private PyropException ModuleUsedAsValue(Token token) =>
-        _cursor.Error(
-            $"'{token.Text}' is a module; name one of its exported functions with {Keywords.From} {token.Text} <name>.",
-            token);
 
     private PyropException ConstructorStatement(Token token, string written) =>
         _cursor.Error(
@@ -343,10 +337,26 @@ public sealed class Parser
 
     private static string Written(string? module, string name) => module is null ? name : $"{Keywords.From} {module} {name}";
 
+    private static bool EndsWithCopy(Expression expression) => expression switch
+    {
+        WithFieldExpression => true,
+        BuiltinCallExpression { Arguments: [.., var last] } => EndsWithCopy(last),
+        FunctionCallExpression { Arguments: [.., var last] } => EndsWithCopy(last),
+        ConstructExpression { Arguments: [.., var last] } => EndsWithCopy(last),
+        VariantExpression { Arguments: [.., var last] } => EndsWithCopy(last),
+        GetFieldExpression read => EndsWithCopy(read.Record),
+        ConvertExpression convert => EndsWithCopy(convert.Operand),
+        AttemptExpression attempt => EndsWithCopy(attempt.Operation),
+        _ => false,
+    };
+
     private PyropException StrayValue(Token token, string? described = null) =>
         _cursor.Error(
             $"{described ?? token.Describe()} cannot stand alone as a statement. " +
             "This usually means the expression before it was given more arguments than its operation takes." +
+            (token.Kind == TokenKind.Word && _names.Uses.ContainsKey(token.Text)
+                ? $" If '{token.Text}' was meant as the module, name one of its exported functions with {Keywords.From} {token.Text} <name>."
+                : "") +
             LibraryHintBefore(token),
             token);
 
@@ -765,9 +775,25 @@ public sealed class Parser
             case Keywords.Copy:
                 _cursor.Advance();
                 var record = ParseExpression();
+                if (EndsWithCopy(record) && !_cursor.Current.IsWord(Keywords.With))
+                {
+                    throw _cursor.Error(
+                        $"This {Keywords.Copy} has no '{Keywords.With}': the {Keywords.Copy} inside it took every '{Keywords.With}' after it. " +
+                        $"Change several fields with one {Keywords.Copy}: {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>.",
+                        token);
+                }
+
                 ExpectFiller(Keywords.With, $"after the record: {Keywords.Copy} <record> {Keywords.With} <field> <value>");
                 var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
-                return new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), token.Position);
+                Expression copy = new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), token.Position);
+                while (_cursor.Current.IsWord(Keywords.With))
+                {
+                    _cursor.Advance();
+                    var next = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
+                    copy = new WithFieldExpression(next.Text, next.Position, copy, ParseExpression(), token.Position, Chained: true);
+                }
+
+                return copy;
         }
 
         if (token.IsWord(Keywords.From))
@@ -810,11 +836,6 @@ public sealed class Parser
         if (_names.Failures.OfName(token.Text) is { } failure)
         {
             throw failure;
-        }
-
-        if (_names.Uses.ContainsKey(token.Text))
-        {
-            throw ModuleUsedAsValue(token);
         }
 
         _cursor.Advance();

@@ -32,7 +32,7 @@ class LanguageServer {
             processId: process.pid,
             clientInfo: { name: 'Pyrop for VS Code' },
             rootUri: vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.toString() : null,
-            capabilities: {}
+            capabilities: { textDocument: { hover: { contentFormat: ['markdown'] } } }
         }).then(() => {
             this.ready = true;
             this.notify('initialized', {});
@@ -147,6 +147,28 @@ class LanguageServer {
         return this.request('textDocument/semanticTokens/full', { textDocument: { uri: document.uri.toString() } });
     }
 
+    async hover(document, position) {
+        if (!this.ready || !isPyropFile(document)) {
+            return null;
+        }
+
+        return this.request('textDocument/hover', {
+            textDocument: { uri: document.uri.toString() },
+            position: { line: position.line, character: position.character }
+        });
+    }
+
+    async format(document) {
+        if (!this.ready || !isPyropFile(document)) {
+            return [];
+        }
+
+        return this.request('textDocument/formatting', {
+            textDocument: { uri: document.uri.toString() },
+            options: { tabSize: 4, insertSpaces: true }
+        });
+    }
+
     stop() {
         if (this.stopping) {
             return Promise.resolve();
@@ -238,6 +260,10 @@ function showDiagnostics(params) {
     refreshTokens();
 }
 
+function toRange(range) {
+    return new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
+}
+
 function start() {
     const configuration = vscode.workspace.getConfiguration('pyrop');
     if (!configuration.get('languageServer.enabled', true)) {
@@ -315,7 +341,35 @@ function activate(context) {
 
                 return new vscode.SemanticTokens(new Uint32Array(result.data));
             }
-        }, legend));
+        }, legend),
+        vscode.languages.registerHoverProvider({ language: 'pyrop', scheme: 'file' }, {
+            async provideHover(document, position) {
+                let result = null;
+                try {
+                    result = server ? await server.hover(document, position) : null;
+                } catch {
+                    result = null;
+                }
+
+                if (!result || !result.contents) {
+                    return null;
+                }
+
+                return new vscode.Hover(new vscode.MarkdownString(result.contents.value), result.range ? toRange(result.range) : undefined);
+            }
+        }),
+        vscode.languages.registerDocumentFormattingEditProvider({ language: 'pyrop', scheme: 'file' }, {
+            async provideDocumentFormattingEdits(document) {
+                let edits = [];
+                try {
+                    edits = server ? await server.format(document) : [];
+                } catch {
+                    edits = [];
+                }
+
+                return (edits || []).map(edit => vscode.TextEdit.replace(toRange(edit.range), edit.newText));
+            }
+        }));
     start();
 }
 

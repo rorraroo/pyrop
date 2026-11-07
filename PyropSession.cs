@@ -8,7 +8,8 @@ namespace Pyrop;
 
 public sealed record InspectedProgram(SyntaxTree? Tree, PyropException? Error, string? Text);
 
-public sealed record AnalyzedSource(IReadOnlyList<Token> Tokens, ModuleNamespace Names, IReadOnlyList<Statement> Statements, SourcePosition? StoppedAt);
+public sealed record AnalyzedSource(
+    IReadOnlyList<Token> Tokens, ModuleNamespace Names, IReadOnlyList<Statement> Statements, SourcePosition? StoppedAt, TypeFacts Facts);
 
 public enum InputStatus
 {
@@ -67,6 +68,9 @@ public sealed class PyropSession
     public AnalyzedSource? Analyze(string source, string sourcePath, string? sourceFullPath = null) =>
         LargeStack.Run(() => AnalyzeOnCurrentThread(source, sourcePath, sourceFullPath));
 
+    public string Format(string source, string sourcePath, string? sourceFullPath = null) =>
+        LargeStack.Run(() => FormatOnCurrentThread(source, sourcePath, sourceFullPath));
+
     public string? SourceText(string? sourceName) =>
         sourceName is null ? _lastInput : _sources.GetValueOrDefault(sourceName);
 
@@ -107,12 +111,21 @@ public sealed class PyropSession
         {
             var tokens = Lexer.Tokenize(source, sourcePath);
             var parsed = Parse(source, sourcePath, sourceFullPath, untilError: true, parsesModules: false);
-            return new AnalyzedSource(tokens, parsed.Names, parsed.Program.Main.Tree.Statements, parsed.ParseError?.Errors[0].Position);
+            var facts = TypeChecker.Describe(parsed.Program.Main);
+            return new AnalyzedSource(tokens, parsed.Names, parsed.Program.Main.Tree.Statements, parsed.ParseError?.Errors[0].Position, facts);
         }
         catch (PyropException)
         {
             return null;
         }
+    }
+
+    private string FormatOnCurrentThread(string source, string sourcePath, string? sourceFullPath)
+    {
+        sourcePath = DisplayNameOf(sourcePath, sourceFullPath);
+        _sources[sourcePath] = source;
+        var parsed = Parse(source, sourcePath, sourceFullPath, parsesModules: false);
+        return Formatter.Format(source, Lexer.Tokenize(source, sourcePath), parsed.Program.Main.Tree.Statements);
     }
 
     private static InspectedProgram Inspected(SyntaxTree tree, ModuleNamespace names, PyropException? error) =>

@@ -14,6 +14,8 @@ public interface IBuiltinInvocation
 
     OutputStyle Style { get; }
 
+    ShownScreen ShownScreen { get; }
+
     int CollectionLimit { get; }
 
     int NestingLimit { get; }
@@ -153,10 +155,19 @@ public static class Builtins
             Overload([MapKV, Key], B, c => BoolValue.Of(c.Argument(0).AsMap().ContainsKey(c.Argument(1))))),
         Operation("keys_of",
             Overload([MapKV], PyropTypes.ListOf(Key), c => CollectionOperations.KeysOf(c.Argument(0).AsMap()))),
+        Operation("positions_of",
+            Overload([ListT], PyropTypes.ListOf(I), c => CollectionOperations.PositionsOf(c.Argument(0).AsList()))),
+        Operation("slice",
+            Overload([ListT, I, I], ListT, c => CollectionOperations.Slice(
+                c, c.Argument(0).AsList(), c.Argument(1).AsInt(), c.Argument(2).AsInt()))),
         Operation("some",
             Overload([Item], OptionT, c => OptionValue.Some(c.Argument(0)))),
         Operation("value_or",
             Overload([OptionT, Item], Item, c => c.Argument(0).AsOption().Content ?? c.Argument(1))),
+        Operation("is_some",
+            Overload([OptionT], B, c => BoolValue.Of(c.Argument(0).AsOption().Content is not null))),
+        Operation("is_none",
+            Overload([OptionT], B, c => BoolValue.Of(c.Argument(0).AsOption().Content is null))),
         Operation("substring",
             Overload([S, I, I], S, c => new StringValue(
                 TextOperations.Substring(c, c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsInt())))),

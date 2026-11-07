@@ -475,8 +475,12 @@ public class RecordTests
     [InlineData("def int with 1", 2, 9, "'with' is a reserved word and cannot be used as a variable name.")]
     [InlineData("write_line of", 2, 12, "Expected an expression, found keyword 'of'.")]
     [InlineData("copy p with x 1.0", 2, 1, "'copy' cannot start a statement.")]
-    [InlineData("def Point p Point 1.0 2.0\nset p copy p with x 2.0 with y 3.0", 3, 25,
-        "'with' cannot start a statement. A copy changes one field; to change two, copy the copy: copy copy <record> with <field> <value> with <field> <value>.")]
+    [InlineData("def Point p Point 1.0 2.0\nset p copy copy p with x 2.0 with y 3.0", 3, 7,
+        "This copy has no 'with': the copy inside it took every 'with' after it. Change several fields with one copy: copy <record> with <field> <value> with <field> <value>.")]
+    [InlineData("record Box Point inner\ndef Box b Box Point 1.0 2.0\nset b copy Box copy the inner of b with x 2.0 with y 3.0", 4, 7,
+        "This copy has no 'with': the copy inside it took every 'with' after it. Change several fields with one copy: copy <record> with <field> <value> with <field> <value>.")]
+    [InlineData("def Point p Point 1.0 2.0\nwith x 1.0", 3, 1,
+        "'with' cannot start a statement; it belongs to a copy, which changes several fields with one 'with' each: copy <record> with <field> <value> with <field> <value>.")]
     public void FieldFormErrors(string body, int line, int column, string message)
     {
         var error = Run.Failure(Point + body);
@@ -484,6 +488,23 @@ public class RecordTests
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
         Assert.Equal(message, error.Message);
+    }
+
+    [Fact]
+    public void OneCopyChangesSeveralFieldsInOrder()
+    {
+        Assert.Equal(
+            "Point x 2.0 y 4.0\nPoint x 1.0 y 2.0\n",
+            Run.Program(Point + "def Point p Point 1.0 2.0\ndef Point q copy p with x 2.0 with y 3.0 with y 4.0\nwrite_line q\nwrite_line p"));
+    }
+
+    [Fact]
+    public void ANestedCopyTakesTheWithsAfterIt()
+    {
+        const string source = "record Line Point start Point stop\ndef Line l Line Point 0.0 0.0 Point 1.0 1.0\n" +
+            "write_line copy l with stop copy the stop of l with x 5.0 with y 6.0";
+
+        Assert.Equal("Line start (Point x 0.0 y 0.0) stop (Point x 5.0 y 6.0)\n", Run.Program(Point + source));
     }
 
     [Fact]

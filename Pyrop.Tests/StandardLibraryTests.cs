@@ -18,7 +18,7 @@ public class StandardLibraryTests
     }
 
     private const string NumberLibraries =
-        "use math library\nimport from math abs power square_root round round_down end\n" +
+        "use math library\nimport from math abs sign power square_root round round_down end\n" +
         "use random library\nimport from random between roll seed end\n";
 
     private static string EvaluateNumber(string expression) => Run.Program(NumberLibraries + $"write_line {expression}").TrimEnd('\n');
@@ -347,5 +347,19 @@ public class StandardLibraryTests
 
         Assert.Equal(ErrorStage.Type, error.Stage);
         Assert.Equal("'square_root' cannot take int. It accepts: float.", error.Message);
+    }
+
+    [Theory]
+    [InlineData("sign 5", "1")]
+    [InlineData("sign -3", "-1")]
+    [InlineData("sign 0", "0")]
+    [InlineData("sign subtract -9223372036854775807 1", "-1")]
+    [InlineData("sign 2.5", "1.0")]
+    [InlineData("sign -0.5", "-1.0")]
+    [InlineData("sign 0.0", "0.0")]
+    [InlineData("sign -0.0", "0.0")]
+    public void SignGivesTheDirectionOfANumberInItsOwnType(string expression, string expected)
+    {
+        Assert.Equal(expected, EvaluateNumber(expression));
     }
 }

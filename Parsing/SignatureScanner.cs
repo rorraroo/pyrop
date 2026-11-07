@@ -350,6 +350,9 @@ public static class SignatureScanner
                 var from = cursor.Advance();
                 var module = cursor.Advance();
                 var inStatement = new HashSet<string>();
+                var first = imports.Count;
+                var named = new HashSet<ChoiceType>();
+                var repeated = new List<(ModuleImport Earlier, QualifiedName Name)>();
                 while (cursor.Current.Kind == TokenKind.Word
                     && !cursor.Current.IsWord(Keywords.End)
                     && !Keywords.IsStatement(cursor.Current.Text))
@@ -363,14 +366,41 @@ public static class SignatureScanner
                         continue;
                     }
 
-                    ScanImportedName(qualified, token, cursor, names, seen, imports, failures);
+                    var (target, earlier) = ScanImportedName(qualified, token, cursor, names, seen, imports, failures);
+                    if (target is ChoiceVariant variant)
+                    {
+                        named.Add(variant.Choice);
+                    }
+
+                    if (earlier is not null)
+                    {
+                        repeated.Add((earlier, qualified));
+                    }
+                }
+
+                foreach (var (earlier, qualified) in repeated)
+                {
+                    if (earlier.Choice is { } partial && !earlier.AllVariants && !named.Contains(partial))
+                    {
+                        failures.Add(token, qualified.Name.Text, cursor.Error(
+                            $"'{partial.Name}' was imported earlier with only some of its variants; import the others by name, as in {Keywords.Import} {Keywords.From} {qualified.Module.Text} {string.Join(" ", partial.Variants.Where(missing => names.FindVariant(missing.Name) != missing).Select(missing => missing.Name))} {Keywords.End}.",
+                            qualified.Name));
+                    }
+                }
+
+                for (var index = first; index < imports.Count; index++)
+                {
+                    if (imports[index].Choice is { } choice && named.Contains(choice))
+                    {
+                        imports[index] = imports[index] with { AllVariants = false };
+                    }
                 }
             }
 
             return imports;
         }
 
-        private static void ScanImportedName(
+        private static (object? Target, ModuleImport? Earlier) ScanImportedName(
             QualifiedName qualified,
             Token token,
             TokenCursor cursor,
@@ -383,13 +413,6 @@ public static class SignatureScanner
             try
             {
                 var target = QualifiedNames.Resolve(names, qualified, cursor);
-                if (target is ChoiceVariant variant)
-                {
-                    throw cursor.Error(
-                        $"'{name}' is a variant of the choice '{variant.Choice.Name}'; import the choice with {Keywords.Import} {Keywords.From} {qualified.Module.Text} {variant.Choice.Name} {Keywords.End}, which imports all its variants.",
-                        qualified.Name);
-                }
-
                 if (!seen.Add(name))
                 {
                     throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
@@ -399,17 +422,19 @@ public static class SignatureScanner
                 {
                     if (ReferenceEquals(earlier.Target, target))
                     {
-                        return;
+                        return (target, earlier);
                     }
 
                     throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
                 }
 
                 imports.Add(new ModuleImport(qualified.Module.Text, name, target, qualified.Name.Position, token));
+                return (target, null);
             }
             catch (PyropException error)
             {
                 failures.Add(token, name, error);
+                return (null, null);
             }
         }
 
@@ -429,13 +454,10 @@ public static class SignatureScanner
             bool IsOwnVariant(string name) =>
                 existing.OwnVariant(name) is not null || choices.Any(choice => choice.FindVariant(name) is not null);
             bool IsImportedVariant(string name) => existing.FindVariant(name) is { } variant && variant.Choice.Module != existing.Module;
-            bool IsModule(string name) => existing.Uses.ContainsKey(name) || uses.Any(use => use.Name == name);
-
             foreach (var function in functions)
             {
                 var message =
-                    existing.Uses.ContainsKey(function.Name) ? $"'{function.Name}' is a module name in this file and cannot also be a function name."
-                    : existing.Imports.ContainsKey(function.Name) || IsImportedVariant(function.Name) ? $"'{function.Name}' is imported in this file and cannot also be a function name."
+                    existing.Imports.ContainsKey(function.Name) || IsImportedVariant(function.Name) ? $"'{function.Name}' is imported in this file and cannot also be a function name."
                     : existing.Records.ContainsKey(function.Name) ? $"'{function.Name}' is a record in this file and cannot also be a function name."
                     : existing.Choices.ContainsKey(function.Name) ? $"'{function.Name}' is a choice in this file and cannot also be a function name."
                     : existing.OwnVariant(function.Name) is not null ? $"'{function.Name}' is a variant in this file and cannot also be a function name."
@@ -453,7 +475,6 @@ public static class SignatureScanner
                 var kind = declared is ChoiceType ? Keywords.Choice : Keywords.Record;
                 var message =
                     IsFunction(name) ? $"'{name}' is a function of this file and cannot also name a {kind}."
-                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also name a {kind}."
                     : existing.Imports.ContainsKey(name) || IsImportedVariant(name) ? $"'{name}' is imported in this file and cannot also name a {kind}."
                     : existing.OwnVariant(name) is not null ? $"'{name}' is a variant in this file and cannot also name a {kind}."
                     : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as a {kind} name."
@@ -471,7 +492,6 @@ public static class SignatureScanner
                     IsFunction(name) ? $"'{name}' is a function of this file and cannot also be a variant."
                     : IsRecord(name) ? $"'{name}' is a record of this file and cannot also be a variant."
                     : IsChoice(name) ? $"'{name}' is a choice of this file and cannot also be a variant."
-                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also be a variant."
                     : existing.Imports.ContainsKey(name) || IsImportedVariant(name) ? $"'{name}' is imported in this file and cannot also be a variant."
                     : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as a variant."
                     : null;
@@ -494,7 +514,6 @@ public static class SignatureScanner
                 : IsRecord(name) ? "a record of this file"
                 : IsChoice(name) ? "a choice of this file"
                 : IsOwnVariant(name) ? "a variant of this file"
-                : IsModule(name) ? "a module name in this file"
                 : existing.Imports.ContainsKey(name) || importedNames.Contains(name) ? "already imported in this file"
                 : ImportedVariantOwner(name) is { } owner ? $"a variant of the imported choice '{owner}'"
                 : globals.Contains(name) ? "a global variable"
@@ -508,11 +527,10 @@ public static class SignatureScanner
                     : IsRecord(name) ? $"'{name}' is a record of this file and cannot also be imported."
                     : IsChoice(name) ? $"'{name}' is a choice of this file and cannot also be imported."
                     : IsOwnVariant(name) ? $"'{name}' is a variant of this file and cannot also be imported."
-                    : IsModule(name) ? $"'{name}' is a module name in this file and cannot also be imported."
                     : ImportedVariantOwner(name) is { } owner ? $"'{name}' is a variant of the imported choice '{owner}' and cannot also be imported."
                     : globals.Contains(name) ? $"'{name}' is already a global variable and cannot be used as an imported name."
                     : null;
-                var clashing = (import.Choice?.Variants ?? [])
+                var clashing = import.BroughtVariants
                     .Select(variant => (variant.Name, Reason: VariantClash(variant.Name)))
                     .FirstOrDefault(found => found.Reason is not null);
                 if (message is null && clashing.Reason is not null)
@@ -528,25 +546,9 @@ public static class SignatureScanner
                 }
 
                 importedNames.Add(name);
-                foreach (var variant in import.Choice?.Variants ?? [])
+                foreach (var variant in import.BroughtVariants)
                 {
                     importedVariants[variant.Name] = variant;
-                }
-            }
-
-            foreach (var use in uses)
-            {
-                var message =
-                    IsFunction(use.Name) ? $"'{use.Name}' is a function of this file and cannot also name a module."
-                    : existing.Records.ContainsKey(use.Name) ? $"'{use.Name}' is a record of this file and cannot also name a module."
-                    : existing.Choices.ContainsKey(use.Name) ? $"'{use.Name}' is a choice of this file and cannot also name a module."
-                    : existing.OwnVariant(use.Name) is not null ? $"'{use.Name}' is a variant of this file and cannot also name a module."
-                    : existing.Imports.ContainsKey(use.Name) || IsImportedVariant(use.Name) ? $"'{use.Name}' is imported in this file and cannot also name a module."
-                    : globals.Contains(use.Name) ? $"'{use.Name}' is already a global variable and cannot be used as a module name."
-                    : null;
-                if (message is not null)
-                {
-                    failures.Add(use.Statement, use.Name, Clash(message, use.Position));
                 }
             }
         }

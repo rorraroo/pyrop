@@ -47,6 +47,30 @@ public static class CollectionOperations
     public static ListValue KeysOf(MapValue map) =>
         new(PyropTypes.ListOf(map.KeyType), map.Keys.ToImmutableList());
 
+    public static ListValue PositionsOf(ListValue list) =>
+        new(PyropTypes.ListOf(PyropType.Int), Enumerable.Range(0, list.Count).Select(index => (Value)new IntValue(index)).ToImmutableList());
+
+    public static ListValue Slice(IBuiltinInvocation invocation, ListValue list, long start, long count)
+    {
+        if (start < 0 || start > list.Count)
+        {
+            throw invocation.Fail($"Position {start} is out of range for {Describe(list.Count)}, numbered from 0.");
+        }
+
+        if (count < 0)
+        {
+            throw invocation.Fail($"'slice' cannot take a negative count ({count}).");
+        }
+
+        if (count > list.Count - start)
+        {
+            var items = count == 1 ? "1 item" : $"{count} items";
+            throw invocation.Fail($"Cannot take {items} from position {start} of {Describe(list.Count)}.");
+        }
+
+        return list.With(list.Items.GetRange((int)start, (int)count));
+    }
+
     public static ListValue ListOf(PyropType elementType, IReadOnlyList<Value> items, int limit, Func<string, Exception> fail)
     {
         CheckRoom(items.Count, limit, "list", fail);
@@ -81,17 +105,19 @@ public static class CollectionOperations
     {
         if (index < 0 || index >= list.Count)
         {
-            var size = list.Count switch
-            {
-                0 => "an empty list",
-                1 => "a list of 1 item, numbered from 0",
-                var count => $"a list of {count} items, numbered from 0",
-            };
+            var size = list.Count == 0 ? "an empty list" : $"{Describe(list.Count)}, numbered from 0";
             throw invocation.Fail($"List index {index} is out of range for {size}.");
         }
 
         return (int)index;
     }
+
+    private static string Describe(int count) => count switch
+    {
+        0 => "an empty list",
+        1 => "a list of 1 item",
+        _ => $"a list of {count} items",
+    };
 
     private static Exception MissingKey(IBuiltinInvocation invocation, Value key) =>
         invocation.Fail($"The map has no key {TextForm.OfItem(key)}.");

@@ -149,6 +149,103 @@ public sealed class LanguageServerTests : IDisposable
         Assert.Equal(SemanticClassifier.KindNames, legend.GetProperty("tokenTypes").EnumerateArray().Select(type => type.GetString()));
         Assert.Equal(SemanticClassifier.ModifierNames, legend.GetProperty("tokenModifiers").EnumerateArray().Select(type => type.GetString()));
         Assert.Equal("pyrop", result.GetProperty("serverInfo").GetProperty("name").GetString());
+        Assert.True(capabilities.GetProperty("hoverProvider").GetBoolean());
+        Assert.True(capabilities.GetProperty("documentFormattingProvider").GetBoolean());
+    }
+
+    [Fact]
+    public void HoverShowsTheGroupingOfTheCallUnderTheCursor()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "def int x 2\nwrite_line add 1 multiply 2 x");
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 1, character = 12 } }))
+            .GetProperty("result");
+
+        Assert.Equal("markdown", result.GetProperty("contents").GetProperty("kind").GetString());
+        Assert.StartsWith("```pyrop\nadd 1 (multiply 2 x)\n```\n\nGives `int`.", result.GetProperty("contents").GetProperty("value").GetString());
+        var range = result.GetProperty("range");
+        Assert.Equal((1, 11), (range.GetProperty("start").GetProperty("line").GetInt32(), range.GetProperty("start").GetProperty("character").GetInt32()));
+        Assert.Equal((1, 14), (range.GetProperty("end").GetProperty("line").GetInt32(), range.GetProperty("end").GetProperty("character").GetInt32()));
+    }
+
+    [Fact]
+    public void HoverInDeeplyNestedCodeDoesNotOverflowTheStack()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, string.Concat(Enumerable.Repeat("if true\n", 1500)) + "write_line 1\n");
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 1500, character = 0 } }))
+            .GetProperty("result");
+
+        Assert.Equal("```pyrop\nwrite_line 1\n```", result.GetProperty("contents").GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public void TheFormattingRangeCountsEveryKindOfLineEnd()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "if true\r\nwrite_line 1\r# a\n");
+        client.Diagnostics();
+
+        var edit = Assert.Single(client.Response(client.Request("textDocument/formatting", new { textDocument = new { uri } }))
+            .GetProperty("result").EnumerateArray());
+
+        var end = edit.GetProperty("range").GetProperty("end");
+        Assert.Equal((3, 0), (end.GetProperty("line").GetInt32(), end.GetProperty("character").GetInt32()));
+    }
+
+    [Fact]
+    public void HoverOverNothingOrAClosedDocumentIsNull()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "write_line 1");
+        client.Diagnostics();
+
+        var space = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 0, character = 10 } }));
+        var closed = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri = UriOf("other.prp") }, position = new { line = 0, character = 0 } }));
+
+        Assert.Equal(JsonValueKind.Null, space.GetProperty("result").ValueKind);
+        Assert.Equal(JsonValueKind.Null, closed.GetProperty("result").ValueKind);
+    }
+
+    [Fact]
+    public void FormattingReplacesTheWholeDocument()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "if true\nwrite_line 1\n");
+        client.Diagnostics();
+
+        var edits = client.Response(client.Request("textDocument/formatting", new { textDocument = new { uri }, options = new { tabSize = 2, insertSpaces = false } }))
+            .GetProperty("result");
+
+        var edit = Assert.Single(edits.EnumerateArray());
+        var range = edit.GetProperty("range");
+        Assert.Equal((0, 0), (range.GetProperty("start").GetProperty("line").GetInt32(), range.GetProperty("start").GetProperty("character").GetInt32()));
+        Assert.Equal((2, 0), (range.GetProperty("end").GetProperty("line").GetInt32(), range.GetProperty("end").GetProperty("character").GetInt32()));
+        Assert.Equal("if true\n    write_line 1\n", edit.GetProperty("newText").GetString());
+    }
+
+    [Theory]
+    [InlineData("if true\n    write_line 1\n")]
+    [InlineData("if true\nwrite_line add 1\n")]
+    public void FormattingAFormattedOrUnparsableDocumentChangesNothing(string text)
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, text);
+        client.Diagnostics();
+
+        var edits = client.Response(client.Request("textDocument/formatting", new { textDocument = new { uri } })).GetProperty("result");
+
+        Assert.Empty(edits.EnumerateArray());
     }
 
     [Fact]
@@ -332,11 +429,11 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = new Client(TimeSpan.Zero);
 
-        var early = client.Request("textDocument/hover");
+        var early = client.Request("textDocument/definition");
         Assert.Equal(-32002, client.Response(early).GetProperty("error").GetProperty("code").GetInt32());
 
         client.Initialize();
-        var unknown = client.Request("textDocument/hover");
+        var unknown = client.Request("textDocument/definition");
         Assert.Equal(-32601, client.Response(unknown).GetProperty("error").GetProperty("code").GetInt32());
 
         client.SendRaw("{ not json");
@@ -345,7 +442,7 @@ public sealed class LanguageServerTests : IDisposable
         Assert.Equal(-32700, parseError.GetProperty("error").GetProperty("code").GetInt32());
 
         client.Response(client.Request("shutdown"));
-        var late = client.Request("textDocument/hover");
+        var late = client.Request("textDocument/definition");
         Assert.Equal(-32600, client.Response(late).GetProperty("error").GetProperty("code").GetInt32());
     }
 

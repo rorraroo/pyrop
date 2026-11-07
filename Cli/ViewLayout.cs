@@ -131,7 +131,8 @@ public static class ViewLayout
         return view switch
         {
             TextView text => Wrap(text.Text, width).Select(line => Line(line, style)).ToList(),
-            BarView bar => [RenderBar(bar, width, style)],
+            BarView bar => [RenderBar(bar, width, style, 0)],
+            AlignedBar aligned => [RenderBar(aligned.Bar, width, style, aligned.LabelWidth)],
             MenuView menu => RenderMenu(menu, width, height, style),
             TableView table => RenderTable(table, width, height, style),
             GridView grid => RenderGrid(grid, width, height, style),
@@ -149,7 +150,7 @@ public static class ViewLayout
         return view switch
         {
             TextView text => Wrap(text.Text, width).Count,
-            BarView => 1,
+            BarView or AlignedBar => 1,
             MenuView menu => menu.Entries.Count > 0 ? 1 : 0,
             TableView table => TableHeader(table, ColumnWidths(table, width)).Count + 1 + (table.Rows.Count > 0 ? 1 : 0),
             GridView grid => grid.Lines.Count > 0 ? 1 : 0,
@@ -169,7 +170,7 @@ public static class ViewLayout
         return view switch
         {
             TextView text => Wrap(text.Text, width).Count,
-            BarView => 1,
+            BarView or AlignedBar => 1,
             MenuView menu => menu.Entries.Count,
             TableView table => RenderTable(table, width, null, OutputStyle.None).Count,
             GridView grid => grid.Lines.Count,
@@ -183,10 +184,11 @@ public static class ViewLayout
         };
     }
 
-    private static ScreenLine RenderBar(BarView bar, int width, OutputStyle style)
+    private static ScreenLine RenderBar(BarView bar, int width, OutputStyle style, int labelWidth)
     {
         var numbers = $"{bar.Value} of {bar.Maximum}";
-        var barWidth = width - WidthOf(bar.Label) - WidthOf(numbers) - 2;
+        var label = bar.Label + new string(' ', Math.Max(labelWidth - WidthOf(bar.Label), 0));
+        var barWidth = width - WidthOf(label) - WidthOf(numbers) - 2;
         if (barWidth < 1)
         {
             return Line(Cut($"{bar.Label}: {numbers}", width), style);
@@ -195,7 +197,7 @@ public static class ViewLayout
         var filled = bar.Maximum < 1 ? 0 : (int)(Math.Clamp((double)bar.Value, 0, bar.Maximum) * barWidth / bar.Maximum);
         return new ScreenLine(
         [
-            new Segment(bar.Label + " ", style),
+            new Segment(label + " ", style),
             new Segment(new string('█', filled), style),
             new Segment(new string('░', barWidth - filled), OutputStyle.Muted),
             new Segment(" " + numbers, style),
@@ -447,8 +449,58 @@ public static class ViewLayout
         return lines;
     }
 
+    private sealed record AlignedBar(BarView Bar, int LabelWidth) : ViewNode;
+
+    private static StackView AlignBars(StackView stack)
+    {
+        var views = stack.Views.ToList();
+        var start = 0;
+        while (start < views.Count)
+        {
+            if (BarOf(views[start]) is null)
+            {
+                start++;
+                continue;
+            }
+
+            var end = start;
+            while (end < views.Count && BarOf(views[end]) is not null)
+            {
+                end++;
+            }
+
+            if (end - start > 1)
+            {
+                var labelWidth = views.Skip(start).Take(end - start).Max(view => WidthOf(BarOf(view)!.Label));
+                for (var index = start; index < end; index++)
+                {
+                    views[index] = Aligned(views[index], labelWidth);
+                }
+            }
+
+            start = end;
+        }
+
+        return stack with { Views = views };
+    }
+
+    private static BarView? BarOf(ViewNode view) => view switch
+    {
+        BarView bar => bar,
+        StyledView styled => BarOf(styled.Content),
+        _ => null,
+    };
+
+    private static ViewNode Aligned(ViewNode view, int labelWidth) => view switch
+    {
+        BarView bar => new AlignedBar(bar, labelWidth),
+        StyledView styled => styled with { Content = Aligned(styled.Content, labelWidth) },
+        _ => view,
+    };
+
     private static List<ScreenLine> RenderRows(StackView stack, int width, int? height, OutputStyle style)
     {
+        stack = AlignBars(stack);
         if (height is not { } limit)
         {
             return stack.Views.SelectMany(view => Render(view, width, null, style)).ToList();

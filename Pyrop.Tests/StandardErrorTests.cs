@@ -79,6 +79,33 @@ public class StandardErrorTests
             TreePrinter.Print(inspected.Tree!));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void APipedAnswerEndsTheLineOfTheStreamThatLeftItOpen(bool toErrors)
+    {
+        var output = new StringWriter();
+        var errors = new StringWriter();
+        var console = new ConsoleProgramOutput(output, plain: true, errors: new ConsoleStream(errors, plain: true));
+        var session = new PyropSession(new StringReader("Ann\n"), console);
+
+        session.Run($"{(toErrors ? "write_error" : "write")} \"Name: \"\ndef string name read\nwrite_line name");
+
+        Assert.Equal(toErrors ? "Ann\n" : "Name: \nAnn\n", output.ToString());
+        Assert.Equal(toErrors ? "Name: \n" : "", errors.ToString());
+    }
+
+    [Fact]
+    public void ATypedAnswerAddsNoLineBreak()
+    {
+        var output = new StringWriter();
+        var console = new ConsoleProgramOutput(output, plain: true, inputEchoed: true);
+
+        new PyropSession(new StringReader("Ann\n"), console).Run("write \"Name: \"\nwrite_line read");
+
+        Assert.Equal("Name: Ann\n", output.ToString());
+    }
+
     [Fact]
     public void TheStreamsKeepTheirOwnLineStarts()
     {

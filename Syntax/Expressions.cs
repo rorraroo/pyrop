@@ -35,7 +35,7 @@ public sealed record GetFieldExpression(string Field, SourcePosition FieldPositi
     : Expression(Position);
 
 public sealed record WithFieldExpression(
-    string Field, SourcePosition FieldPosition, Expression Record, Expression Value, SourcePosition Position)
+    string Field, SourcePosition FieldPosition, Expression Record, Expression Value, SourcePosition Position, bool Chained = false)
     : Expression(Position);
 
 public sealed record VariantExpression(

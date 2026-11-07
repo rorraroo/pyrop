@@ -99,7 +99,13 @@ public sealed class BuiltinLibraries
 
     private static string HowToReach(BuiltinLibrary library, string name, ModuleNamespace names)
     {
-        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {library.ImportNameFor(name) ?? name} {Keywords.End}";
+        var importName = library.ImportNameFor(name) ?? name;
+        if (importName != name && names.Imports.TryGetValue(importName, out var imported) && imported.Module == library.Name)
+        {
+            importName = name;
+        }
+
+        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {importName} {Keywords.End}";
         var qualified = $"{Keywords.From} {library.Name} {name}";
         return names.Uses.TryGetValue(library.Name, out var use) && use.Target.Module == library.Module
             ? $"add {import}, or write {qualified}"

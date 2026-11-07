@@ -126,6 +126,79 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void FormatRewritesTheFileQuietly()
+    {
+        var path = Script("if true\nwrite_line \"yes\"   \nelse\n        write_line \"no\"\n\n\n");
+
+        var (output, errors, exitCode) = Pyrop("--format", path);
+
+        Assert.Equal(("", "", 0), (output, errors, exitCode));
+        Assert.Equal("if true\n    write_line \"yes\"\nelse\n    write_line \"no\"\n", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void FormatLeavesAFormattedFileUntouched()
+    {
+        var path = Script("write_line 1\n");
+        var written = DateTime.UtcNow.AddDays(-1);
+        File.SetLastWriteTimeUtc(path, written);
+
+        Assert.Equal(("", "", 0), Pyrop("-f", path));
+        Assert.Equal(written, File.GetLastWriteTimeUtc(path));
+    }
+
+    [Fact]
+    public void FormatKeepsAByteOrderMark()
+    {
+        var path = Path.Combine(_directory, "marked.prp");
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. "if true\nwrite_line 1\n"u8.ToArray()]);
+
+        Assert.Equal(0, Pyrop("--format", path).ExitCode);
+        Assert.Equal([0xEF, 0xBB, 0xBF, .. "if true\n    write_line 1\n"u8.ToArray()], File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void FormatLeavesAFileThatIsNotUtf8Untouched()
+    {
+        var path = Path.Combine(_directory, "latin.prp");
+        byte[] bytes = [.. "# caf"u8.ToArray(), 0xE9, .. "\nif true\nwrite_line 1\n"u8.ToArray()];
+        File.WriteAllBytes(path, bytes);
+
+        var (output, errors, exitCode) = Pyrop("--format", path);
+
+        Assert.Equal("", output);
+        Assert.Contains("is not UTF-8 text", errors);
+        Assert.Equal(1, exitCode);
+        Assert.Equal(bytes, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void FormatReportsAFileThatDoesNotParseAndGoesOn()
+    {
+        var broken = Path.Combine(_directory, "broken.prp");
+        File.WriteAllText(broken, "write_line add 1\n  write_line 2 3\n");
+        var fine = Script("if true\nwrite_line 1\n");
+
+        var (output, errors, exitCode) = Pyrop("--format", broken, fine);
+
+        Assert.Equal("", output);
+        Assert.StartsWith("Parse error ", errors);
+        Assert.Equal(1, exitCode);
+        Assert.Equal("write_line add 1\n  write_line 2 3\n", File.ReadAllText(broken));
+        Assert.Equal("if true\n    write_line 1\n", File.ReadAllText(fine));
+    }
+
+    [Fact]
+    public void FormatNeedsAFile()
+    {
+        var (output, errors, exitCode) = Pyrop("--format");
+
+        Assert.Equal("", output);
+        Assert.Contains("pyrop --format", errors);
+        Assert.Equal(2, exitCode);
+    }
+
+    [Fact]
     public void TreeDoesNotRunTheProgram()
     {
         var (output, errors, exitCode) = Pyrop("-t", Script("write_line \"ran\"\nexit 3"));
@@ -202,7 +275,7 @@ public sealed class CliTests : IDisposable
             "x\n2\n", Script("styled \"info\" write_line choose \"Where?\" list_of string \"Hall\" \"Cellar\" end"));
 
         Assert.Equal("", errors);
-        Assert.Equal("Where?\n1. Hall\n2. Cellar\nChoose a number from 1 to 2: Please choose a number from 1 to 2.\nChoose a number from 1 to 2: Cellar\n", output);
+        Assert.Equal("Where?\n1. Hall\n2. Cellar\nChoose a number from 1 to 2: \nPlease choose a number from 1 to 2.\nChoose a number from 1 to 2: \nCellar\n", output);
         Assert.Equal(0, exitCode);
     }
 

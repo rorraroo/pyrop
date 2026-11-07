@@ -8,19 +8,34 @@ internal sealed class StringOutput : IProgramOutput
     private readonly StringBuilder _text = new();
     private readonly StringBuilder _errors = new();
     private bool _atLineStart = true;
+    private bool _errorsAtLineStart = true;
+    private bool _errorsWroteLast;
 
     public string Errors => _errors.ToString();
+
+    public long Written { get; private set; }
 
     public void Write(string text, OutputStyle style)
     {
         Append(_text, text, style);
         if (text.Length > 0)
         {
+            Written++;
             _atLineStart = text[^1] == '\n';
+            _errorsWroteLast = false;
         }
     }
 
-    public void WriteError(string text, OutputStyle style) => Append(_errors, text, style);
+    public void WriteError(string text, OutputStyle style)
+    {
+        Append(_errors, text, style);
+        if (text.Length > 0)
+        {
+            Written++;
+            _errorsAtLineStart = text[^1] == '\n';
+            _errorsWroteLast = true;
+        }
+    }
 
     public void WritePrompt(string prompt, string? hint, OutputStyle style)
     {
@@ -30,6 +45,14 @@ internal sealed class StringOutput : IProgramOutput
 
     public void LineRead()
     {
+        if (!_errorsWroteLast)
+        {
+            EnsureLineStart();
+        }
+        else if (!_errorsAtLineStart)
+        {
+            WriteError("\n", OutputStyle.None);
+        }
     }
 
     public void EnsureLineStart()
