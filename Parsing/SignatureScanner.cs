@@ -87,7 +87,7 @@ public static class SignatureScanner
                 {
                     if (Keywords.IsReserved(nameToken.Text))
                     {
-                        throw cursor.Error($"'{nameToken.Text}' is a reserved word and cannot be used as a module name.", nameToken);
+                        throw cursor.Error(Keywords.NotAName(nameToken.Text, "module name"), nameToken);
                     }
 
                     if (!seen.Add(nameToken.Text))

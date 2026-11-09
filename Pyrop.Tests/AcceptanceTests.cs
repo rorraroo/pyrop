@@ -24,10 +24,10 @@ public sealed class AcceptanceTests : IDisposable
         RunSource(File.ReadAllText(Script), Script, null, null, arguments);
 
     private static (string Output, string Errors, int ExitCode) RunSource(
-        string source, string path, string? fullPath, Parsing.ISourceStore? store, string[] arguments, string input = "", ICommandRunner? commands = null)
+        string source, string path, string? fullPath, Parsing.ISourceStore? store, string[] arguments, string input = "", ICommandRunner? commands = null, IClock? clock = null)
     {
         var output = new StringOutput();
-        var session = new PyropSession(new StringReader(input), output, new HostContext(arguments, _ => null) { Commands = commands ?? NoCommandRunner.Instance }, store);
+        var session = new PyropSession(new StringReader(input), output, new HostContext(arguments, _ => null) { Commands = commands ?? NoCommandRunner.Instance, Clock = clock ?? SystemClock.Instance }, store);
         var exitCode = session.Run(source, path, fullPath) ?? 0;
         return (output.ToString(), output.Errors, exitCode);
     }
@@ -579,7 +579,7 @@ public sealed class AcceptanceTests : IDisposable
             output);
         Assert.Equal(78, CountOf(output, "q quit\n</muted>\n"));
         Assert.Equal(71, CountOf(output, "\nThe crypt\n") + 1);
-        Assert.Equal("Progress runs 1 escapes 1 best_depth 3 gold_banked 22\n", File.ReadAllText(ProgressFile));
+        Assert.Equal(Saved(1, 1, 3, 22), File.ReadAllText(ProgressFile));
     }
 
     [Theory]
@@ -587,7 +587,7 @@ public sealed class AcceptanceTests : IDisposable
     [InlineData(true)]
     public void DiesInTheRogueliteAndStillBanksTheGold(bool built)
     {
-        File.WriteAllText(ProgressFile, "Progress runs 2 escapes 1 best_depth 3 gold_banked 20\n");
+        File.WriteAllText(ProgressFile, Saved(2, 1, 3, 20));
 
         var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], Keys(Death));
 
@@ -597,7 +597,7 @@ public sealed class AcceptanceTests : IDisposable
             "\nThe run is over\nYou hit the orc for 1.\nThe orc kills you.\nYou died on depth 3.\n" +
             "Gold this run 22   Gold banked 42\nRuns 3   Escapes 1   Deepest 3\n",
             output);
-        Assert.Equal("Progress runs 3 escapes 1 best_depth 3 gold_banked 42\n", File.ReadAllText(ProgressFile));
+        Assert.Equal(Saved(3, 1, 3, 42), File.ReadAllText(ProgressFile));
     }
 
     [Theory]
@@ -605,7 +605,7 @@ public sealed class AcceptanceTests : IDisposable
     [InlineData(true)]
     public void SpendsBankedGoldOnExtraHealthInTheNextRun(bool built)
     {
-        File.WriteAllText(ProgressFile, "Progress runs 4 escapes 1 best_depth 2 gold_banked 60\n");
+        File.WriteAllText(ProgressFile, Saved(4, 1, 2, 60));
 
         var (output, errors, exitCode) = PlayRogue(built, ["7", ProgressFile], "q\n");
 
@@ -614,21 +614,23 @@ public sealed class AcceptanceTests : IDisposable
         Assert.Contains("Hero\nHealth: 12 of 12\n", output);
         Assert.Contains("Log\nYou enter the crypt. Find the stairs down.\nYour banked gold buys you 2 extra health.\n", output);
         Assert.EndsWith("Gold this run 0   Gold banked 60\nRuns 5   Escapes 1   Deepest 2\n", output);
-        Assert.Equal("Progress runs 5 escapes 1 best_depth 2 gold_banked 60\n", File.ReadAllText(ProgressFile));
+        Assert.Equal(Saved(5, 1, 2, 60), File.ReadAllText(ProgressFile));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("not a progress file\n")]
-    [InlineData("Progress runs 1 escapes 0 best_depth 1\n")]
-    [InlineData("Progress escapes 0 runs 1 best_depth 1 gold_banked 0\n")]
-    [InlineData("Progress runs -1 escapes 0 best_depth 1 gold_banked 0\n")]
-    [InlineData("Progress runs 1 escapes 2 best_depth 1 gold_banked 0\n")]
-    [InlineData("Progress runs 1 escapes 0 best_depth 9 gold_banked 0\n")]
-    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 9223372036854775807\n")]
-    [InlineData("Progress runs 9223372036854775807 escapes 0 best_depth 1 gold_banked 0\n")]
-    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 99999999999999999999\n")]
-    [InlineData("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\nProgress runs 1 escapes 0 best_depth 1 gold_banked 0\n")]
+    [InlineData("Progress runs 2 escapes 1 best_depth 3 gold_banked 20\n")]
+    [InlineData("runs: 1\nescapes: 0\nbest_depth: 1\n")]
+    [InlineData("runs: one\nescapes: 0\nbest_depth: 1\ngold_banked: 0\n")]
+    [InlineData("runs: -1\nescapes: 0\nbest_depth: 1\ngold_banked: 0\n")]
+    [InlineData("runs: 1\nescapes: 2\nbest_depth: 1\ngold_banked: 0\n")]
+    [InlineData("runs: 1\nescapes: 0\nbest_depth: 9\ngold_banked: 0\n")]
+    [InlineData("runs: 1\nescapes: 0\nbest_depth: 1\ngold_banked: 9223372036854775807\n")]
+    [InlineData("runs: 9223372036854775807\nescapes: 0\nbest_depth: 1\ngold_banked: 0\n")]
+    [InlineData("runs: 1\nescapes: 0\nbest_depth: 1\ngold_banked: 99999999999999999999\n")]
+    [InlineData("runs: 1\nruns: 1\nescapes: 0\nbest_depth: 1\ngold_banked: 0\n")]
+    [InlineData("runs: [1\n")]
     public void StartsTheRogueliteFreshWhenTheProgressIsDamaged(string progress)
     {
         File.WriteAllText(ProgressFile, progress);
@@ -640,7 +642,7 @@ public sealed class AcceptanceTests : IDisposable
             Assert.Equal(0, exitCode);
             Assert.Equal("", errors);
             Assert.Equal(FirstScreen + FreshEnding, output);
-            Assert.Equal("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\n", File.ReadAllText(ProgressFile));
+            Assert.Equal(Saved(1, 0, 1, 0), File.ReadAllText(ProgressFile));
             File.WriteAllText(ProgressFile, progress);
         }
     }
@@ -652,7 +654,144 @@ public sealed class AcceptanceTests : IDisposable
 
         File.WriteAllBytes(ProgressFile, [0x50, 0xFF, 0xFE, 0x0A]);
         Assert.Equal((FirstScreen + FreshEnding, "", 0), PlayRogue(false, ["7", ProgressFile], "q\n"));
-        Assert.Equal("Progress runs 1 escapes 0 best_depth 1 gold_banked 0\n", File.ReadAllText(ProgressFile));
+        Assert.Equal(Saved(1, 0, 1, 0), File.ReadAllText(ProgressFile));
+    }
+
+    private static string Saved(int runs, int escapes, int depth, int gold) =>
+        $"runs: {runs}\nescapes: {escapes}\nbest_depth: {depth}\ngold_banked: {gold}\n";
+
+    private static string Backup => Path.Combine(Samples, "backup", "backup.prp");
+
+    private static readonly TimeSpan BackupOffset = TimeSpan.FromHours(1);
+
+    private static DateTimeOffset BackupDay(int day) => new(2026, 11, day, 12, 0, 0, BackupOffset);
+
+    private (string Output, string Errors, int ExitCode) RunBackup(bool built, DateTimeOffset at, params string[] arguments)
+    {
+        var clock = new FixedClock(at);
+        if (!built)
+        {
+            return RunSource(File.ReadAllText(Backup), Backup, null, null, arguments, clock: clock);
+        }
+
+        var bundle = BuildSample(Backup, "backup");
+        return RunSource(bundle.Entry.Text, bundle.EntryName, BundleSourceStore.FullPathOf(bundle.EntryName), new BundleSourceStore(bundle), arguments, clock: clock);
+    }
+
+    private string PreparedBackup(int keep)
+    {
+        var settings = PathOf("backup.yaml");
+        var yamlPath = (string name) => "'" + PathOf(name).Replace('\\', '/') + "'";
+        File.WriteAllText(
+            settings,
+            $"destination: {yamlPath("out")}\nkeep: {keep}\nfolders:\n  - {yamlPath("notes")}\n  - {yamlPath("photos")}\n");
+        Directory.CreateDirectory(PathOf("notes/sub"));
+        Directory.CreateDirectory(PathOf("photos"));
+        File.WriteAllText(PathOf("notes/a.txt"), "first");
+        File.WriteAllBytes(PathOf("notes/sub/b.bin"), [0, 255, 13, 10]);
+        File.WriteAllBytes(PathOf("photos/c.png"), [137, 80]);
+        foreach (var file in new[] { "notes/a.txt", "notes/sub/b.bin", "photos/c.png" })
+        {
+            File.SetLastWriteTimeUtc(PathOf(file), BackupDay(1).UtcDateTime);
+        }
+
+        return settings;
+    }
+
+    private string[] BackupFolders() =>
+        [.. Directory.GetDirectories(PathOf("out")).Select(path => Path.GetFileName(path)!).Order(StringComparer.Ordinal)];
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BacksUpEverythingOnTheFirstRun(bool built)
+    {
+        var settings = PreparedBackup(keep: 5);
+
+        Assert.Equal(("Copied 3 files and removed 0 old backups.\n", "", 0), RunBackup(built, BackupDay(2), settings));
+
+        var dated = PathOf("out/2026-11-02_12-00-00");
+        Assert.Equal("first", File.ReadAllText(Path.Combine(dated, "notes/a.txt")));
+        Assert.Equal(new byte[] { 0, 255, 13, 10 }, File.ReadAllBytes(Path.Combine(dated, "notes/sub/b.bin")));
+        Assert.Equal(new byte[] { 137, 80 }, File.ReadAllBytes(Path.Combine(dated, "photos/c.png")));
+        Assert.Equal(
+            "{\n  \"started\": \"2026-11-02 12:00:00\",\n  \"copied\": [\n    \"notes/a.txt\",\n    \"notes/sub/b.bin\",\n    \"photos/c.png\"\n  ],\n  \"removed\": []\n}\n",
+            File.ReadAllText(PathOf("out/report.json")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CopiesOnlyWhatChangedSinceTheLastRun(bool built)
+    {
+        var settings = PreparedBackup(keep: 5);
+        RunBackup(built, BackupDay(2), settings);
+
+        File.WriteAllText(PathOf("notes/a.txt"), "second");
+        File.SetLastWriteTimeUtc(PathOf("notes/a.txt"), BackupDay(3).UtcDateTime);
+
+        Assert.Equal(("Copied 1 files and removed 0 old backups.\n", "", 0), RunBackup(built, BackupDay(4), settings));
+
+        var dated = PathOf("out/2026-11-04_12-00-00");
+        Assert.Equal("second", File.ReadAllText(Path.Combine(dated, "notes/a.txt")));
+        Assert.False(File.Exists(Path.Combine(dated, "photos/c.png")));
+        Assert.Contains("\"copied\": [\n    \"notes/a.txt\"\n  ]", File.ReadAllText(PathOf("out/report.json")));
+    }
+
+    [Fact]
+    public void MakesNoBackupWhenNothingChanged()
+    {
+        var settings = PreparedBackup(keep: 5);
+        RunBackup(false, BackupDay(2), settings);
+
+        Assert.Equal(("Copied 0 files and removed 0 old backups.\n", "", 0), RunBackup(false, BackupDay(3), settings));
+
+        Assert.Equal(["2026-11-02_12-00-00"], BackupFolders());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RemovesTheOldestBackupsPastTheLimit(bool built)
+    {
+        var settings = PreparedBackup(keep: 2);
+        for (var day = 2; day <= 4; day += 1)
+        {
+            File.SetLastWriteTimeUtc(PathOf("notes/a.txt"), BackupDay(day).AddHours(-1).UtcDateTime);
+            RunBackup(built, BackupDay(day), settings);
+        }
+
+        Assert.Equal(["2026-11-03_12-00-00", "2026-11-04_12-00-00"], BackupFolders());
+        Assert.Contains("\"removed\": [\n    \"2026-11-02_12-00-00\"\n  ]", File.ReadAllText(PathOf("out/report.json")));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("destination: out\n")]
+    [InlineData("destination: out\nkeep: 0\nfolders: []\n")]
+    [InlineData("destination: [\n")]
+    public void RefusesUnusableBackupSettings(string text)
+    {
+        var settings = PathOf("backup.yaml");
+        File.WriteAllText(settings, text);
+
+        var (output, errors, exitCode) = RunBackup(false, BackupDay(2), settings);
+
+        Assert.Equal(("", 2), (output, exitCode));
+        Assert.Contains("is not a usable settings file", errors);
+    }
+
+    [Fact]
+    public void RefusesAMissingBackupFolderBeforeCopyingAnything()
+    {
+        var settings = PreparedBackup(keep: 5);
+        Directory.Delete(PathOf("photos"), recursive: true);
+
+        var (output, errors, exitCode) = RunBackup(false, BackupDay(2), settings);
+
+        Assert.Equal(("", 2), (output, exitCode));
+        Assert.EndsWith("photos does not exist.\n", errors);
+        Assert.False(Directory.Exists(PathOf("out")));
     }
 
     [Fact]

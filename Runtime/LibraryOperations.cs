@@ -71,6 +71,56 @@ public static class LibraryOperations
         }
     }
 
+    private static readonly Module DataModule = BuiltinLibrary.ModuleFor("data");
+
+    public static ChoiceType DataChoice { get; } = DataOperations.Declare(DataModule);
+
+    public static BuiltinLibrary Data { get; } = new("data",
+    [
+        Operation("parse_json",
+            Overload([S], DataChoice, c => DataOperations.ParseJson(c, c.Argument(0).AsString()))),
+        Operation("parse_yaml",
+            Overload([S], DataChoice, c => DataOperations.ParseYaml(c, c.Argument(0).AsString()))),
+        Operation("json_text",
+            Overload([DataChoice], S, c => new StringValue(DataOperations.JsonText(c, c.Argument(0))))),
+        Operation("yaml_text",
+            Overload([DataChoice], S, c => new StringValue(DataOperations.YamlText(c, c.Argument(0))))),
+        Operation("text_at",
+            Overload([DataChoice, S], S, c => DataOperations.TextAt(c, c.Argument(0), c.Argument(1).AsString()))),
+        Operation("int_at",
+            Overload([DataChoice, S], I, c => DataOperations.IntAt(c, c.Argument(0), c.Argument(1).AsString()))),
+        Operation("float_at",
+            Overload([DataChoice, S], F, c => DataOperations.FloatAt(c, c.Argument(0), c.Argument(1).AsString()))),
+        Operation("bool_at",
+            Overload([DataChoice, S], B, c => DataOperations.BoolAt(c, c.Argument(0), c.Argument(1).AsString()))),
+        Operation("list_at",
+            Overload([DataChoice, S], PyropTypes.ListOf(DataChoice), c => DataOperations.ListAt(c, c.Argument(0), c.Argument(1).AsString()))),
+    ], new Dictionary<string, string>(), DataModule, [DataChoice]);
+
+    private static readonly Module TimeModule = BuiltinLibrary.ModuleFor("time");
+
+    public static RecordType Moment { get; } = TimeOperations.DeclareMoment(TimeModule);
+
+    public static BuiltinLibrary Time { get; } = new("time",
+    [
+        Operation("now",
+            Overload([], Moment, c => TimeOperations.MomentOf(c.Host.Clock.Now))),
+        Operation("now_utc",
+            Overload([], Moment, c => TimeOperations.MomentOf(c.Host.Clock.UtcNow))),
+        Operation("moment_text",
+            Overload([Moment, S], S, c => new StringValue(TimeOperations.Text(c, c.Argument(0), c.Argument(1).AsString())))),
+        Operation("parse_moment",
+            Overload([S, S], Moment, c => TimeOperations.Parse(c, c.Argument(0).AsString(), c.Argument(1).AsString()))),
+        Operation("milliseconds_between",
+            Overload([Moment, Moment], I, c => new IntValue(TimeOperations.MillisecondsBetween(c, c.Argument(0), c.Argument(1))))),
+        Operation("plus_milliseconds",
+            Overload([Moment, I], Moment, c => TimeOperations.PlusMilliseconds(c, c.Argument(0), c.Argument(1).AsInt()))),
+        Operation("is_before",
+            Overload([Moment, Moment], B, c => BoolValue.Of(TimeOperations.IsBefore(c, c.Argument(0), c.Argument(1))))),
+        Operation("wait",
+            Overload([I], V, c => TimeOperations.Wait(c, c.Argument(0).AsInt()))),
+    ], new Dictionary<string, string>(), TimeModule, records: [Moment]);
+
     public static BuiltinLibrary Files { get; } = new("files",
     [
         Operation("load",
@@ -86,7 +136,33 @@ public static class LibraryOperations
         Operation("listing",
             Overload([S], Strings, c => TextFiles.ListFiles(c, c.Argument(0).AsString()))),
         Operation("name_of",
-            Overload([S], S, c => new StringValue(NameOf(c.Argument(0).AsString())))),
+            Overload([S], S, c => new StringValue(FileOperations.NameOf(c.Argument(0).AsString())))),
+        Operation("delete_file",
+            Overload([S], V, c => FileOperations.DeleteFile(c, c.Argument(0).AsString()))),
+        Operation("copy_file",
+            Overload([S, S], V, c => FileOperations.CopyFile(c, c.Argument(0).AsString(), c.Argument(1).AsString()))),
+        Operation("move_file",
+            Overload([S, S], V, c => FileOperations.MoveFile(c, c.Argument(0).AsString(), c.Argument(1).AsString()))),
+        Operation("make_folder",
+            Overload([S], V, c => FileOperations.MakeFolder(c, c.Argument(0).AsString()))),
+        Operation("delete_folder",
+            Overload([S], V, c => FileOperations.DeleteFolder(c, c.Argument(0).AsString()))),
+        Operation("join_path",
+            Overload([S, S], S, c => new StringValue(FileOperations.JoinPath(c, c.Argument(0).AsString(), c.Argument(1).AsString())))),
+        Operation("folder_of",
+            Overload([S], S, c => new StringValue(FileOperations.FolderOf(c.Argument(0).AsString())))),
+        Operation("extension_of",
+            Overload([S], S, c => new StringValue(FileOperations.ExtensionOf(c.Argument(0).AsString())))),
+        Operation("listing_all",
+            Overload([S], Strings, c => TextFiles.ListAllFiles(c, c.Argument(0).AsString()))),
+        Operation("current_folder",
+            Overload([], S, c => new StringValue(Environment.CurrentDirectory))),
+        Operation("folder_exists",
+            Overload([S], B, c => BoolValue.Of(Directory.Exists(c.Argument(0).AsString())))),
+        Operation("folders_in",
+            Overload([S], Strings, c => TextFiles.ListFolders(c, c.Argument(0).AsString()))),
+        Operation("modified_at",
+            Overload([S], Moment, c => FileOperations.ModifiedAt(c, c.Argument(0).AsString()))),
     ], new Dictionary<string, string>
     {
         ["read_file"] = "load",
@@ -198,8 +274,6 @@ public static class LibraryOperations
             }
         });
     }
-
-    private static string NameOf(string path) => path[(path.LastIndexOfAny(['/', '\\']) + 1)..];
 
     private static double NonNegative(IBuiltinInvocation invocation, double number) =>
         number >= 0 ? number : throw invocation.Fail($"Cannot take the square root of a negative number ({new FloatValue(number).ToText()}).");

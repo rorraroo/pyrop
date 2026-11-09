@@ -1,4 +1,6 @@
+use data library
 use files library
+import from data Data parse_yaml yaml_text end
 import from files load save end
 
 export record Progress int runs int escapes int best_depth int gold_banked
@@ -8,13 +10,14 @@ def int most_runs 1000000
 
 export function Progress load_progress string path block
     if_some string text attempt load path
-        if_some Progress saved attempt convert Progress text
-            if believable saved return saved
+        if_some Data document attempt parse_yaml text
+            if_some Progress saved attempt convert Progress document
+                if believable saved return saved
     return fresh_progress
 end
 
 export function bool save_progress string path Progress progress
-    return attempt save path add convert string progress "\n"
+    return attempt save path yaml_text convert Data progress
 
 export function Progress after_run Progress before int depth int gold block
     def Progress after copy before with runs add the runs of before 1

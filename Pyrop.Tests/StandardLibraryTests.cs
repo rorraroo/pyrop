@@ -68,26 +68,26 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("find \"hello\" \"l\"", "2")]
-    [InlineData("find \"hello\" \"lo\"", "3")]
-    [InlineData("find \"hello\" \"z\"", "-1")]
-    [InlineData("find \"hello\" \"\"", "0")]
-    [InlineData("find \"Hello\" \"h\"", "-1")]
-    [InlineData("find \"" + Sword + "ab\" \"b\"", "2")]
-    [InlineData("find \"" + DecomposedC + "c\" \"c\"", "1")]
-    [InlineData("find \"" + DecomposedC + "\" \"c\"", "-1")]
+    [InlineData("find \"hello\" \"l\"", "some 2")]
+    [InlineData("find \"hello\" \"lo\"", "some 3")]
+    [InlineData("find \"hello\" \"z\"", "none")]
+    [InlineData("find \"hello\" \"\"", "some 0")]
+    [InlineData("find \"Hello\" \"h\"", "none")]
+    [InlineData("find \"" + Sword + "ab\" \"b\"", "some 2")]
+    [InlineData("find \"" + DecomposedC + "c\" \"c\"", "some 1")]
+    [InlineData("find \"" + DecomposedC + "\" \"c\"", "none")]
     public void FindReturnsTheFirstWholeCharacterMatch(string expression, string expected)
     {
         Assert.Equal(expected, Evaluate(expression));
     }
 
     [Theory]
-    [InlineData("find_from \"a-b-c\" \"-\" 0", "1")]
-    [InlineData("find_from \"a-b-c\" \"-\" 2", "3")]
-    [InlineData("find_from \"a-b-c\" \"-\" 4", "-1")]
-    [InlineData("find_from \"abc\" \"\" 3", "3")]
-    [InlineData("find_from \"" + Sword + "a" + Sword + "a\" \"a\" 2", "3")]
-    [InlineData("find_from \"" + DecomposedC + "cc\" \"c\" 0", "1")]
+    [InlineData("find_from \"a-b-c\" \"-\" 0", "some 1")]
+    [InlineData("find_from \"a-b-c\" \"-\" 2", "some 3")]
+    [InlineData("find_from \"a-b-c\" \"-\" 4", "none")]
+    [InlineData("find_from \"abc\" \"\" 3", "some 3")]
+    [InlineData("find_from \"" + Sword + "a" + Sword + "a\" \"a\" 2", "some 3")]
+    [InlineData("find_from \"" + DecomposedC + "cc\" \"c\" 0", "some 1")]
     public void FindFromSearchesFromAPosition(string expression, string expected)
     {
         Assert.Equal(expected, Evaluate(expression));
@@ -296,7 +296,7 @@ public class StandardLibraryTests
             "write_line substring text 237 3\nwrite_line length_of replace text \"c\" \"x\"",
             host: host);
 
-        Assert.Equal($"360\n{DecomposedC}\n4\nab \n360\n", output);
+        Assert.Equal($"360\n{DecomposedC}\nsome 4\nab \n360\n", output);
     }
 
     [Theory]

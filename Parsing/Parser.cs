@@ -171,7 +171,7 @@ public sealed class Parser
         var nameToken = _cursor.ExpectWord($"a module name after '{Keywords.Use}'");
         if (Keywords.IsReserved(nameToken.Text))
         {
-            throw _cursor.Error($"'{nameToken.Text}' is a reserved word and cannot be used as a module name.", nameToken);
+            throw _cursor.Error(Keywords.NotAName(nameToken.Text, "module name"), nameToken);
         }
 
         var pathToken = _cursor.Current;
@@ -246,6 +246,11 @@ public sealed class Parser
 
         if (!_cursor.Current.IsWord(Keywords.Function))
         {
+            if (_cursor.Current.Kind == TokenKind.Word && Keywords.UnavailableHint(_cursor.Current.Text) is { } unavailable)
+            {
+                throw _cursor.Error(unavailable);
+            }
+
             throw _cursor.Error(
                 $"'{Keywords.Export}' must be followed by a function, record or choice definition, found {_cursor.Current.Describe()}.");
         }
@@ -362,7 +367,7 @@ public sealed class Parser
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
             _ when _names.FindVariant(token.Text) is { Arity: > 0 } variant => throw VariantStatement(token, variant.Name),
             _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
-            _ when Keywords.RetiredHint(token.Text) is { } retired => throw _cursor.Error(retired),
+            _ when Keywords.UnavailableHint(token.Text) is { } unavailable => throw _cursor.Error(unavailable),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
             _ when token.Kind == TokenKind.Word && _names.LibraryHint(token.Text) is { } hint => throw _cursor.Error(hint),
             _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
@@ -888,9 +893,9 @@ public sealed class Parser
             throw ChoiceAsValue(token, choice);
         }
 
-        if (Keywords.RetiredHint(token.Text) is { } retired)
+        if (Keywords.UnavailableHint(token.Text) is { } unavailable)
         {
-            throw _cursor.Error(retired);
+            throw _cursor.Error(unavailable);
         }
 
         if (Keywords.IsReserved(token.Text))
@@ -943,9 +948,9 @@ public sealed class Parser
             _cursor.MoveTo(qualifiedStart);
         }
 
-        if (operand.Kind == TokenKind.Word && Keywords.RetiredHint(operand.Text) is { } retired)
+        if (operand.Kind == TokenKind.Word && Keywords.UnavailableHint(operand.Text) is { } unavailable)
         {
-            throw _cursor.Error(retired);
+            throw _cursor.Error(unavailable);
         }
 
         var qualifiedFunction = operand.IsWord(Keywords.From) && _names.Uses.TryGetValue(_cursor.Peek(1).Text, out var use)

@@ -58,11 +58,13 @@ public sealed class BuiltinLibraries
 
     public static BuiltinLibraries Standard { get; } = new(
     [
+        LibraryOperations.Data,
         LibraryOperations.Files,
         LibraryOperations.Program,
         LibraryOperations.Math,
         LibraryOperations.Random,
         LibraryOperations.Terminal,
+        LibraryOperations.Time,
     ]);
 
     public static BuiltinLibraries None { get; } = new([]);

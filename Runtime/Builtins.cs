@@ -180,10 +180,10 @@ public static class Builtins
             Overload([S, I, I], S, c => new StringValue(
                 TextOperations.Substring(c, c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsInt())))),
         Operation("find",
-            Overload([S, S], I, c => new IntValue(TextOperations.Find(c.Argument(0).AsString(), c.Argument(1).AsString())))),
+            Overload([S, S], PyropTypes.OptionOf(I), c => TextOperations.Find(c.Argument(0).AsString(), c.Argument(1).AsString()))),
         Operation("find_from",
-            Overload([S, S, I], I, c => new IntValue(
-                TextOperations.FindFrom(c, c.Argument(0).AsString(), c.Argument(1).AsString(), c.Argument(2).AsInt())))),
+            Overload([S, S, I], PyropTypes.OptionOf(I), c =>
+                TextOperations.FindFrom(c, c.Argument(0).AsString(), c.Argument(1).AsString(), c.Argument(2).AsInt()))),
         Operation("replace",
             Overload([S, S, S], S, c => new StringValue(
                 TextOperations.Replace(c, c.Argument(0).AsString(), c.Argument(1).AsString(), c.Argument(2).AsString())))),

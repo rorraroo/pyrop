@@ -516,6 +516,12 @@ public sealed class TypeChecker
         }
 
         _overloads[call] = match.Overload;
+        if (call.Arguments is [_, LiteralExpression { Value: StringValue { Value: var layout } } literal]
+            && TimeOperations.LiteralLayoutProblem(operation, layout) is { } problem)
+        {
+            Report(problem, literal.Position);
+        }
+
         return match.Result;
     }
 

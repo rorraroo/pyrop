@@ -92,7 +92,7 @@ public sealed class LibraryTests : IDisposable
         var error = Run.Failure("use termnal library");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
-        Assert.Equal("There is no built-in library 'termnal'; the libraries are: files, math, program, random, terminal.", error.Message);
+        Assert.Equal("There is no built-in library 'termnal'; the libraries are: data, files, math, program, random, terminal, time.", error.Message);
         Assert.Equal(5, error.Position.Column);
     }
 

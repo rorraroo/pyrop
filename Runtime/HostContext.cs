@@ -10,4 +10,6 @@ public sealed record HostContext(IReadOnlyList<string> Arguments, Func<string, s
     public BuiltinLibraries Libraries { get; init; } = BuiltinLibraries.Standard;
 
     public ICommandRunner Commands { get; init; } = NoCommandRunner.Instance;
+
+    public IClock Clock { get; init; } = SystemClock.Instance;
 }

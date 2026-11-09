@@ -1,0 +1,90 @@
+use data library
+use files library
+use program library
+use time library
+import from data Data parse_yaml json_text yaml_text end
+import from files copy_file delete_folder folder_exists folder_of folders_in join_path listing_all load make_folder modified_at name_of save end
+import from program arguments end
+import from time Moment is_before moment_text now end
+
+record Settings string destination int keep list string folders
+record Report string started list string copied list string removed
+
+def string last_run_file "last-run.yaml"
+def string report_file "report.json"
+
+function Settings read_settings string path block
+    if_some string text attempt load path
+        if_some Data document attempt parse_yaml text
+            if_some Settings settings attempt convert Settings document
+                if at_least the keep of settings 1 return settings
+    write_error_line fill "{} is not a usable settings file: it needs destination, keep (at least 1) and folders." list_of string path end
+    exit 2
+end
+
+function option Moment read_last_run string path block
+    if_some string text attempt load path
+        if_some Data document attempt parse_yaml text
+            return attempt convert Moment document
+    return none Moment
+end
+
+function bool changed_since string path option Moment since block
+    if_some Moment last since return is_before last modified_at path
+    return true
+end
+
+function list string copy_changed string folder string target option Moment since block
+    def list string done list_of string end
+    for string relative in listing_all folder block
+        def string source join_path folder relative
+        if changed_since source since block
+            def string inside join_path name_of folder relative
+            def string place join_path target inside
+            make_folder folder_of place
+            copy_file source place
+            set done push done inside
+        end
+    end
+    return done
+end
+
+function list string remove_oldest string destination int keep block
+    def list string backups sort folders_in destination
+    def int extra subtract length_of backups keep
+    if at_most extra 0 return list_of string end
+    def list string oldest slice backups 0 extra
+    for string name in oldest delete_folder join_path destination name
+    return oldest
+end
+
+def string settings_path "backup.yaml"
+if greater length_of arguments 0 set settings_path get arguments 0
+def Settings settings read_settings settings_path
+
+for string folder in the folders of settings
+    if not folder_exists folder block
+        write_error_line fill "The folder {} does not exist." list_of string folder end
+        exit 2
+    end
+
+def string destination the destination of settings
+make_folder destination
+
+def Moment started now
+def string last_run_path join_path destination last_run_file
+def option Moment since read_last_run last_run_path
+def string target join_path destination moment_text started "{year}-{month}-{day}_{hour}-{minute}-{second}"
+
+def list string copied list_of string end
+for string folder in the folders of settings block
+    for string file in copy_changed folder target since
+        set copied push copied file
+end
+
+def list string removed remove_oldest destination the keep of settings
+save last_run_path yaml_text convert Data started
+def Report report Report moment_text started "{year}-{month}-{day} {hour}:{minute}:{second}" copied removed
+save join_path destination report_file add json_text convert Data report "\n"
+
+write_line fill "Copied {} files and removed {} old backups." list_of int length_of copied length_of removed end

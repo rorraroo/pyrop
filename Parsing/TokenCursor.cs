@@ -57,7 +57,7 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompl
 
         if (Keywords.IsReserved(token.Text))
         {
-            throw Error($"'{token.Text}' is a reserved word and cannot be used as a {role}.", token);
+            throw Error(Keywords.NotAName(token.Text, role), token);
         }
 
         if (role != "function name" && names.Describe(token.Text) is { } kind)

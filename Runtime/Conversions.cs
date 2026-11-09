@@ -16,6 +16,11 @@ public static class Conversions
             return true;
         }
 
+        if (DataOperations.Involves(from, to))
+        {
+            return true;
+        }
+
         if (!PyropTypes.ValueTypes.Contains(from) || !PyropTypes.ValueTypes.Contains(to))
         {
             return false;
@@ -42,6 +47,9 @@ public static class Conversions
         return value switch
         {
             _ when target == PyropType.String => new StringValue(TextForm.Of(value, fail, nestingLimit, tooDeep)),
+            _ when target == LibraryOperations.DataChoice => DataOperations.FromValue(value, tooDeep ?? fail, nestingLimit),
+            ChoiceValue data when data.Choice == LibraryOperations.DataChoice =>
+                DataOperations.ToValue(data, target, fail, tooDeep ?? fail, nestingLimit),
             IntValue integer when target == PyropType.Float => new FloatValue(integer.Value),
             FloatValue number when target == PyropType.Int => FloatToInt(number.Value, fail),
             StringValue text when target == PyropType.Int => StringToInt(text.Value, fail),

@@ -213,7 +213,7 @@ public static class RecordDeclarations
     public static bool CanStartRecord(TokenCursor cursor, KnownTypes types)
     {
         var name = cursor.Current;
-        if (name.Kind != TokenKind.Word || Keywords.IsReserved(name.Text))
+        if (name.Kind != TokenKind.Word || (Keywords.IsReserved(name.Text) && !Keywords.IsReservedForLater(name.Text)))
         {
             return false;
         }
@@ -233,7 +233,7 @@ public static class RecordDeclarations
         var token = cursor.ExpectWord($"a {keyword} name after '{keyword}'");
         if (Keywords.IsReserved(token.Text))
         {
-            throw cursor.Error($"'{token.Text}' is a reserved word and cannot be used as a {keyword} name.", token);
+            throw cursor.Error(Keywords.NotAName(token.Text, $"{keyword} name"), token);
         }
 
         return token;
@@ -276,6 +276,11 @@ public static class RecordDeclarations
 
         if (fields.Count == 0)
         {
+            if (cursor.Current.Kind == TokenKind.Word && Keywords.IsReservedForLater(cursor.Current.Text))
+            {
+                throw cursor.Error(Keywords.UnavailableHint(cursor.Current.Text)!);
+            }
+
             throw cursor.Error(
                 $"Record '{record}' needs at least one field, a type and a name such as {Keywords.Record} {record} int count; found {cursor.Current.Describe()}.");
         }
@@ -299,7 +304,7 @@ public static class RecordDeclarations
         var token = cursor.ExpectWord(expectation);
         if (Keywords.IsReserved(token.Text))
         {
-            throw cursor.Error($"'{token.Text}' is a reserved word and cannot be used as a field name.", token);
+            throw cursor.Error(Keywords.NotAName(token.Text, "field name"), token);
         }
 
         return token;

@@ -9,6 +9,8 @@ public static class TextOperations
 {
     public const int MaxLength = 100_000_000;
 
+    private static readonly PyropType FoundPosition = PyropTypes.OptionOf(PyropType.Int);
+
     private const int CachedFromLength = 256;
 
     private static readonly ConditionalWeakTable<string, CharacterMap> MapCache = new();
@@ -47,9 +49,9 @@ public static class TextOperations
         return text[map.OffsetOf(index)..map.OffsetOf(index + 1)];
     }
 
-    public static long Find(string text, string needle) => FindAt(text, needle, MapOf(text), 0);
+    public static Value Find(string text, string needle) => FindAt(text, needle, MapOf(text), 0);
 
-    public static long FindFrom(IBuiltinInvocation invocation, string text, string needle, long start)
+    public static Value FindFrom(IBuiltinInvocation invocation, string text, string needle, long start)
     {
         var map = MapOf(text);
         if (start < 0 || start > map.Count)
@@ -60,10 +62,10 @@ public static class TextOperations
         return FindAt(text, needle, map, map.OffsetOf(start));
     }
 
-    private static long FindAt(string text, string needle, CharacterMap map, int from)
+    private static Value FindAt(string text, string needle, CharacterMap map, int from)
     {
         var offset = AlignedMatches(text, needle, map, from).DefaultIfEmpty(-1).First();
-        return offset < 0 ? -1 : map.IndexAt(offset);
+        return offset < 0 ? OptionValue.None(FoundPosition) : OptionValue.Some(new IntValue(map.IndexAt(offset)));
     }
 
     public static string Replace(IBuiltinInvocation invocation, string text, string old, string replacement)

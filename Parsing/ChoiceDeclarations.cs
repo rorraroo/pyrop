@@ -8,7 +8,7 @@ public static class ChoiceDeclarations
     public static bool CanStartChoice(TokenCursor cursor)
     {
         var name = cursor.Current;
-        if (name.Kind != TokenKind.Word || Keywords.IsReserved(name.Text))
+        if (name.Kind != TokenKind.Word || (Keywords.IsReserved(name.Text) && !Keywords.IsReservedForLater(name.Text)))
         {
             return false;
         }
@@ -122,7 +122,7 @@ public static class ChoiceDeclarations
 
             if (Keywords.IsReserved(token.Text))
             {
-                throw cursor.Error($"'{token.Text}' is a reserved word and cannot be used as a variant name.");
+                throw cursor.Error(Keywords.NotAName(token.Text, "variant name"));
             }
 
             if (!names.Add(token.Text))

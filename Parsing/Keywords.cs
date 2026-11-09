@@ -63,6 +63,8 @@ public static class Keywords
         ["with_style"] = "it is now called styled, as in styled \"warning\" write_line \"Careful\"",
     };
 
+    private static readonly HashSet<string> ForLater = ["call", "function_type", "function_of", "at_once"];
+
     public static IReadOnlyList<string> LanguageWords { get; } =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
@@ -76,6 +78,7 @@ public static class Keywords
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
         .. Retired.Keys,
+        .. ForLater,
     ];
 
     private static readonly HashSet<string> Statements =
@@ -86,15 +89,25 @@ public static class Keywords
 
     public static bool IsReserved(string word) => Reserved.Contains(word);
 
+    public static bool IsReservedForLater(string word) => ForLater.Contains(word);
+
     public static bool IsStatement(string word) => Statements.Contains(word);
 
     public static bool StartsDefinition(string word) => word is Function or Record or Choice;
 
-    public static string? RetiredHint(string word) =>
-        Retired.TryGetValue(word, out var hint) ? $"'{word}' is no longer part of Pyrop; {hint}." : null;
+    public static string? UnavailableHint(string word) =>
+        Retired.TryGetValue(word, out var hint) ? $"'{word}' is no longer part of Pyrop; {hint}."
+        : ForLater.Contains(word) ? $"'{word}' is reserved for a later version of Pyrop."
+        : null;
+
+    public static string NotAName(string word, string role) =>
+        ForLater.Contains(word)
+            ? $"'{word}' is reserved for a later version of Pyrop and cannot be used as a {role}."
+            : $"'{word}' is a reserved word and cannot be used as a {role}.";
 
     public static string? UnderscoredSpelling(string word) =>
-        Reserved.FirstOrDefault(reserved => reserved != word && !Retired.ContainsKey(reserved) && reserved.Replace("_", "") == word);
+        Reserved.FirstOrDefault(reserved =>
+            reserved != word && !Retired.ContainsKey(reserved) && !ForLater.Contains(reserved) && reserved.Replace("_", "") == word);
 
     public static string UnderscoreHint(string word, string spelling) =>
         $"'{word}' is not a Pyrop word; did you mean '{spelling}'? Names made of several words are joined with underscores.";

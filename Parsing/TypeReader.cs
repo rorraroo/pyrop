@@ -38,7 +38,8 @@ public static class TypeReader
         if (!PyropTypes.ValueConstructors.TryGetValue(token.Text, out var constructor))
         {
             throw names.Failures.OfName(token.Text) ?? cursor.Error(
-                names.FindVariant(token.Text) is { } variant
+                Keywords.IsReservedForLater(token.Text) ? Keywords.UnavailableHint(token.Text)!
+                    : names.FindVariant(token.Text) is { } variant
                     ? $"'{token.Text}' is a variant of the choice '{variant.Choice.Name}', not a type."
                     : LooksLikeTypeBeforeName(token, cursor) || (owner == TypeArgument && !Keywords.IsReserved(token.Text))
                     ? $"'{token.Text}' is not a type; no record or choice named '{token.Text}' is declared or imported in this file."

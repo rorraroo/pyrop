@@ -24,6 +24,14 @@ public static class TextFiles
         ReturnSpecialDirectories = false,
     };
 
+    private static readonly EnumerationOptions EveryEntryBelow = new()
+    {
+        AttributesToSkip = 0,
+        IgnoreInaccessible = false,
+        RecurseSubdirectories = true,
+        ReturnSpecialDirectories = false,
+    };
+
     public static ListValue ReadLines(IBuiltinInvocation invocation, string path)
     {
         var text = Read(invocation, path);
@@ -45,20 +53,44 @@ public static class TextFiles
         return new ListValue(PyropTypes.ListOf(PyropType.String), lines.ToImmutable());
     }
 
-    public static ListValue ListFiles(IBuiltinInvocation invocation, string path)
+    public static ListValue ListFiles(IBuiltinInvocation invocation, string path) =>
+        List(invocation, path, "directory", "Directory", EveryEntry, (ref FileSystemEntry entry) => entry.FileName.ToString(), wantFolders: false);
+
+    public static ListValue ListAllFiles(IBuiltinInvocation invocation, string path) =>
+        List(invocation, path, "folder", "Folder", EveryEntryBelow, RelativePath, wantFolders: false);
+
+    public static ListValue ListFolders(IBuiltinInvocation invocation, string path) =>
+        List(invocation, path, "folder", "Folder", EveryEntry, (ref FileSystemEntry entry) => entry.FileName.ToString(), wantFolders: true);
+
+    private static string RelativePath(ref FileSystemEntry entry)
     {
-        RequirePath(invocation, path, "directory");
+        var below = entry.Directory[entry.RootDirectory.Length..].ToString().TrimStart(Separators);
+        var name = entry.FileName.ToString();
+        return below.Length == 0 ? name : $"{below.Replace(Path.DirectorySeparatorChar, '/')}/{name}";
+    }
+
+    private static ListValue List(
+        IBuiltinInvocation invocation,
+        string path,
+        string kind,
+        string capitalKind,
+        EnumerationOptions options,
+        FileSystemEnumerable<string>.FindTransform describe,
+        bool wantFolders)
+    {
+        RequirePath(invocation, path, kind);
         if (File.Exists(path))
         {
-            throw invocation.Fail($"\"{path}\" is a file, not a directory.");
+            throw invocation.Fail($"\"{path}\" is a file, not a {kind}.");
         }
 
         var names = new List<string>();
         try
         {
-            var entries = new FileSystemEnumerable<string>(path, (ref FileSystemEntry entry) => entry.FileName.ToString(), EveryEntry)
+            var entries = new FileSystemEnumerable<string>(path, describe, options)
             {
-                ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+                ShouldIncludePredicate = (ref FileSystemEntry entry) => entry.IsDirectory == wantFolders,
+                ShouldRecursePredicate = (ref FileSystemEntry entry) => (entry.Attributes & FileAttributes.ReparsePoint) == 0,
             };
 
             foreach (var name in entries)
@@ -69,16 +101,16 @@ public static class TextFiles
         }
         catch (DirectoryNotFoundException)
         {
-            throw invocation.Fail($"Directory \"{path}\" does not exist.");
+            throw invocation.Fail($"{capitalKind} \"{path}\" does not exist.");
         }
         catch (Exception exception) when (IsFileSystemFailure(exception))
         {
-            throw invocation.Fail(FileSystemFailure("list", path, exception, "directory"));
+            throw invocation.Fail(FileSystemFailure("list", path, exception, kind));
         }
 
         if (!names.All(IsValidText))
         {
-            throw invocation.Fail($"Directory \"{path}\" holds a file whose name is not valid text.");
+            throw invocation.Fail($"{capitalKind} \"{path}\" holds a file whose name is not valid text.");
         }
 
         names.Sort(string.CompareOrdinal);
@@ -144,7 +176,7 @@ public static class TextFiles
 
     private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
-    private static void RequirePath(IBuiltinInvocation invocation, string path, string kind)
+    internal static void RequirePath(IBuiltinInvocation invocation, string path, string kind)
     {
         if (path.Length == 0)
         {
@@ -175,7 +207,7 @@ public static class TextFiles
         }
     }
 
-    private static string MissingDirectory(string path)
+    internal static string MissingDirectory(string path)
     {
         var directory = path[..Math.Max(path.LastIndexOfAny(Separators), 0)];
         return File.Exists(directory)
@@ -183,10 +215,10 @@ public static class TextFiles
             : $"Directory \"{directory}\" does not exist, so \"{path}\" cannot be written.";
     }
 
-    private static bool IsFileSystemFailure(Exception exception) =>
+    internal static bool IsFileSystemFailure(Exception exception) =>
         exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
 
-    private static string FileSystemFailure(string verb, string path, Exception exception, string kind = "file") => exception switch
+    internal static string FileSystemFailure(string verb, string path, Exception exception, string kind = "file") => exception switch
     {
         UnauthorizedAccessException => $"Access to \"{path}\" was denied.",
         PathTooLongException => $"\"{path}\" is too long to be a {kind} path.",
