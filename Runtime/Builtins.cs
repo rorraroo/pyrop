@@ -160,6 +160,14 @@ public static class Builtins
         Operation("slice",
             Overload([ListT, I, I], ListT, c => CollectionOperations.Slice(
                 c, c.Argument(0).AsList(), c.Argument(1).AsInt(), c.Argument(2).AsInt()))),
+        Operation("sort",
+            SortOf(I, (first, second) => first.AsInt().CompareTo(second.AsInt())),
+            SortOf(F, (first, second) => first.AsFloat().CompareTo(second.AsFloat())),
+            SortOf(S, (first, second) => string.CompareOrdinal(first.AsString(), second.AsString()))),
+        Operation("reverse",
+            Overload([ListT], ListT, c => CollectionOperations.Reverse(c.Argument(0).AsList()))),
+        Operation("distinct",
+            Overload([ListT], ListT, c => CollectionOperations.Distinct(c, c.Argument(0).AsList()))),
         Operation("some",
             Overload([Item], OptionT, c => OptionValue.Some(c.Argument(0)))),
         Operation("value_or",
@@ -214,6 +222,12 @@ public static class Builtins
         Overload([F, F], B, c => BoolValue.Of(holds(c.Argument(0).AsFloat().CompareTo(c.Argument(1).AsFloat())))),
         Overload([S, S], B, c => BoolValue.Of(holds(string.CompareOrdinal(c.Argument(0).AsString(), c.Argument(1).AsString())))),
     ];
+
+    private static BuiltinOverload SortOf(PyropType element, Comparison<Value> order)
+    {
+        var list = PyropTypes.ListOf(element);
+        return Overload([list], list, c => CollectionOperations.Sort(c.Argument(0).AsList(), order));
+    }
 
     private static BuiltinOverload[] Choices(bool smaller) =>
     [

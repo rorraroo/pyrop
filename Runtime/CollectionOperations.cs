@@ -71,6 +71,18 @@ public static class CollectionOperations
         return list.With(list.Items.GetRange((int)start, (int)count));
     }
 
+    public static ListValue Sort(ListValue list, Comparison<Value> order) =>
+        list.With(list.Items.OrderBy(item => item, Comparer<Value>.Create(order)).ToImmutableList());
+
+    public static ListValue Reverse(ListValue list) =>
+        list.With(list.Items.Reverse());
+
+    public static ListValue Distinct(IBuiltinInvocation invocation, ListValue list)
+    {
+        var seen = new HashSet<Value>(new NestingLimitedComparer(invocation, "distinct"));
+        return list.With(list.Items.Where(seen.Add).ToImmutableList());
+    }
+
     public static ListValue ListOf(PyropType elementType, IReadOnlyList<Value> items, int limit, Func<string, Exception> fail)
     {
         CheckRoom(items.Count, limit, "list", fail);
@@ -121,4 +133,13 @@ public static class CollectionOperations
 
     private static Exception MissingKey(IBuiltinInvocation invocation, Value key) =>
         invocation.Fail($"The map has no key {TextForm.OfItem(key)}.");
+
+    private sealed class NestingLimitedComparer(IBuiltinInvocation invocation, string operation) : IEqualityComparer<Value>
+    {
+        public bool Equals(Value? left, Value? right) =>
+            ValueEquality.Equal(left!, right!, invocation.NestingLimit, () => TooDeep(invocation, operation));
+
+        public int GetHashCode(Value value) =>
+            ValueEquality.Hash(value, invocation.NestingLimit, () => TooDeep(invocation, operation));
+    }
 }

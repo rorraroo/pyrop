@@ -505,8 +505,107 @@ public class CollectionTests
     }
 
     [Theory]
+    [InlineData("sort list_of int 3 -1 2 end", "[-1, 2, 3]")]
+    [InlineData("sort list_of int 2 1 2 end", "[1, 2, 2]")]
+    [InlineData("sort list_of float 2.5 -0.5 1.0 end", "[-0.5, 1.0, 2.5]")]
+    [InlineData("sort list_of string \"pear\" \"Zoo\" \"apple\" \"éclair\" end", "[\"Zoo\", \"apple\", \"pear\", \"éclair\"]")]
+    [InlineData("sort list_of int end", "[]")]
+    [InlineData("sort keys_of put put map_of string int end \"b\" 1 \"a\" 2", "[\"a\", \"b\"]")]
+    [InlineData("sort keys_of put put map_of int bool end 2 true 1 false", "[1, 2]")]
+    public void SortsNumbersAndTexts(string expression, string expected)
+    {
+        Assert.Equal(expected, Evaluate(expression));
+    }
+
+    [Theory]
+    [InlineData("sort list_of bool true false end", "'sort' cannot take list bool. It accepts: list int, list float, list string.")]
+    [InlineData("sort list_of list int end", "'sort' cannot take list list int. It accepts: list int, list float, list string.")]
+    [InlineData("sort 5", "'sort' cannot take int. It accepts: list int, list float, list string.")]
+    public void SortRejectsListsItCannotOrder(string expression, string message)
+    {
+        Assert.Equal(message, Failure($"write_line {expression}", ErrorStage.Type).Message);
+    }
+
+    [Fact]
+    public void SortRejectsChoicesAndRecords()
+    {
+        Assert.Equal(ErrorStage.Type, Run.Failure("choice Level low high end\nwrite_line sort list_of Level high low end").Stage);
+        Assert.Equal(ErrorStage.Type, Run.Failure("record Point int x\nwrite_line sort list_of Point end").Stage);
+    }
+
+    [Theory]
+    [InlineData("reverse list_of int 1 2 3 end", "[3, 2, 1]")]
+    [InlineData("reverse list_of string \"a\" end", "[\"a\"]")]
+    [InlineData("reverse list_of list int list_of int 1 end list_of int end end", "[[], [1]]")]
+    [InlineData("reverse list_of bool end", "[]")]
+    [InlineData("reverse sort list_of int 2 3 1 end", "[3, 2, 1]")]
+    public void ReversesAnyList(string expression, string expected)
+    {
+        Assert.Equal(expected, Evaluate(expression));
+    }
+
+    [Theory]
+    [InlineData("distinct list_of int 3 1 3 2 1 end", "[3, 1, 2]")]
+    [InlineData("distinct list_of string \"a\" \"A\" \"a\" end", "[\"a\", \"A\"]")]
+    [InlineData("distinct list_of float 0.5 0.5 1.5 end", "[0.5, 1.5]")]
+    [InlineData("distinct list_of bool true true end", "[true]")]
+    [InlineData("distinct list_of int end", "[]")]
+    [InlineData("distinct list_of list int list_of int 1 end list_of int 2 end list_of int 1 end end", "[[1], [2]]")]
+    [InlineData("distinct list_of option int some 1 none int some 1 none int end", "[some 1, none]")]
+    public void DistinctKeepsTheFirstOfEachEqualItem(string expression, string expected)
+    {
+        Assert.Equal(expected, Evaluate(expression));
+    }
+
+    [Fact]
+    public void DistinctTreatsMapsWithTheSameContentAsEqualWhateverTheirOrder()
+    {
+        Assert.Equal(
+            "1",
+            Evaluate("length_of distinct list_of map string int put put map_of string int end \"a\" 1 \"b\" 2 put put map_of string int end \"b\" 2 \"a\" 1 end"));
+    }
+
+    [Fact]
+    public void DistinctComparesRecordsAndChoicesLikeEqual()
+    {
+        const string source = """
+            record Point int x int y
+            choice Move go int stay end
+            write_line length_of distinct list_of Point Point 1 2 Point 1 2 Point 2 1 end
+            write_line length_of distinct list_of Move go 1 go 1 go 2 stay stay end
+            """;
+
+        Assert.Equal("2\n3\n", Run.Program(source));
+    }
+
+    [Fact]
+    public void DistinctFailsOnValuesNestedBeyondTheLimit()
+    {
+        const string source = "record Tree list Tree kids\n" +
+            "def Tree a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
+            "write_line length_of distinct list_of Tree a a end";
+        var session = new PyropSession(new StringReader(""), new StringOutput()) { NestingLimit = 4 };
+
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(source)).Errors);
+
+        Assert.Equal(ErrorStage.Runtime, error.Stage);
+        Assert.Equal("'distinct' cannot compare values nested this deeply.", error.Message);
+    }
+
+    [Fact]
+    public void TheNewListOperationsLeaveTheListUnchanged()
+    {
+        Assert.Equal(
+            "[2, 1, 2]\n[1, 2, 2]\n[2, 1, 2]\n[2, 1]\n",
+            Run.Program("def list int a list_of int 2 1 2 end\ndef list int s sort a\ndef list int r reverse a\ndef list int d distinct a\nwrite_line a\nwrite_line s\nwrite_line r\nwrite_line d"));
+    }
+
+    [Theory]
     [InlineData("slice")]
     [InlineData("positions_of")]
+    [InlineData("sort")]
+    [InlineData("reverse")]
+    [InlineData("distinct")]
     public void TheListOperationsAreReservedWords(string word)
     {
         Assert.Equal(ErrorStage.Parse, Run.Failure($"def int {word} 1").Stage);

@@ -9,6 +9,69 @@ public static class ValueEquality
     public static bool Equal(Value left, Value right, int nestingLimit, Func<Exception> tooDeep) =>
         Equal(left, right, nestingLimit, 0, tooDeep);
 
+    public static int Hash(Value value, int nestingLimit, Func<Exception> tooDeep) =>
+        Hash(value, nestingLimit, 0, tooDeep);
+
+    private static int Hash(Value value, int nestingLimit, int depth, Func<Exception> tooDeep)
+    {
+        if (value is not (ListValue or MapValue or RecordValue or OptionValue or ChoiceValue { HasData: true }))
+        {
+            return value.GetHashCode();
+        }
+
+        if (depth >= nestingLimit || !RuntimeHelpers.TryEnsureSufficientExecutionStack())
+        {
+            throw tooDeep();
+        }
+
+        var hash = new HashCode();
+        switch (value)
+        {
+            case ListValue list:
+                hash.Add(list.Type);
+                foreach (var item in list.Items)
+                {
+                    hash.Add(Hash(item, nestingLimit, depth + 1, tooDeep));
+                }
+
+                break;
+            case MapValue map:
+                var contents = 0;
+                foreach (var (key, stored) in map.Entries)
+                {
+                    contents = unchecked(contents + HashCode.Combine(
+                        Hash(key, nestingLimit, depth + 1, tooDeep), Hash(stored, nestingLimit, depth + 1, tooDeep)));
+                }
+
+                hash.Add(map.Type);
+                hash.Add(contents);
+                break;
+            case RecordValue record:
+                hash.Add(record.Record);
+                foreach (var field in record.Fields)
+                {
+                    hash.Add(Hash(field, nestingLimit, depth + 1, tooDeep));
+                }
+
+                break;
+            case ChoiceValue choice:
+                hash.Add(choice.Choice);
+                hash.Add(choice.Index);
+                foreach (var data in choice.Data)
+                {
+                    hash.Add(Hash(data, nestingLimit, depth + 1, tooDeep));
+                }
+
+                break;
+            case OptionValue option:
+                hash.Add(option.Type);
+                hash.Add(option.Content is { } content ? Hash(content, nestingLimit, depth + 1, tooDeep) : 0);
+                break;
+        }
+
+        return hash.ToHashCode();
+    }
+
     private static bool Equal(Value left, Value right, int nestingLimit, int depth, Func<Exception> tooDeep)
     {
         if (ReferenceEquals(left, right))
