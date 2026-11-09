@@ -20,6 +20,8 @@ public sealed class DocsTests
 
     private sealed record Malformed(string Page, int Line, string Problem) : Snippet(Page, Line, "");
 
+    private sealed record Excerpt(string Page, int Line, string Source, string File) : Snippet(Page, Line, Source);
+
     [Fact]
     public void EveryPyropSnippetInTheDocsRunsAndShowsItsOutput()
     {
@@ -80,6 +82,9 @@ public sealed class DocsTests
             var parts = block.Info.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
             switch (parts)
             {
+                case ["prp", var excerpt] when excerpt.StartsWith("from ", StringComparison.Ordinal):
+                    yield return new Excerpt(page, block.Line, block.Text, excerpt["from ".Length..].Trim());
+                    continue;
                 case ["prp", var name]:
                     yield return new ModuleFile(page, block.Line, block.Text, name.Trim());
                     continue;
@@ -143,9 +148,23 @@ public sealed class DocsTests
     {
         Malformed malformed => malformed.Problem,
         ModuleFile module => Save(module, directory),
+        Excerpt excerpt => Compare(excerpt),
         Example example => Run(example, directory),
         _ => null,
     };
+
+    private static string? Compare(Excerpt excerpt)
+    {
+        var file = Path.Combine(Path.GetDirectoryName(DocsDirectory()!)!, excerpt.File);
+        if (!File.Exists(file))
+        {
+            return $"the excerpt names {excerpt.File}, which does not exist";
+        }
+
+        return File.ReadAllText(file).Replace("\r\n", "\n").Contains(excerpt.Source, StringComparison.Ordinal)
+            ? null
+            : $"the excerpt is no longer in {excerpt.File}:\n{excerpt.Source}";
+    }
 
     private static string? Save(ModuleFile module, string directory)
     {
@@ -185,7 +204,7 @@ public sealed class DocsTests
 
         var writer = new StringWriter();
         var output = new ConsoleProgramOutput(writer, plain: true, errors: new ConsoleStream(writer, plain: true), sharedScreen: true);
-        var session = new PyropSession(new StringReader(example.Input ?? ""), output, HostContext.Isolated);
+        var session = new PyropSession(new StringReader(example.Input ?? ""), output, HostContext.Isolated with { Commands = ProcessCommandRunner.Instance });
         try
         {
             session.Run(example.Source, main, main);

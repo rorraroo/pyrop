@@ -48,7 +48,7 @@ public static class SignatureScanner
                 ScanRecordFields(new TokenCursor(tokens, reportsIncompleteInput), declarations, typeNames);
                 ScanChoiceData(new TokenCursor(tokens, reportsIncompleteInput), choiceDeclarations, typeNames);
                 RecordDeclarations.CheckSelfContainment(records, choices);
-                var functions = ScanHeaders(new TokenCursor(tokens, reportsIncompleteInput), typeNames);
+                var functions = ScanHeaders(new TokenCursor(tokens, reportsIncompleteInput), typeNames, failures);
                 if (isUsedModule)
                 {
                     RecordDeclarations.CheckExposure(existing.Module, records, choices, functions);
@@ -306,7 +306,39 @@ public static class SignatureScanner
             }
         }
 
-        private static List<FunctionSignature> ScanHeaders(TokenCursor cursor, ModuleNamespace names)
+        private static bool HeaderReads(TokenCursor cursor, int start, ModuleNamespace names)
+        {
+            try
+            {
+                ReadHeader(cursor, names, isExported: false);
+                return true;
+            }
+            catch (PyropException)
+            {
+                return false;
+            }
+            finally
+            {
+                cursor.MoveTo(start);
+            }
+        }
+
+        private static string? HeaderName(TokenCursor cursor, int start, ModuleNamespace names)
+        {
+            cursor.MoveTo(start);
+            try
+            {
+                TypeReader.ReadReturnType(cursor, names);
+            }
+            catch (PyropException)
+            {
+                return null;
+            }
+
+            return cursor.Current.Kind == TokenKind.Word && !Keywords.IsReserved(cursor.Current.Text) ? cursor.Current.Text : null;
+        }
+
+        private static List<FunctionSignature> ScanHeaders(TokenCursor cursor, ModuleNamespace names, ModuleFailures failures)
         {
             var functions = new List<FunctionSignature>();
             Token? previous = null;
@@ -321,15 +353,27 @@ public static class SignatureScanner
                     continue;
                 }
 
-                RecordDeclarations.RejectKeywordAsName(token, cursor, cursor.Current.Kind == TokenKind.Word, KnownTypes.Of(names));
-
-                var signature = ReadHeader(cursor, names, exported);
-                if (names.Functions.Contains(signature.Name) || functions.Any(function => function.Name == signature.Name))
+                var start = cursor.Index;
+                if (!HeaderReads(cursor, start, names))
                 {
-                    throw new PyropException(ErrorStage.Parse, $"Function '{signature.Name}' is already defined.", signature.Position);
+                    RecordDeclarations.RejectKeywordAsName(token, cursor, cursor.Current.Kind == TokenKind.Word || cursor.IsAtEnd, KnownTypes.Of(names));
                 }
 
-                functions.Add(signature);
+                try
+                {
+                    var signature = ReadHeader(cursor, names, exported);
+                    if (names.Functions.Contains(signature.Name) || functions.Any(function => function.Name == signature.Name))
+                    {
+                        throw new PyropException(ErrorStage.Parse, $"Function '{signature.Name}' is already defined.", signature.Position);
+                    }
+
+                    functions.Add(signature);
+                }
+                catch (PyropException error)
+                {
+                    failures.Add(token, HeaderName(cursor, start, names), error);
+                    cursor.MoveTo(start);
+                }
             }
 
             return functions;

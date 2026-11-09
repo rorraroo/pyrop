@@ -24,6 +24,7 @@ public static class Keywords
     public const string Convert = "convert";
     public const string ListOf = "list_of";
     public const string MapOf = "map_of";
+    public const string VariantsOf = "variants_of";
     public const string Exit = "exit";
     public const string Styled = "styled";
     public const string Use = "use";
@@ -62,11 +63,16 @@ public static class Keywords
         ["with_style"] = "it is now called styled, as in styled \"warning\" write_line \"Careful\"",
     };
 
-    private static readonly HashSet<string> Reserved =
+    public static IReadOnlyList<string> LanguageWords { get; } =
     [
         Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
-        WriteError, WriteErrorLine, Convert, ListOf, MapOf, Exit, Styled, Use, Import, Export, From, Library, Record, Choice,
+        WriteError, WriteErrorLine, Convert, ListOf, MapOf, VariantsOf, Exit, Styled, Use, Import, Export, From, Library, Record, Choice,
         The, Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
+    ];
+
+    private static readonly HashSet<string> Reserved =
+    [
+        .. LanguageWords,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
         .. Retired.Keys,
@@ -81,6 +87,8 @@ public static class Keywords
     public static bool IsReserved(string word) => Reserved.Contains(word);
 
     public static bool IsStatement(string word) => Statements.Contains(word);
+
+    public static bool StartsDefinition(string word) => word is Function or Record or Choice;
 
     public static string? RetiredHint(string word) =>
         Retired.TryGetValue(word, out var hint) ? $"'{word}' is no longer part of Pyrop; {hint}." : null;

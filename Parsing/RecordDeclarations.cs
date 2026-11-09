@@ -41,7 +41,7 @@ public static class RecordDeclarations
     private static readonly HashSet<string> ValuePositions =
     [
         Keywords.Write, Keywords.WriteLine, Keywords.WriteError, Keywords.WriteErrorLine, Keywords.Return, Keywords.Exit,
-        Keywords.If, Keywords.While, Keywords.Styled, Keywords.In, Keywords.Convert, Keywords.ListOf, Keywords.MapOf,
+        Keywords.If, Keywords.While, Keywords.Styled, Keywords.In, Keywords.Convert, Keywords.ListOf, Keywords.MapOf, Keywords.VariantsOf,
         Keywords.Attempt, Keywords.None, Keywords.IfSome, Keywords.Match, Keywords.Of, Keywords.Copy,
     ];
 

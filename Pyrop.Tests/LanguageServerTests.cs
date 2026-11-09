@@ -186,6 +186,109 @@ public sealed class LanguageServerTests : IDisposable
     }
 
     [Fact]
+    public void InitializeAnnouncesDefinitionAndCompletion()
+    {
+        using var client = new Client(TimeSpan.Zero);
+
+        var capabilities = client.Initialize().GetProperty("capabilities");
+
+        Assert.True(capabilities.GetProperty("definitionProvider").GetBoolean());
+        Assert.Equal(" ", Assert.Single(capabilities.GetProperty("completionProvider").GetProperty("triggerCharacters").EnumerateArray()).GetString());
+    }
+
+    [Fact]
+    public void DefinitionGivesTheLocationInAnOpenModuleUnderTheClientsUri()
+    {
+        using var client = Started();
+        var main = VsCodeUriOf("main.prp");
+        var library = VsCodeUriOf("lib.prp");
+        client.Open(library, "export function int one\n    return 1\n");
+        client.Diagnostics();
+        client.Open(main, "use lib \"lib.prp\"\nwrite_line from lib one\n");
+        client.Diagnostics();
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/definition", new { textDocument = new { uri = main }, position = new { line = 1, character = 21 } }))
+            .GetProperty("result");
+
+        Assert.Equal(library, result.GetProperty("uri").GetString());
+        var start = result.GetProperty("range").GetProperty("start");
+        Assert.Equal((0, 20), (start.GetProperty("line").GetInt32(), start.GetProperty("character").GetInt32()));
+        Assert.Equal(23, result.GetProperty("range").GetProperty("end").GetProperty("character").GetInt32());
+    }
+
+    [Fact]
+    public void DefinitionOfAWordWithoutOneIsNull()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "write_line 1\n");
+        client.Diagnostics();
+
+        var response = client.Response(client.Request("textDocument/definition", new { textDocument = new { uri }, position = new { line = 0, character = 2 } }));
+
+        Assert.Equal(JsonValueKind.Null, response.GetProperty("result").ValueKind);
+    }
+
+    [Fact]
+    public void CompletionItemsCarryArityAndSignature()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "function int square int x\n    return x\n\nwrite_line squ\n");
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/completion", new { textDocument = new { uri }, position = new { line = 3, character = 14 }, context = new { triggerKind = 1 } }))
+            .GetProperty("result");
+
+        Assert.False(result.GetProperty("isIncomplete").GetBoolean());
+        var item = Assert.Single(result.GetProperty("items").EnumerateArray());
+        Assert.Equal("square", item.GetProperty("label").GetString());
+        Assert.Equal(3, item.GetProperty("kind").GetInt32());
+        Assert.Equal("takes 1", item.GetProperty("labelDetails").GetProperty("description").GetString());
+        Assert.Equal("function int square int x", item.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public void ASpaceInGeneralCodeCompletesNothing()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, "write_line \n");
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/completion", new { textDocument = new { uri }, position = new { line = 0, character = 11 }, context = new { triggerKind = 2, triggerCharacter = " " } }))
+            .GetProperty("result");
+
+        Assert.Empty(result.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public void CompletionWithADeeplyNestedTypeDoesNotOverflowTheStack()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+        client.Open(uri, $"function void f {string.Concat(Enumerable.Repeat("list ", 60000))}int x\n    write_line 1\n");
+        client.Diagnostics();
+
+        var result = client.Response(client.Request("textDocument/completion", new { textDocument = new { uri }, position = new { line = 1, character = 4 }, context = new { triggerKind = 1 } }))
+            .GetProperty("result");
+
+        Assert.NotEmpty(result.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public void EveryParseErrorInADocumentIsADiagnostic()
+    {
+        using var client = Started();
+        var uri = UriOf("main.prp");
+
+        client.Open(uri, "function void a\n    write_line 1 2\n\nfunction void b\n    write_line 3 4\n");
+
+        Assert.Equal(2, client.Diagnostics().Diagnostics.GetArrayLength());
+    }
+
+    [Fact]
     public void TheFormattingRangeCountsEveryKindOfLineEnd()
     {
         using var client = Started();
@@ -429,11 +532,11 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = new Client(TimeSpan.Zero);
 
-        var early = client.Request("textDocument/definition");
+        var early = client.Request("textDocument/references");
         Assert.Equal(-32002, client.Response(early).GetProperty("error").GetProperty("code").GetInt32());
 
         client.Initialize();
-        var unknown = client.Request("textDocument/definition");
+        var unknown = client.Request("textDocument/references");
         Assert.Equal(-32601, client.Response(unknown).GetProperty("error").GetProperty("code").GetInt32());
 
         client.SendRaw("{ not json");
@@ -442,7 +545,7 @@ public sealed class LanguageServerTests : IDisposable
         Assert.Equal(-32700, parseError.GetProperty("error").GetProperty("code").GetInt32());
 
         client.Response(client.Request("shutdown"));
-        var late = client.Request("textDocument/definition");
+        var late = client.Request("textDocument/references");
         Assert.Equal(-32600, client.Response(late).GetProperty("error").GetProperty("code").GetInt32());
     }
 

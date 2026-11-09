@@ -158,6 +158,29 @@ class LanguageServer {
         });
     }
 
+    async definition(document, position) {
+        if (!this.ready || !isPyropFile(document)) {
+            return null;
+        }
+
+        return this.request('textDocument/definition', {
+            textDocument: { uri: document.uri.toString() },
+            position: { line: position.line, character: position.character }
+        });
+    }
+
+    async completion(document, position, triggerKind) {
+        if (!this.ready || !isPyropFile(document)) {
+            return null;
+        }
+
+        return this.request('textDocument/completion', {
+            textDocument: { uri: document.uri.toString() },
+            position: { line: position.line, character: position.character },
+            context: { triggerKind }
+        });
+    }
+
     async format(document) {
         if (!this.ready || !isPyropFile(document)) {
             return [];
@@ -264,6 +287,18 @@ function toRange(range) {
     return new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
 }
 
+function toCompletionItem(entry) {
+    const label = entry.labelDetails ? { label: entry.label, description: entry.labelDetails.description } : entry.label;
+    const item = new vscode.CompletionItem(label, entry.kind - 1);
+    item.sortText = entry.sortText;
+    item.detail = entry.detail;
+    if (entry.documentation) {
+        item.documentation = new vscode.MarkdownString(entry.documentation.value);
+    }
+
+    return item;
+}
+
 function start() {
     const configuration = vscode.workspace.getConfiguration('pyrop');
     if (!configuration.get('languageServer.enabled', true)) {
@@ -358,6 +393,30 @@ function activate(context) {
                 return new vscode.Hover(new vscode.MarkdownString(result.contents.value), result.range ? toRange(result.range) : undefined);
             }
         }),
+        vscode.languages.registerDefinitionProvider({ language: 'pyrop', scheme: 'file' }, {
+            async provideDefinition(document, position) {
+                let result = null;
+                try {
+                    result = server ? await server.definition(document, position) : null;
+                } catch {
+                    result = null;
+                }
+
+                return result ? new vscode.Location(vscode.Uri.parse(result.uri), toRange(result.range)) : null;
+            }
+        }),
+        vscode.languages.registerCompletionItemProvider({ language: 'pyrop', scheme: 'file' }, {
+            async provideCompletionItems(document, position, token, context) {
+                let result = null;
+                try {
+                    result = server ? await server.completion(document, position, context.triggerKind + 1) : null;
+                } catch {
+                    result = null;
+                }
+
+                return result ? result.items.map(toCompletionItem) : [];
+            }
+        }, ' '),
         vscode.languages.registerDocumentFormattingEditProvider({ language: 'pyrop', scheme: 'file' }, {
             async provideDocumentFormattingEdits(document) {
                 let edits = [];

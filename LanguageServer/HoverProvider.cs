@@ -11,25 +11,12 @@ public static class HoverProvider
 {
     public static HoverResult? Describe(AnalyzedSource source, int line, int column)
     {
-        var tokens = source.Tokens;
-        var index = -1;
-        for (var candidate = 0; candidate < tokens.Count; candidate++)
-        {
-            var token = tokens[candidate];
-            if (token.Kind == TokenKind.Word && token.Position.Line == line
-                && token.Position.Column <= column && column < token.Position.Column + token.Text.Length)
-            {
-                index = candidate;
-                break;
-            }
-        }
-
-        if (index < 0)
+        if (SourceWords.WordAt(source.Tokens, line, column) is not { } index)
         {
             return null;
         }
 
-        var hovered = tokens[index];
+        var hovered = source.Tokens[index];
         var markdown = new Explainer(source).Explain(index);
         return markdown is null ? null : new HoverResult(line - 1, hovered.Position.Column - 1, hovered.Text.Length, markdown);
     }
@@ -44,6 +31,7 @@ public static class HoverProvider
         private readonly Dictionary<SourcePosition, Expression> _expressions = [];
         private readonly Dictionary<SourcePosition, Expression> _fields = [];
         private readonly Dictionary<SourcePosition, Statement> _statements = [];
+        private readonly Dictionary<SourcePosition, (RecordField Field, RecordType Record)> _labels = [];
         private readonly Dictionary<SourcePosition, Named> _declared = [];
 
         public Explainer(AnalyzedSource source)
@@ -79,6 +67,11 @@ public static class HoverProvider
             if (_fields.TryGetValue(at, out var fieldUse))
             {
                 return ExplainFieldUse(fieldUse);
+            }
+
+            if (_labels.TryGetValue(at, out var label))
+            {
+                return ExplainField(label.Field, label.Record);
             }
 
             if (_declared.TryGetValue(at, out var named))
@@ -129,7 +122,7 @@ public static class HoverProvider
             switch (expression)
             {
                 case BuiltinCallExpression call:
-                    parts.Add(Overloads(call.Operation, _source.Facts.Overloads.GetValueOrDefault(call)));
+                    parts.Add(Code(SourceWords.Overloads(call.Operation, _names, _source.Facts.Overloads.GetValueOrDefault(call))));
                     break;
                 case FunctionCallExpression call:
                     parts.Add(ExplainFunction(call.Function));
@@ -138,7 +131,7 @@ public static class HoverProvider
                     parts.Add(Code(TreePrinter.Declaration(construct.Record, _names)));
                     break;
                 case VariantExpression variant:
-                    parts.Add(Code(VariantLine(variant.Variant)));
+                    parts.Add(Code(SourceWords.VariantLine(variant.Variant, _names)));
                     break;
             }
 
@@ -183,7 +176,7 @@ public static class HoverProvider
 
             if (_names.FindOperation(text) is { } operation)
             {
-                return Overloads(operation, null);
+                return Code(SourceWords.Overloads(operation, _names));
             }
 
             if (_names.FindCallable(text) is { } function)
@@ -198,7 +191,7 @@ public static class HoverProvider
 
             if (_names.FindVariant(text) is { } variant)
             {
-                return Code(VariantLine(variant));
+                return Code(SourceWords.VariantLine(variant, _names));
             }
 
             return null;
@@ -209,18 +202,6 @@ public static class HoverProvider
             var header = Code(TreePrinter.Signature(function, _names));
             return function.Module == _names.Module ? header : $"{header}\n\nDeclared in `{function.Module.DisplayName}`.";
         }
-
-        private string Overloads(BuiltinOperation operation, BuiltinOverload? chosen)
-        {
-            var ordered = chosen is null ? operation.Overloads : operation.Overloads.OrderBy(overload => overload == chosen ? 0 : 1).ToList();
-            return Code(string.Join("\n", ordered.Select(overload =>
-                string.Join(" ", overload.Parameters.Select(parameter => TreePrinter.Type(parameter, _names)).Prepend(operation.Name))
-                + $" → {TreePrinter.Type(overload.Result, _names)}")));
-        }
-
-        private string VariantLine(ChoiceVariant variant) =>
-            string.Join(" ", variant.Data.Select(type => TreePrinter.Type(type, _names)).Prepend(variant.Name))
-            + $" → {TreePrinter.Type(variant.Choice, _names)}";
 
         private string Declared(PyropType? type, string name) => type is null ? name : $"{TreePrinter.Type(type, _names)} {name}";
 
@@ -321,52 +302,24 @@ public static class HoverProvider
             _expressions.TryAdd(Key(expression.Position), expression);
             switch (expression)
             {
-                case BuiltinCallExpression call:
-                    VisitAll(call.Arguments);
-                    break;
-                case FunctionCallExpression call:
-                    VisitAll(call.Arguments);
-                    break;
-                case ConstructExpression construct:
-                    VisitAll(construct.Arguments);
-                    break;
-                case VariantExpression variant:
-                    VisitAll(variant.Arguments);
-                    break;
-                case ConvertExpression convert:
-                    Visit(convert.Operand);
-                    break;
-                case ListOfExpression list:
-                    VisitAll(list.Items);
-                    break;
-                case MapOfExpression map:
-                    foreach (var entry in map.Entries)
-                    {
-                        Visit(entry.Key);
-                        Visit(entry.Value);
-                    }
-
-                    break;
                 case GetFieldExpression read:
                     _fields[Key(read.FieldPosition)] = read;
-                    Visit(read.Record);
                     break;
                 case WithFieldExpression change:
                     _fields[Key(change.FieldPosition)] = change;
-                    Visit(change.Record);
-                    Visit(change.Value);
                     break;
-                case AttemptExpression attempt:
-                    Visit(attempt.Operation);
+                case ConstructExpression { Labels: { } labels } construct:
+                    foreach (var label in labels)
+                    {
+                        _labels[Key(label.Position)] = (construct.Record.Fields[label.FieldIndex], construct.Record);
+                    }
+
                     break;
             }
-        }
 
-        private void VisitAll(IEnumerable<Expression> expressions)
-        {
-            foreach (var expression in expressions)
+            foreach (var child in SyntaxTraversal.Children(expression))
             {
-                Visit(expression);
+                Visit(child);
             }
         }
 
@@ -382,7 +335,7 @@ public static class HoverProvider
 
         private int TokenAfter(SourcePosition position) => _tokenAt[Key(position)] + 1;
 
-        private static string Code(string text) => $"```pyrop\n{text}\n```";
+        private static string Code(string text) => SourceWords.Code(text);
 
         private static SourcePosition Key(SourcePosition position) => position with { Source = null };
     }

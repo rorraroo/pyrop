@@ -32,7 +32,12 @@ public static class SemanticClassifier
 
     public static readonly IReadOnlyList<string> ModifierNames = ["defaultLibrary", "imported"];
 
-    private sealed record FunctionExtent((int Line, int Column) Start, (int Line, int Column) End, IReadOnlySet<string> Parameters);
+    internal sealed record FunctionExtent((int Line, int Column) Start, (int Line, int Column) End, FunctionSignature Signature)
+    {
+        public bool Contains((int Line, int Column) position) => Start.CompareTo(position) <= 0 && position.CompareTo(End) < 0;
+
+        public bool HasParameter(string name) => Signature.Parameters.Any(parameter => parameter.Name == name);
+    }
 
     public static IReadOnlyList<SemanticToken> Classify(AnalyzedSource source)
     {
@@ -126,8 +131,8 @@ public static class SemanticClassifier
         }
 
         var position = At(token.Position);
-        var inFunction = functions.FirstOrDefault(extent => extent.Start.CompareTo(position) <= 0 && position.CompareTo(extent.End) < 0);
-        return inFunction is not null && inFunction.Parameters.Contains(text)
+        var inFunction = functions.FirstOrDefault(extent => extent.Contains(position));
+        return inFunction is not null && inFunction.HasParameter(text)
             ? (SemanticKind.Parameter, SemanticModifiers.None)
             : (SemanticKind.Variable, SemanticModifiers.None);
     }
@@ -142,20 +147,18 @@ public static class SemanticClassifier
     private static SemanticModifiers Origin(ModuleNamespace names, Module module) =>
         module == names.Module ? SemanticModifiers.None : SemanticModifiers.Imported;
 
-    private static IReadOnlyList<FunctionExtent> FunctionExtents(AnalyzedSource source)
+    internal static IReadOnlyList<FunctionExtent> FunctionExtents(AnalyzedSource source)
     {
         var names = source.Names;
         var own = names.Functions.Signatures
             .Where(signature => signature.Module == names.Module)
             .OrderBy(signature => At(signature.Position))
             .ToList();
-        var unparsedLineStarts = source.StoppedAt is { } stoppedAt
-            ? source.Tokens
-                .Where(token => token.Kind == TokenKind.Word && token.Position.Column == 1
-                    && !token.IsWord(Keywords.End) && !token.IsWord(Keywords.Else)
-                    && At(token.Position).CompareTo(At(stoppedAt)) >= 0)
-                .Select(token => At(token.Position))
-            : [];
+        var unparsedLineStarts = source.Tokens
+            .Where(token => token.Kind == TokenKind.Word && token.Position.Column == 1
+                && !token.IsWord(Keywords.End) && !token.IsWord(Keywords.Else)
+                && source.Gaps.Any(gap => At(token.Position).CompareTo(At(gap.From)) >= 0 && At(token.Position).CompareTo(At(gap.To)) < 0))
+            .Select(token => At(token.Position));
         var starts = source.Statements
             .Where(statement => statement is not FunctionStatement)
             .Select(statement => At(statement.Position))
@@ -168,12 +171,12 @@ public static class SemanticClassifier
             {
                 var start = At(signature.Position);
                 var end = starts.FirstOrDefault(boundary => boundary.CompareTo(start) > 0, (int.MaxValue, int.MaxValue));
-                return new FunctionExtent(start, end, signature.Parameters.Select(parameter => parameter.Name).ToHashSet());
+                return new FunctionExtent(start, end, signature);
             })
             .ToList();
     }
 
-    private static (int Line, int Column) At(SourcePosition position) => (position.Line, position.Column);
+    internal static (int Line, int Column) At(SourcePosition position) => (position.Line, position.Column);
 
     private static SemanticToken Classified(Token token, SemanticKind kind, SemanticModifiers modifiers) =>
         new(token.Position.Line - 1, token.Position.Column - 1, token.Text.Length, kind, modifiers);

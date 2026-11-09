@@ -475,6 +475,8 @@ public sealed class TypeChecker
                 }
 
                 return PyropTypes.ListOf(list.ElementType);
+            case VariantsOfExpression variants:
+                return TypeOfVariants(variants);
             case ConstructExpression construct:
                 CheckConstructArguments(construct, scope);
                 return construct.Record;
@@ -532,11 +534,30 @@ public sealed class TypeChecker
         }
     }
 
+    private PyropType? TypeOfVariants(VariantsOfExpression variants)
+    {
+        if (variants.Target is not ChoiceType choice)
+        {
+            Report($"'{Keywords.VariantsOf}' lists the variants of a choice, and '{variants.Target.Name}' is not one.", variants.Position);
+            return null;
+        }
+
+        if (choice.HasData)
+        {
+            Report(
+                $"'{Keywords.VariantsOf}' cannot list '{choice.Name}': a variant that carries data, such as '{choice.Variants.First(variant => variant.Arity > 0).Name}', has no value without its data.",
+                variants.Position);
+            return null;
+        }
+
+        return PyropTypes.ListOf(choice);
+    }
+
     private void CheckConstructArguments(ConstructExpression construct, SymbolScope scope)
     {
         for (var index = 0; index < construct.Arguments.Count; index++)
         {
-            var field = construct.Record.Fields[index];
+            var field = construct.Record.Fields[construct.Labels?[index].FieldIndex ?? index];
             if (TypeOf(construct.Arguments[index], scope) is { } type && type != field.Type)
             {
                 var (declared, found) = Names(field.Type, type);

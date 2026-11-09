@@ -17,6 +17,8 @@ public sealed record FunctionCallExpression(
     FunctionSignature Function, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null)
     : Expression(Position);
 
+public sealed record VariantsOfExpression(PyropType Target, SourcePosition Position) : Expression(Position);
+
 public sealed record ConvertExpression(PyropType Target, Expression Operand, SourcePosition Position) : Expression(Position);
 
 public sealed record ListOfExpression(PyropType ElementType, IReadOnlyList<Expression> Items, SourcePosition Position)
@@ -27,8 +29,10 @@ public sealed record MapEntry(Expression Key, Expression Value);
 public sealed record MapOfExpression(PyropType KeyType, PyropType ValueType, IReadOnlyList<MapEntry> Entries, SourcePosition Position)
     : Expression(Position);
 
+public sealed record FieldLabel(string Field, int FieldIndex, SourcePosition Position);
+
 public sealed record ConstructExpression(
-    RecordType Record, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null)
+    RecordType Record, IReadOnlyList<Expression> Arguments, SourcePosition Position, string? Module = null, IReadOnlyList<FieldLabel>? Labels = null)
     : Expression(Position);
 
 public sealed record GetFieldExpression(string Field, SourcePosition FieldPosition, Expression Record, SourcePosition Position)

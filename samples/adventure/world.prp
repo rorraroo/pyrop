@@ -13,7 +13,7 @@ export record Room
     option ItemKind needs
 
 export function list Direction compass
-    return list_of Direction north east south west end
+    return variants_of Direction
 
 export function map Place Room build_world block
     def map Place Room rooms map_of Place Room end

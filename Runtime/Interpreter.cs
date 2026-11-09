@@ -364,6 +364,9 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                     list.Items.Select(item => Evaluate(item, scope)).ToList(),
                     CollectionLimit,
                     message => Runtime(message, list.Position));
+            case VariantsOfExpression variants:
+                var listed = (ChoiceType)variants.Target;
+                return new ListValue(PyropTypes.ListOf(listed), [.. listed.Variants.Select(variant => (Value)listed.ValueOf(variant.Index))]);
             case ConstructExpression construct:
                 return Construct(construct, scope);
             case GetFieldExpression read:
@@ -409,21 +412,22 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     private RecordValue Construct(ConstructExpression construct, Scope scope)
     {
         var fields = construct.Record.Fields;
-        var values = ImmutableArray.CreateBuilder<Value>(fields.Count);
+        var values = new Value[fields.Count];
         for (var index = 0; index < fields.Count; index++)
         {
+            var field = construct.Labels?[index].FieldIndex ?? index;
             var value = Evaluate(construct.Arguments[index], scope);
-            if (value.Type != fields[index].Type)
+            if (value.Type != fields[field].Type)
             {
                 throw Internal(
-                    $"Type mismatch constructing {construct.Record.Name}: field '{fields[index].Name}' is {fields[index].Type.Name}, found {value.Type.Name}.",
+                    $"Type mismatch constructing {construct.Record.Name}: field '{fields[field].Name}' is {fields[field].Type.Name}, found {value.Type.Name}.",
                     construct.Arguments[index].Position);
             }
 
-            values.Add(value);
+            values[field] = value;
         }
 
-        return new RecordValue(construct.Record, values.MoveToImmutable());
+        return new RecordValue(construct.Record, [.. values]);
     }
 
     private Value ReadField(GetFieldExpression read, Scope scope)

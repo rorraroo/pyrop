@@ -263,6 +263,12 @@ public sealed class ConsoleProgramOutput(
         }
     }
 
+    public void BeforeAttachedCommand()
+    {
+        LeaveScreen();
+        writer.Flush();
+    }
+
     public void LeaveScreen()
     {
         if (!_onScreen)

@@ -1,0 +1,38 @@
+use program library
+import from program arguments CommandResult run end
+
+function map string int count_each list string names block
+    def map string int counts map_of string int end
+    for string name in names block
+        if equal name "" continue
+        if has counts name set counts put counts name add get counts name 1
+        else set counts put counts name 1
+    end
+    return counts
+end
+
+function void report map string int counts block
+    def list list string rows list_of list string end
+    def int total 0
+    for string author in keys_of counts block
+        set total add total get counts author
+        set rows push rows list_of string author convert string get counts author end
+    end
+    write_table list_of string "Author" "Commits" end rows
+    write_line fill "Commits {}   Authors {}" list_of int total length_of rows end
+end
+
+def string folder "."
+if greater length_of arguments 0 set folder get arguments 0
+
+if_some CommandResult result attempt run "git" list_of string "-C" folder "log" "--format=%an" end block
+    if not equal the exit_code of result 0 block
+        write_error_line trim the errors of result
+        exit 1
+    end
+    report count_each split the output of result "\n"
+end
+else block
+    write_error_line "gitsummary needs git, which could not be started."
+    exit 2
+end

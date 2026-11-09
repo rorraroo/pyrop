@@ -5,6 +5,10 @@ using Pyrop.Syntax;
 
 namespace Pyrop.Parsing;
 
+public sealed record ParseGap(SourcePosition From, SourcePosition To);
+
+public sealed record ParseReport(SyntaxTree Tree, PyropException? Error, IReadOnlyList<ParseGap> Gaps);
+
 public sealed class Parser
 {
     private static readonly IReadOnlySet<string> NoDeclarations = new HashSet<string>();
@@ -40,6 +44,61 @@ public sealed class Parser
         catch (PyropException exception)
         {
             return (new SyntaxTree(statements), exception);
+        }
+    }
+
+    public static ParseReport ParseAll(IReadOnlyList<Token> tokens, ModuleNamespace names, bool reportsIncompleteInput = true)
+    {
+        var parser = new Parser(tokens, names, reportsIncompleteInput);
+        var statements = new List<Statement>();
+        var failures = new List<PyropException>();
+        var gaps = new List<ParseGap>();
+        var declared = new HashSet<string>();
+        while (!parser._cursor.IsAtEnd)
+        {
+            var start = parser._cursor.Index;
+            var first = parser._cursor.Current;
+            try
+            {
+                statements.Add(parser.ParseListedStatement(declared, NoOuterNames));
+            }
+            catch (PyropException failure)
+            {
+                if (failures.Count == 0 || !IsCloser(first))
+                {
+                    failures.Add(failure);
+                }
+
+                parser.ResumeAfter(start);
+                gaps.Add(new ParseGap(first.Position, parser._cursor.Current.Position));
+            }
+        }
+
+        return new ParseReport(new SyntaxTree(statements), Combined(failures), gaps);
+    }
+
+    public static PyropException? Combined(IReadOnlyList<PyropException> failures) =>
+        failures.Count == 0 ? null : new PyropException(failures.SelectMany(failure => failure.Errors).Distinct().ToList(), failures[0].IsIncompleteInput);
+
+    private static bool IsCloser(Token token) => token.IsWord(Keywords.End) || token.IsWord(Keywords.Else) || token.IsWord(Keywords.When);
+
+    private static bool ResumesAt(Token token, Token failed) =>
+        token.Kind == TokenKind.Word
+        && (Keywords.StartsDefinition(token.Text)
+            || ((failed.IsWord(Keywords.Use) || failed.IsWord(Keywords.Import)) && (token.IsWord(Keywords.Use) || token.IsWord(Keywords.Import))));
+
+    private void ResumeAfter(int start)
+    {
+        _cursor.MoveTo(start);
+        var first = _cursor.Advance();
+        if (first.IsWord(Keywords.Export))
+        {
+            _cursor.Advance();
+        }
+
+        while (!_cursor.IsAtEnd && !ResumesAt(_cursor.Current, first))
+        {
+            _cursor.Advance();
         }
     }
 
@@ -337,17 +396,19 @@ public sealed class Parser
 
     private static string Written(string? module, string name) => module is null ? name : $"{Keywords.From} {module} {name}";
 
-    private static bool EndsWithCopy(Expression expression) => expression switch
+    private static bool EndsWithCopy(Expression expression) => TrailingCopy(expression) is not null;
+
+    private static WithFieldExpression? TrailingCopy(Expression expression) => expression switch
     {
-        WithFieldExpression => true,
-        BuiltinCallExpression { Arguments: [.., var last] } => EndsWithCopy(last),
-        FunctionCallExpression { Arguments: [.., var last] } => EndsWithCopy(last),
-        ConstructExpression { Arguments: [.., var last] } => EndsWithCopy(last),
-        VariantExpression { Arguments: [.., var last] } => EndsWithCopy(last),
-        GetFieldExpression read => EndsWithCopy(read.Record),
-        ConvertExpression convert => EndsWithCopy(convert.Operand),
-        AttemptExpression attempt => EndsWithCopy(attempt.Operation),
-        _ => false,
+        WithFieldExpression copy => copy,
+        BuiltinCallExpression { Arguments: [.., var last] } => TrailingCopy(last),
+        FunctionCallExpression { Arguments: [.., var last] } => TrailingCopy(last),
+        ConstructExpression { Arguments: [.., var last] } => TrailingCopy(last),
+        VariantExpression { Arguments: [.., var last] } => TrailingCopy(last),
+        GetFieldExpression read => TrailingCopy(read.Record),
+        ConvertExpression convert => TrailingCopy(convert.Operand),
+        AttemptExpression attempt => TrailingCopy(attempt.Operation),
+        _ => null,
     };
 
     private PyropException StrayValue(Token token, string? described = null) =>
@@ -623,6 +684,7 @@ public sealed class Parser
             throw _cursor.Error("Functions can only be defined at the top level.", start);
         }
 
+        ThrowIfFailed(start);
         var header = SignatureScanner.ReadHeader(_cursor, _names, isExported: false);
         var signature = _names.Functions.Find(header.Name)
             ?? throw new InvalidOperationException($"Function '{header.Name}' was not registered by the signature pre-pass.");
@@ -753,6 +815,9 @@ public sealed class Parser
                 _cursor.Advance();
                 var target = TypeReader.ReadValueType(_cursor, _names, "conversion target");
                 return new ConvertExpression(target, ParseExpression(), token.Position);
+            case Keywords.VariantsOf:
+                _cursor.Advance();
+                return new VariantsOfExpression(TypeReader.ReadValueType(_cursor, _names, "listed choice"), token.Position);
             case Keywords.ListOf:
                 return ParseListOf();
             case Keywords.MapOf:
@@ -1005,7 +1070,50 @@ public sealed class Parser
     }
 
     private Expression ParseConstruct(RecordType record, Token start, string? module) =>
-        new ConstructExpression(record, ParseArguments(record.Fields.Count), start.Position, module);
+        _cursor.Current.IsWord(Keywords.With)
+            ? ParseLabelledConstruct(record, start, module)
+            : new ConstructExpression(record, ParseArguments(record.Fields.Count), start.Position, module);
+
+    private Expression ParseLabelledConstruct(RecordType record, Token start, string? module)
+    {
+        var labels = new List<FieldLabel>();
+        var values = new List<Expression>();
+        while (labels.Count < record.Fields.Count)
+        {
+            if (!_cursor.Current.IsWord(Keywords.With))
+            {
+                throw MissingLabels(record, labels, values);
+            }
+
+            _cursor.Advance();
+            var name = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
+            var index = record.Fields.ToList().FindIndex(field => field.Name == name.Text);
+            if (index < 0)
+            {
+                throw _cursor.Error($"'{record.Name}' has no field '{name.Text}'; its fields are {string.Join(", ", record.Fields.Select(field => field.Name))}.", name);
+            }
+
+            if (labels.Any(label => label.FieldIndex == index))
+            {
+                throw _cursor.Error($"Field '{name.Text}' of '{record.Name}' is given twice.", name);
+            }
+
+            labels.Add(new FieldLabel(name.Text, index, name.Position));
+            values.Add(ParseExpression());
+        }
+
+        return new ConstructExpression(record, values, start.Position, module, labels);
+    }
+
+    private PyropException MissingLabels(RecordType record, List<FieldLabel> labels, List<Expression> values)
+    {
+        var missing = record.Fields.Where((_, index) => labels.All(label => label.FieldIndex != index)).Select(field => field.Name);
+        var copyHint = values.Count > 0 && TrailingCopy(values[^1]) is { Chained: true }
+            ? $" The {Keywords.Copy} in the value before took the '{Keywords.With}' that followed it; put that {Keywords.Copy} in a variable first."
+            : "";
+        return _cursor.Error(
+            $"'{record.Name}' still needs {string.Join(", ", missing)}: a labelled constructor gives every field with {Keywords.With} <field> <value>, found {_cursor.Current.Describe()}.{copyHint}");
+    }
 
     private Expression ParseFunctionCall(FunctionSignature function, Token start, string? module, bool allowVoid)
     {

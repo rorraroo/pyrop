@@ -17,6 +17,7 @@ end
 ## Features
 
 - **Errors while you type.** Syntax, parse and type errors are underlined as you write, in the file they are in, also when that is a module you have not saved yet. They are listed in the **Problems** panel too. Nothing is run.
+- **Go to Definition and completion.** Jump from any name to where it is declared, in any file of the program. Completion lists what fits at the cursor and shows how many operands each call takes, such as `takes 2`.
 - **Grouping and types on hover.** Hover over a word to see how the call it starts groups, with brackets around each operand, the type it gives, and what it calls: every form of a built-in operation, a function's header, a record's fields or a variant's data. Hover over a variable, parameter or field to see its type.
 - **Format Document** indents every line by how the program parses, four spaces per level, and changes nothing else: your line breaks, blank lines and comments stay. A file that does not parse is left as it is. It works with format on save too.
 - **Highlighting that knows your program.** Built-in operations, your own functions, variables, parameters, record fields, types, variants and module names each get their own colour, and names imported from another module are shown in italics.
@@ -33,7 +34,7 @@ end
 
 ## Requirements
 
-Errors and the program-aware highlighting come from the `pyrop` command-line tool, version 0.11.0 or later (0.20.1 or later for hover and formatting), which the extension starts in the background with `pyrop --lsp`. The Windows installer puts `pyrop` on your `Path`; otherwise set **pyrop.path** to the executable. Without it, the extension still highlights `.prp` files from its grammar.
+Errors and the program-aware highlighting come from the `pyrop` command-line tool, version 0.11.0 or later (0.20.1 or later for hover and formatting, 0.22.0 or later for Go to Definition and completion), which the extension starts in the background with `pyrop --lsp`. The Windows installer puts `pyrop` on your `Path`; otherwise set **pyrop.path** to the executable. Without it, the extension still highlights `.prp` files from its grammar.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -55,7 +56,7 @@ pyrop --help          # show all options
 ## Known limitations
 
 - Without `pyrop`, calls to your own functions are coloured like variables, and any capitalised word is coloured as a type: telling them apart needs the full program.
-- A file shows one parse error at a time: after the first one, the rest of the file cannot be read reliably. Type errors are all shown.
+- A file shows at most one parse error per function or other declaration, because the rest of a broken declaration cannot be read reliably. Type errors are all shown once the parse errors are fixed.
 - Untitled files are checked once they are saved.
 - Italics for imported names come from a default the extension sets in `editor.semanticTokenColorCustomizations`; if you set that setting yourself, add a rule for `*.imported:pyrop` to keep them.
 - The file icon shows with icon themes that have no icon of their own for `.prp`, including the default theme. The **Minimal** and **None** themes show no file icons at all.

@@ -9,7 +9,15 @@ export record Hero int x int y int health int max_health int attack int gold int
 export record Game Hero hero Level level list string log
 
 export function Game new_game int bonus block
-    def Hero hero Hero 1 1 add 10 bonus add 10 bonus 2 0 1 list_of Item draught end
+    def Hero hero Hero
+        with x 1
+        with y 1
+        with health add 10 bonus
+        with max_health add 10 bonus
+        with attack 2
+        with gold 0
+        with depth 1
+        with items list_of Item draught end
     def Game game Game hero make_level 1 list_of string "You enter the crypt. Find the stairs down." end
     if greater bonus 0 set game said game fill "Your banked gold buys you {} extra health." list_of int bonus end
     return game

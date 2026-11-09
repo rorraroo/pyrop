@@ -69,6 +69,11 @@ public static class QualifiedNames
             throw cursor.Error(LibraryLacks(names, use, module, name), qualified.Name);
         }
 
+        if (target.Failures.OfName(name) is { } failure)
+        {
+            throw failure;
+        }
+
         throw cursor.Error(
             target.Imports.ContainsKey(name) || target.Variants.ContainsKey(name)
                 ? $"Module '{module}' only imports '{name}' and cannot pass it on; use the module that exports it."
@@ -120,7 +125,7 @@ public static class QualifiedNames
         names.Libraries.All.FirstOrDefault(library => library.Module == use.Target.Module) is { } library
         && library.FormerNames.TryGetValue(name, out var current)
             ? $"The library {module} has no '{name}'; it is now called '{current}'."
-            : $"The library {module} has no '{name}'; it offers {string.Join(", ", use.Target.Names.Operations.Keys.Concat(use.Target.Names.Choices.Keys))}.";
+            : $"The library {module} has no '{name}'; it offers {string.Join(", ", use.Target.Names.Operations.Keys.Concat(use.Target.Names.Choices.Keys).Concat(use.Target.Names.Records.Keys))}.";
 
     private static ChoiceVariant ExportedVariant(ChoiceVariant variant, ModuleUse use, QualifiedName qualified, TokenCursor cursor)
     {

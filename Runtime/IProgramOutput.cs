@@ -18,6 +18,10 @@ public interface IProgramOutput
 
     long Written => -1;
 
+    void BeforeAttachedCommand()
+    {
+    }
+
     void BeforeLineRead()
     {
     }

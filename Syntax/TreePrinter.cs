@@ -258,7 +258,7 @@ public static class TreePrinter
         {
             if (expression is BuiltinCallExpression { Arguments.Count: > 0 } or FunctionCallExpression { Arguments.Count: > 0 }
                 or ConstructExpression { Arguments.Count: > 0 } or VariantExpression { Arguments.Count: > 0 } or ConvertExpression or ListOfExpression or MapOfExpression
-                or GetFieldExpression or WithFieldExpression or AttemptExpression or NoneExpression)
+                or GetFieldExpression or WithFieldExpression or AttemptExpression or NoneExpression or VariantsOfExpression)
             {
                 builder.Append('(');
                 AppendBare(builder, expression);
@@ -287,6 +287,18 @@ public static class TreePrinter
                     break;
                 case FunctionCallExpression call:
                     AppendApplied(builder, Callee(call.Module, call.Function.Name), call.Arguments);
+                    break;
+                case ConstructExpression { Labels: { } labels } labelled:
+                    builder.Append(Callee(labelled.Module, labelled.Record.Name));
+                    foreach (var (label, value) in labels.Zip(labelled.Arguments))
+                    {
+                        builder.Append(' ').Append(Keywords.With).Append(' ').Append(label.Field).Append(' ');
+                        AppendOperand(builder, value);
+                    }
+
+                    break;
+                case VariantsOfExpression variants:
+                    builder.Append(Keywords.VariantsOf).Append(' ').Append(TypeText(variants.Target));
                     break;
                 case ConstructExpression construct:
                     AppendApplied(builder, Callee(construct.Module, construct.Record.Name), construct.Arguments);

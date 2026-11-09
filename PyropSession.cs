@@ -9,7 +9,7 @@ namespace Pyrop;
 public sealed record InspectedProgram(SyntaxTree? Tree, PyropException? Error, string? Text);
 
 public sealed record AnalyzedSource(
-    IReadOnlyList<Token> Tokens, ModuleNamespace Names, IReadOnlyList<Statement> Statements, SourcePosition? StoppedAt, TypeFacts Facts);
+    string Text, IReadOnlyList<Token> Tokens, ModuleNamespace Names, IReadOnlyList<Statement> Statements, IReadOnlyList<ParseGap> Gaps, TypeFacts Facts);
 
 public enum InputStatus
 {
@@ -21,6 +21,14 @@ public enum InputStatus
 
 public sealed class PyropSession
 {
+    private enum ParseMode
+    {
+        FirstError,
+        UntilFirstError,
+        Recovering,
+        AllErrors,
+    }
+
     private readonly Interpreter _interpreter;
     private readonly ISourceStore _store;
     private readonly BuiltinLibraries _libraries;
@@ -98,7 +106,7 @@ public sealed class PyropSession
     {
         sourcePath = DisplayNameOf(sourcePath, sourceFullPath);
         _sources[sourcePath] = source;
-        var parsed = Parse(source, sourcePath, sourceFullPath);
+        var parsed = Parse(source, sourcePath, sourceFullPath, ParseMode.AllErrors);
         TypeChecker.Check(parsed.Program, _globals);
         return parsed.Files;
     }
@@ -110,9 +118,9 @@ public sealed class PyropSession
         try
         {
             var tokens = Lexer.Tokenize(source, sourcePath);
-            var parsed = Parse(source, sourcePath, sourceFullPath, untilError: true, parsesModules: false);
+            var parsed = Parse(source, sourcePath, sourceFullPath, ParseMode.Recovering, parsesModules: false);
             var facts = TypeChecker.Describe(parsed.Program.Main);
-            return new AnalyzedSource(tokens, parsed.Names, parsed.Program.Main.Tree.Statements, parsed.ParseError?.Errors[0].Position, facts);
+            return new AnalyzedSource(source, tokens, parsed.Names, parsed.Program.Main.Tree.Statements, parsed.Gaps, facts);
         }
         catch (PyropException)
         {
@@ -138,7 +146,7 @@ public sealed class PyropSession
         ParsedInput parsed;
         try
         {
-            parsed = Parse(source, sourcePath, null, untilError: true);
+            parsed = Parse(source, sourcePath, null, ParseMode.UntilFirstError);
         }
         catch (PyropException exception)
         {
@@ -174,7 +182,7 @@ public sealed class PyropSession
             _sources[sourcePath] = source;
         }
 
-        var parsed = Parse(source, sourcePath, sourceFullPath);
+        var parsed = Parse(source, sourcePath, sourceFullPath, sourcePath is null ? ParseMode.FirstError : ParseMode.AllErrors);
         var check = TypeChecker.Check(parsed.Program, _globals);
         _names = parsed.Names;
         _globals = check.Globals;
@@ -198,7 +206,11 @@ public sealed class PyropSession
         ModuleNamespace Names,
         IReadOnlyList<LoadedModule> Loaded,
         IReadOnlyList<SourceFile> Files,
-        PyropException? ParseError = null);
+        PyropException? ParseError = null,
+        IReadOnlyList<ParseGap>? ParseGaps = null)
+    {
+        public IReadOnlyList<ParseGap> Gaps => ParseGaps ?? [];
+    }
 
     private string DisplayNameOf(string sourcePath, string? sourceFullPath)
     {
@@ -212,7 +224,7 @@ public sealed class PyropSession
         }
     }
 
-    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath, bool untilError = false, bool parsesModules = true)
+    private ParsedInput Parse(string source, string? sourcePath, string? sourceFullPath, ParseMode mode = ParseMode.FirstError, bool parsesModules = true)
     {
         var baseDirectory = Environment.CurrentDirectory;
         string? fullPath = null;
@@ -231,14 +243,33 @@ public sealed class PyropSession
                 tokens, existing, new ModuleLoading(loader, baseDirectory, _modules), _globals.Keys.ToHashSet());
 
             PyropException? parseError = null;
+            IReadOnlyList<ParseGap> gaps = [];
             SyntaxTree tree;
-            if (untilError)
+            switch (mode)
             {
-                (tree, parseError) = Parser.ParseUntilError(tokens, scan.Names);
+                case ParseMode.UntilFirstError:
+                    (tree, parseError) = Parser.ParseUntilError(tokens, scan.Names);
+                    break;
+                case ParseMode.FirstError:
+                    tree = Parser.Parse(tokens, scan.Names);
+                    break;
+                default:
+                    var report = Parser.ParseAll(tokens, scan.Names);
+                    (tree, parseError, gaps) = (report.Tree, report.Error, report.Gaps);
+                    break;
             }
-            else
+
+            if (mode == ParseMode.AllErrors)
             {
-                tree = Parser.Parse(tokens, scan.Names);
+                var reports = scan.Loaded.Select(module => (module, Report: Parser.ParseAll(module.File!.Tokens, module.Names, reportsIncompleteInput: false))).ToList();
+                var failures = reports.Select(entry => entry.Report.Error).Prepend(parseError).OfType<PyropException>().ToList();
+                if (Parser.Combined(failures) is { } combined)
+                {
+                    throw combined;
+                }
+
+                var checkedModules = reports.Select(entry => new ModuleTree(entry.module.Module, entry.Report.Tree, entry.module.Names)).ToList();
+                return new ParsedInput(new ParsedProgram(checkedModules, new ModuleTree(scan.Names.Module, tree, scan.Names)), scan.Names, scan.Loaded, [.. loader.Files]);
             }
 
             var modules = parseError is null && parsesModules
@@ -247,7 +278,7 @@ public sealed class PyropSession
                     .ToList()
                 : [];
             var program = new ParsedProgram(modules, new ModuleTree(scan.Names.Module, tree, scan.Names));
-            return new ParsedInput(program, scan.Names, scan.Loaded, [.. loader.Files], parseError);
+            return new ParsedInput(program, scan.Names, scan.Loaded, [.. loader.Files], parseError, gaps);
         }
         finally
         {

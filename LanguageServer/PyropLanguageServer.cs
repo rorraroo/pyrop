@@ -16,6 +16,7 @@ public sealed class PyropLanguageServer
     private const int ServerNotInitialized = -32002;
     private const int FullTextSync = 1;
     private const int ErrorSeverity = 1;
+    private const int TriggerCharacter = 2;
 
     private sealed record OpenDocument(string Uri, string Path, string Text);
 
@@ -145,6 +146,10 @@ public sealed class PyropLanguageServer
                 writer.WriteBoolean("full", true);
                 writer.WriteEndObject();
                 writer.WriteBoolean("hoverProvider", true);
+                writer.WriteBoolean("definitionProvider", true);
+                writer.WriteStartObject("completionProvider");
+                WriteStrings(writer, "triggerCharacters", [" "]);
+                writer.WriteEndObject();
                 writer.WriteBoolean("documentFormattingProvider", true);
                 writer.WriteEndObject();
                 writer.WriteStartObject("serverInfo");
@@ -171,6 +176,20 @@ public sealed class PyropLanguageServer
         {
             var hover = HoverOf(StringAt(parameters, "textDocument", "uri"), NumberAt(parameters, "position", "line"), NumberAt(parameters, "position", "character"));
             WriteResult(id, writer => WriteHover(writer, hover));
+        }
+        else if (method == "textDocument/definition")
+        {
+            var definition = DefinitionOf(StringAt(parameters, "textDocument", "uri"), NumberAt(parameters, "position", "line"), NumberAt(parameters, "position", "character"));
+            WriteResult(id, writer => WriteDefinition(writer, definition));
+        }
+        else if (method == "textDocument/completion")
+        {
+            var entries = CompletionOf(
+                StringAt(parameters, "textDocument", "uri"),
+                NumberAt(parameters, "position", "line"),
+                NumberAt(parameters, "position", "character"),
+                NumberAt(parameters, "context", "triggerKind") == TriggerCharacter);
+            WriteResult(id, writer => WriteCompletion(writer, entries));
         }
         else if (method == "textDocument/formatting")
         {
@@ -325,6 +344,58 @@ public sealed class PyropLanguageServer
         }
     }
 
+    private (string Uri, DefinitionTarget Target)? DefinitionOf(string? uri, int? line, int? character)
+    {
+        if (line is not { } zeroLine || character is not { } zeroCharacter || SessionFor(uri) is not var (document, session))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (session.Analyze(document.Text, document.Path, document.Path) is not { } analyzed
+                || LargeStack.Run(() => DefinitionProvider.Find(analyzed, zeroLine + 1, zeroCharacter + 1)) is not { } target)
+            {
+                return null;
+            }
+
+            return (UriOf(target.Path ?? document.Path), target);
+        }
+        catch (Exception exception) when (exception is not PyropException)
+        {
+            Log($"Go to definition in {document.Path} failed: {exception.Message}");
+            return null;
+        }
+    }
+
+    private string UriOf(string path)
+    {
+        lock (_gate)
+        {
+            return _documents.TryGetValue(path, out var open) ? open.Uri : new Uri(path).AbsoluteUri;
+        }
+    }
+
+    private IReadOnlyList<CompletionEntry> CompletionOf(string? uri, int? line, int? character, bool typedSpace)
+    {
+        if (line is not { } zeroLine || character is not { } zeroCharacter || SessionFor(uri) is not var (document, session))
+        {
+            return [];
+        }
+
+        try
+        {
+            return session.Analyze(document.Text, document.Path, document.Path) is { } analyzed
+                ? LargeStack.Run(() => CompletionProvider.Complete(analyzed, zeroLine + 1, zeroCharacter + 1, typedSpace))
+                : [];
+        }
+        catch (Exception exception) when (exception is not PyropException)
+        {
+            Log($"Completion in {document.Path} failed: {exception.Message}");
+            return [];
+        }
+    }
+
     private (int Line, int Character, string Text)? FormattingOf(string? uri)
     {
         if (SessionFor(uri) is not var (document, session))
@@ -389,6 +460,61 @@ public sealed class PyropLanguageServer
         WritePosition(writer, "start", hover.Line, hover.Start);
         WritePosition(writer, "end", hover.Line, hover.Start + hover.Length);
         writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteDefinition(Utf8JsonWriter writer, (string Uri, DefinitionTarget Target)? definition)
+    {
+        if (definition is not var (uri, target))
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStartObject();
+        writer.WriteString("uri", uri);
+        writer.WriteStartObject("range");
+        WritePosition(writer, "start", target.Line, target.Start);
+        WritePosition(writer, "end", target.Line, target.Start + target.Length);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteCompletion(Utf8JsonWriter writer, IReadOnlyList<CompletionEntry> entries)
+    {
+        writer.WriteStartObject();
+        writer.WriteBoolean("isIncomplete", false);
+        writer.WriteStartArray("items");
+        foreach (var entry in entries)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("label", entry.Label);
+            writer.WriteNumber("kind", entry.Kind);
+            writer.WriteString("sortText", $"{entry.Rank}{entry.Label}");
+            if (entry.Takes is not null)
+            {
+                writer.WriteStartObject("labelDetails");
+                writer.WriteString("description", entry.Takes);
+                writer.WriteEndObject();
+            }
+
+            if (entry.Detail is not null)
+            {
+                writer.WriteString("detail", entry.Detail);
+            }
+
+            if (entry.Documentation is not null)
+            {
+                writer.WriteStartObject("documentation");
+                writer.WriteString("kind", "markdown");
+                writer.WriteString("value", entry.Documentation);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
         writer.WriteEndObject();
     }
 

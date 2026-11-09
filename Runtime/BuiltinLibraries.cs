@@ -9,14 +9,16 @@ public sealed class BuiltinLibrary
         IReadOnlyList<BuiltinOperation> operations,
         IReadOnlyDictionary<string, string> formerNames,
         Module? module = null,
-        IReadOnlyList<ChoiceType>? choices = null)
+        IReadOnlyList<ChoiceType>? choices = null,
+        IReadOnlyList<RecordType>? records = null)
     {
         Name = name;
         Module = module ?? ModuleFor(name);
         Operations = operations.ToDictionary(operation => operation.Name);
         FormerNames = formerNames;
         Choices = choices ?? [];
-        Loaded = new LoadedModule(Module, ModuleNamespace.ForLibrary(Module, Operations).With([], [], [], null, Choices), null);
+        Records = records ?? [];
+        Loaded = new LoadedModule(Module, ModuleNamespace.ForLibrary(Module, Operations).With([], [], [], Records, Choices), null);
     }
 
     public static Module ModuleFor(string name) => new(null, $"the library {name}");
@@ -31,17 +33,19 @@ public sealed class BuiltinLibrary
 
     public IReadOnlyList<ChoiceType> Choices { get; }
 
+    public IReadOnlyList<RecordType> Records { get; }
+
     public LoadedModule Loaded { get; }
 
     public bool Exports(string name) => ImportNameFor(name) is not null;
 
     public string? ImportNameFor(string name) =>
-        Operations.ContainsKey(name) || Choices.Any(choice => choice.Name == name) ? name
+        Operations.ContainsKey(name) || Choices.Any(choice => choice.Name == name) || Records.Any(record => record.Name == name) ? name
         : Choices.FirstOrDefault(choice => choice.FindVariant(name) is not null)?.Name;
 
     public string KindOf(string name) =>
         Operations.ContainsKey(name) ? "an operation"
-        : Choices.Any(choice => choice.Name == name) ? "a type"
+        : Choices.Any(choice => choice.Name == name) || Records.Any(record => record.Name == name) ? "a type"
         : "a variant";
 }
 

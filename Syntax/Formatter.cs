@@ -11,7 +11,9 @@ public static class Formatter
     public static string Format(string source, IReadOnlyList<Token> tokens, IReadOnlyList<Statement> statements)
     {
         var layout = new Layout([.. tokens.Where(token => token.Kind != TokenKind.EndOfInput)]);
-        layout.Copies(statements.SelectMany(Expressions).OfType<WithFieldExpression>());
+        var expressions = statements.SelectMany(Expressions).ToList();
+        layout.Copies(expressions.OfType<WithFieldExpression>());
+        layout.Labels(expressions.OfType<ConstructExpression>());
         layout.Place(statements, 0);
         return Render(source, layout);
     }
@@ -160,6 +162,17 @@ public static class Formatter
             foreach (var copy in copies)
             {
                 _withOwner[IndexOf(copy.FieldPosition) - 1] = IndexOf(copy.Position);
+            }
+        }
+
+        public void Labels(IEnumerable<ConstructExpression> constructs)
+        {
+            foreach (var construct in constructs)
+            {
+                foreach (var label in construct.Labels ?? [])
+                {
+                    _withOwner[IndexOf(label.Position) - 1] = IndexOf(construct.Position);
+                }
             }
         }
 

@@ -191,7 +191,7 @@
       }
     },
     "conversion": {
-      "match": "\\b(convert|list_of|map_of|none)\\b(?:\\s+((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\b)?",
+      "match": "\\b(convert|list_of|map_of|none|variants_of)\\b(?:\\s+((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\b)?",
       "captures": {
         "1": { "name": "keyword.operator.convert.pyrop" },
         "2": { "name": "storage.type.pyrop" }

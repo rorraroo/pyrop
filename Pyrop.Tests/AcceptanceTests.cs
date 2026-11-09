@@ -24,10 +24,10 @@ public sealed class AcceptanceTests : IDisposable
         RunSource(File.ReadAllText(Script), Script, null, null, arguments);
 
     private static (string Output, string Errors, int ExitCode) RunSource(
-        string source, string path, string? fullPath, Parsing.ISourceStore? store, string[] arguments, string input = "")
+        string source, string path, string? fullPath, Parsing.ISourceStore? store, string[] arguments, string input = "", ICommandRunner? commands = null)
     {
         var output = new StringOutput();
-        var session = new PyropSession(new StringReader(input), output, new HostContext(arguments, _ => null), store);
+        var session = new PyropSession(new StringReader(input), output, new HostContext(arguments, _ => null) { Commands = commands ?? NoCommandRunner.Instance }, store);
         var exitCode = session.Run(source, path, fullPath) ?? 0;
         return (output.ToString(), output.Errors, exitCode);
     }
@@ -833,6 +833,61 @@ public sealed class AcceptanceTests : IDisposable
 
     private (string Output, string Errors, int ExitCode) PlayRogue(bool built, string[] arguments, string keys) =>
         PlaySample(built, Rogue, "rogue", arguments, keys);
+
+    private static string GitSummary => Path.Combine(Samples, "gitsummary", "gitsummary.prp");
+
+    private (string Output, string Errors, int ExitCode) RunGitSummary(bool built, string[] arguments, ICommandRunner commands)
+    {
+        if (!built)
+        {
+            return RunSource(File.ReadAllText(GitSummary), GitSummary, null, null, arguments, commands: commands);
+        }
+
+        var bundle = BuildSample(GitSummary, "gitsummary");
+        return RunSource(bundle.Entry.Text, bundle.EntryName, BundleSourceStore.FullPathOf(bundle.EntryName), new BundleSourceStore(bundle), arguments, commands: commands);
+    }
+
+    private static void Commit(string repository, string author) =>
+        ProcessCommandRunner.Instance.Capture("git", ["-C", repository, "-c", $"user.name={author}", "-c", "user.email=a@example.com", "commit", "--allow-empty", "-m", "change"]);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GitSummaryCountsCommitsByAuthor(bool built)
+    {
+        var repository = PathOf("repository");
+        ProcessCommandRunner.Instance.Capture("git", ["init", repository]);
+        Commit(repository, "Ann");
+        Commit(repository, "Bob");
+        Commit(repository, "Ann");
+
+        var (output, errors, exitCode) = RunGitSummary(built, [repository], ProcessCommandRunner.Instance);
+
+        Assert.Equal(("", 0), (errors, exitCode));
+        Assert.Contains("Ann", output);
+        Assert.Contains("Bob", output);
+        Assert.EndsWith("Commits 3   Authors 2\n", output);
+
+        foreach (var file in Directory.EnumerateFiles(repository, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
+    public void GitSummaryReportsAFolderThatIsNotARepository()
+    {
+        var (output, errors, exitCode) = RunGitSummary(false, [_directory], ProcessCommandRunner.Instance);
+
+        Assert.Equal(("", 1), (output, exitCode));
+        Assert.NotEqual("", errors);
+    }
+
+    [Fact]
+    public void GitSummarySaysWhenGitCannotBeStarted()
+    {
+        Assert.Equal(("", "gitsummary needs git, which could not be started.\n", 2), RunGitSummary(false, [], NoCommandRunner.Instance));
+    }
 
     private (string Output, string Errors, int ExitCode) PlaySample(bool built, string script, string name, string[] arguments, string keys)
     {

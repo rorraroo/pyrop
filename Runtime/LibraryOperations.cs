@@ -12,6 +12,65 @@ public static class LibraryOperations
     private static readonly PyropType V = PyropType.Void;
     private static readonly PyropType Strings = PyropTypes.ListOf(PyropType.String);
 
+    private static RecordType DeclareCommandResult()
+    {
+        var position = new SourcePosition(0, 0);
+        var record = new RecordType("CommandResult", ProgramModule, position, isExported: true);
+        record.Define([new RecordField(I, "exit_code", position), new RecordField(S, "output", position), new RecordField(S, "errors", position)]);
+        return record;
+    }
+
+    private static (string Command, List<string> Arguments) CommandOf(IBuiltinInvocation invocation)
+    {
+        var command = invocation.Argument(0).AsString();
+        var arguments = invocation.Argument(1).AsList().Items.Select(argument => argument.AsString()).ToList();
+        if (command.Length == 0)
+        {
+            throw invocation.Fail("A command needs a program name; it was empty.");
+        }
+
+        if (command.Contains('"') || command != command.Trim())
+        {
+            throw invocation.Fail("A program name cannot contain a quotation mark or start or end with a space; its arguments go in the list.");
+        }
+
+        if (arguments.Prepend(command).Any(part => part.Contains('\0')))
+        {
+            throw invocation.Fail($"A command cannot contain a NUL character: \"{command}\".");
+        }
+
+        return (command, arguments);
+    }
+
+    private static Value RunCaptured(IBuiltinInvocation invocation)
+    {
+        var (command, arguments) = CommandOf(invocation);
+        try
+        {
+            var outcome = invocation.Host.Commands.Capture(command, arguments);
+            return new RecordValue(CommandResult, [new IntValue(outcome.ExitCode), new StringValue(outcome.Output), new StringValue(outcome.Errors)]);
+        }
+        catch (CommandFailedException failure)
+        {
+            throw invocation.Fail(failure.Message);
+        }
+    }
+
+    private static Value RunAttached(IBuiltinInvocation invocation)
+    {
+        var (command, arguments) = CommandOf(invocation);
+        invocation.Output.BeforeAttachedCommand();
+        invocation.ShownScreen.Panels = null;
+        try
+        {
+            return new IntValue(invocation.Host.Commands.RunAttached(command, arguments));
+        }
+        catch (CommandFailedException failure)
+        {
+            throw invocation.Fail(failure.Message);
+        }
+    }
+
     public static BuiltinLibrary Files { get; } = new("files",
     [
         Operation("load",
@@ -38,18 +97,26 @@ public static class LibraryOperations
         ["list_files"] = "listing",
     });
 
+    private static readonly Module ProgramModule = BuiltinLibrary.ModuleFor("program");
+
+    public static RecordType CommandResult { get; } = DeclareCommandResult();
+
     public static BuiltinLibrary Program { get; } = new("program",
     [
         Operation("arguments",
             Overload([], Strings, c => new ListValue(Strings, [.. c.Host.Arguments.Select(argument => (Value)new StringValue(argument))]))),
         Operation("environment",
             Overload([S], S, c => new StringValue(ReadEnvironment(c, c.Argument(0).AsString())))),
+        Operation("run",
+            Overload([S, Strings], CommandResult, RunCaptured)),
+        Operation("run_attached",
+            Overload([S, Strings], I, RunAttached)),
     ], new Dictionary<string, string>
     {
         ["argument_count"] = "arguments",
         ["argument_at"] = "arguments",
         ["read_environment"] = "environment",
-    });
+    }, ProgramModule, records: [CommandResult]);
 
     public static BuiltinLibrary Math { get; } = new("math",
     [
