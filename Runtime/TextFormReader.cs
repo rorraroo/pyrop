@@ -380,11 +380,17 @@ public sealed class TextFormReader
                     '"' => '"',
                     '\\' => '\\',
                     'n' => '\n',
+                    'r' => '\r',
                     't' => '\t',
-                    _ => throw Expected("one of the escapes \\\", \\\\, \\n or \\t"),
+                    _ => throw Expected("one of the escapes \\\", \\\\, \\n, \\r or \\t"),
                 });
                 _position += 2;
                 continue;
+            }
+
+            if (character is '\n' or '\r')
+            {
+                throw Expected("'\"' to close the string before the line ends");
             }
 
             builder.Append(character);

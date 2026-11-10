@@ -208,7 +208,7 @@ public class MatchTests
     [InlineData("function void f int n\n    match wait\n        when go n write_line n\n        when take t write_line t\n        when wait write_line 0\n    end", 4, 17,
         "The when value 'n' would shadow the parameter of the same name.")]
     [InlineData("match go 1\n    when go n block\n        def int n 2\n    end\nend", 4, 17, "Variable 'n' would shadow the when value of the same name.")]
-    [InlineData("match wait\n    write_line 1\nend", 3, 5, "Expected 'when' or 'end' to close the match started at 2:1, found 'write_line'.")]
+    [InlineData("match wait\n    write_line 1\nend", 3, 5, "Expected 'when' or 'end' to close the match started at line 2, column 1, found 'write_line'.")]
     [InlineData("match wait end", 2, 12, "'match' needs a branch for each variant before 'end', such as when <variant> <statement>.")]
     [InlineData("match wait\n    when Action write_line 1\nend", 3, 10, "'Action' is a choice; 'when' names one of its variants, such as when go ….")]
     [InlineData("match wait\n    when nothing write_line 1\nend", 3, 10, "Expected a variant after 'when', found 'nothing'.")]
@@ -238,7 +238,7 @@ public class MatchTests
     [InlineData("choice D a int b end\nchoice E c end\nmatch c\n    when D write_line 1\nend", 4, 10, "'D' is a choice; 'when' names one of its variants, such as when a ….")]
     [InlineData("choice D a list end", 1, 17,
         "Expected a type (int, float, string, bool, list, map, option, a record or choice name), found 'end'.")]
-    [InlineData("choice D a int\nwrite_line 1", 2, 1, "Expected a variant name or 'end' to close the choice started at 1:1, found 'write_line'.")]
+    [InlineData("choice D a int\nwrite_line 1", 2, 1, "Expected a variant name or 'end' to close the choice started at line 1, column 1, found 'write_line'.")]
     public void DeclarationErrors(string source, int line, int column, string message)
     {
         var error = Failure(source, ErrorStage.Parse, line, column);

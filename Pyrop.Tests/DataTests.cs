@@ -424,9 +424,10 @@ public class DataTests
     }
 
     [Fact]
-    public void JsonWritesPastAThousandLevels()
+    public void JsonNestsUpToAThousandLevels()
     {
-        Assert.Equal("true\n", Program("def Data d parse_json add repeat \"[\" 5000 repeat \"]\" 5000\nwrite_line equal d parse_json json_text d"));
+        Assert.Equal("true\n", Program("def Data d parse_json add repeat \"[\" 900 repeat \"]\" 900\nwrite_line equal d parse_json json_text d"));
+        Assert.Equal("JSON can nest at most 1,000 levels deep.", Failure("def Data d parse_json add repeat \"[\" 5000 repeat \"]\" 5000").Message);
     }
 
     [Fact]

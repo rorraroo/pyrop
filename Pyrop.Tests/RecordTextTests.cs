@@ -54,7 +54,7 @@ public sealed class RecordTextTests
     [InlineData("Player place study moves 5 inventory [] spot some Point x 1.0 y 2.0", 50, "'('")]
     [InlineData("Player place study moves 5 inventory [] spot maybe", 45, "some or none")]
     [InlineData("Player place study moves 5 inventory [] spot none extra", 49, "the end of the text")]
-    [InlineData("Player place study moves 5 inventory [\"a\\q\"] spot none", 40, "one of the escapes \\\", \\\\, \\n or \\t")]
+    [InlineData("Player place study moves 5 inventory [\"a\\q\"] spot none", 40, "one of the escapes \\\", \\\\, \\n, \\r or \\t")]
     [InlineData("Player place study moves 5 inventory [\"a", 40, "'\"' to close the string")]
     [InlineData("Player place study moves 99999999999999999999 inventory [] spot none", 25, "an int")]
     [InlineData("Player  place study", 7, "the field 'place'")]

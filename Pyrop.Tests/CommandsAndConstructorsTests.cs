@@ -103,7 +103,9 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void AFolderAsTheCommandGivesAPlainMessage()
     {
-        Assert.Equal("Cannot run \".\": it is not a program that can be started, or access to it was denied.", Assert.Throws<CommandFailedException>(() => ProcessCommandRunner.Instance.Capture(".", [])).Message);
+        var reason = OperatingSystem.IsWindows() ? "it is not a program that can be started, or access to it was denied." : "no such program was found.";
+
+        Assert.Equal($"Cannot run \".\": {reason}", Assert.Throws<CommandFailedException>(() => ProcessCommandRunner.Instance.Capture(".", [])).Message);
     }
 
     [Fact]

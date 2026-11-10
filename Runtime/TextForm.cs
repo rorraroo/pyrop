@@ -136,6 +136,7 @@ public static class TextForm
                 '"' => "\\\"",
                 '\\' => "\\\\",
                 '\n' => "\\n",
+                '\r' => "\\r",
                 '\t' => "\\t",
                 _ => null,
             };

@@ -1,3 +1,4 @@
+using System.Text;
 using Pyrop.Bundling;
 using Pyrop.Parsing;
 using Pyrop.Runtime;
@@ -14,13 +15,18 @@ public static class ScriptRunner
     {
         if (!File.Exists(path))
         {
-            Terminal.Errors.MarkupLine($"[red bold]Error[/] File '{Markup.Escape(path)}' was not found.");
+            Terminal.Errors.MarkupLine($"[red bold]Error[/] {Markup.Escape(MissingScript(path))}");
             return null;
         }
 
         try
         {
-            return File.ReadAllText(path);
+            return FileSourceStore.ReadText(path);
+        }
+        catch (DecoderFallbackException)
+        {
+            Terminal.Errors.MarkupLine($"[red bold]Error[/] '{Markup.Escape(path)}' is not UTF-8 text.");
+            return null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -28,6 +34,9 @@ public static class ScriptRunner
             return null;
         }
     }
+
+    public static string MissingScript(string path) =>
+        Directory.Exists(path) ? $"'{path}' is a folder, not a script." : $"File '{path}' was not found.";
 
     public static int RunBundle(Bundle bundle, IReadOnlyList<string> arguments) =>
         Execute(bundle.Entry.Text, bundle.EntryName, BundleSourceStore.FullPathOf(bundle.EntryName), new BundleSourceStore(bundle), arguments);

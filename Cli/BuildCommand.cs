@@ -42,7 +42,7 @@ public static class BuildCommand
     {
         if (!File.Exists(script))
         {
-            return Fail($"File '{script}' was not found.");
+            return Fail(ScriptRunner.MissingScript(script));
         }
 
         if (output is not null && (Path.EndsInDirectorySeparator(output) || Directory.Exists(output)))
@@ -54,7 +54,11 @@ public static class BuildCommand
         string source;
         try
         {
-            source = File.ReadAllText(scriptFullPath);
+            source = FileSourceStore.ReadText(scriptFullPath);
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            return Fail($"'{script}' is not UTF-8 text.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

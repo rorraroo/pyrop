@@ -100,8 +100,22 @@ public sealed class Lexer
             return ReadWord(start);
         }
 
-        throw Error($"Unexpected character '{Current}'. Pyrop uses words instead of symbols.", start);
+        throw Error($"Unexpected character '{CurrentCharacter}'. Pyrop uses words instead of symbols{SymbolHint()}", start);
     }
+
+    private string CurrentCharacter =>
+        Rune.TryGetRuneAt(_source, _index, out var rune) ? rune.ToString() : Current.ToString();
+
+    private string SymbolHint() => Current switch
+    {
+        '/' when PeekAhead(1) == '/' => "; a comment starts with #.",
+        '\'' => "; text goes in double quotes.",
+        '.' => "; write from math round for a name in a library, and the x of p for a field.",
+        '-' => "; write subtract 0 x to change a sign, and join the words of a name with underscores.",
+        '(' or ')' or '[' or ']' or '{' or '}' => "; there are no brackets, because each word knows how many values it takes.",
+        '=' => "; write def or set to give a variable a value, and equal to compare.",
+        _ => ".",
+    };
 
     private static bool IsWordStart(char character) => char.IsLetter(character) || character == '_';
 
@@ -142,7 +156,8 @@ public sealed class Lexer
 
         if (!IsAtEnd && (IsWordPart(Current) || Current == '.'))
         {
-            throw Error($"Malformed number '{_source[begin.._index]}{Current}'.", start);
+            var exponent = Current is 'e' or 'E' ? " A number has no exponent form; write its digits out." : "";
+            throw Error($"Malformed number '{Token.Shortened(_source[begin.._index])}{CurrentCharacter}'.{exponent}", start);
         }
 
         var text = _source[begin.._index];
@@ -151,7 +166,7 @@ public sealed class Lexer
             var value = double.Parse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
             if (!double.IsFinite(value))
             {
-                throw Error($"Float literal {text} is out of range.", start);
+                throw Error($"Float literal {Token.Shortened(text)} is out of range.", start);
             }
 
             return new Token(TokenKind.Float, text, start);
@@ -159,7 +174,7 @@ public sealed class Lexer
 
         if (!long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _))
         {
-            throw Error($"Integer literal {text} does not fit in a 64-bit int.", start);
+            throw Error($"Integer literal {Token.Shortened(text)} does not fit in a 64-bit int.", start);
         }
 
         return new Token(TokenKind.Integer, text, start);
@@ -204,6 +219,7 @@ public sealed class Lexer
                     '"' => '"',
                     '\\' => '\\',
                     'n' => '\n',
+                    'r' => '\r',
                     't' => '\t',
                     _ => throw Error($"Unknown escape sequence '\\{Current}'.", escapePosition),
                 });

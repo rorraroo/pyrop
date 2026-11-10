@@ -281,9 +281,9 @@ public class CollectionTests
     }
 
     [Theory]
-    [InlineData("def map string int m map_of string int \"a\" end", 44, "The last key of the map_of started at 1:22 has no value; every key is followed by its value.")]
-    [InlineData("def map string int m map_of string int \"a\" 1\nwrite_line m", 1, "Expected a key or 'end' to close the map_of started at 1:22, found 'write_line'.")]
-    [InlineData("def map string int m map_of string int \"a\" 1 \"b\"\nwrite_line m", 1, "Expected the value of the last key of the map_of started at 1:22, found 'write_line'.")]
+    [InlineData("def map string int m map_of string int \"a\" end", 44, "The last key of the map_of started at line 1, column 22 has no value; every key is followed by its value.")]
+    [InlineData("def map string int m map_of string int \"a\" 1\nwrite_line m", 1, "Expected a key or 'end' to close the map_of started at line 1, column 22, found 'write_line'.")]
+    [InlineData("def map string int m map_of string int \"a\" 1 \"b\"\nwrite_line m", 1, "Expected the value of the last key of the map_of started at line 1, column 22, found 'write_line'.")]
     [InlineData("def int n length_of map_of list int int end", 28, "A map key must be int, string, bool or a choice, found list int.")]
     public void RejectsMalformedMapOf(string source, int column, string message)
     {

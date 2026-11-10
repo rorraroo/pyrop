@@ -47,7 +47,7 @@ public sealed class ParseRecoveryTests : IDisposable
     {
         var errors = FailuresOf("function void a\n    block\n        write_line 1\n\nfunction void b\n    write_line 2\n");
 
-        Assert.Equal("Functions can only be defined at the top level.", Assert.Single(errors).Message);
+        Assert.Equal("Functions can only be defined at the top level. The block started at line 2, column 5 may be missing its 'end'.", Assert.Single(errors).Message);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class ParseRecoveryTests : IDisposable
     {
         var errors = FailuresOf("block function int f return 1 end\n");
 
-        Assert.Equal("Functions can only be defined at the top level.", Assert.Single(errors).Message);
+        Assert.Equal("Functions can only be defined at the top level. The block started at line 1, column 1 may be missing its 'end'.", Assert.Single(errors).Message);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class ParseRecoveryTests : IDisposable
     {
         var errors = FailuresOf("function void a\n    write_line add\n\nfunction void b\n    write_line 1 2\n");
 
-        Assert.Equal(["4: Expected an expression, found keyword 'function'.", "5: '2' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes."], Lines(errors));
+        Assert.Equal(["2: 'add' needs 2 values but has none: it starts at line 2, column 16, and 'function' on line 4 begins a new statement.", "5: '2' cannot stand alone as a statement. This usually means the expression before it was given more arguments than its operation takes."], Lines(errors));
     }
 
     [Fact]

@@ -143,7 +143,7 @@ public class TreeTests
     [Fact]
     public void PrintsDeeplyNestedProgramsWithoutRunningOutOfStack()
     {
-        const int depth = 20_000;
+        const int depth = 900;
         var source = "use math library\nimport from math abs end\n" +
             $"write_line {string.Concat(Enumerable.Repeat("abs ", depth))}1\n" +
             $"def int n length_of list_of {string.Concat(Enumerable.Repeat("list ", depth))}int end";

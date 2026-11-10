@@ -405,7 +405,7 @@ public static class SignatureScanner
                     if (!inStatement.Add(qualified.Name.Text))
                     {
                         failures.Add(token, qualified.Name.Text, cursor.Error(
-                            $"'{qualified.Name.Text}' is named twice in the {Keywords.Import} started at {token.Position}; if the names were meant to stop before it, close the {Keywords.Import} with '{Keywords.End}'.",
+                            $"'{qualified.Name.Text}' is named twice in the {Keywords.Import} started at {token.Position.Spoken}; if the names were meant to stop before it, close the {Keywords.Import} with '{Keywords.End}'.",
                             qualified.Name));
                         continue;
                     }

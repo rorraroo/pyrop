@@ -373,22 +373,26 @@ public sealed class FileOperationTests : IDisposable
     [Fact]
     public void ATransferErrorNamesTheDestinationWhenThatIsTheProblem()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         File.WriteAllText("src.txt", "x");
-        File.WriteAllText("readonly.txt", "y");
-        File.SetAttributes("readonly.txt", FileAttributes.ReadOnly);
-        try
-        {
-            Assert.Equal("Access to \"readonly.txt\" was denied.", Failure("copy_file \"src.txt\" \"readonly.txt\"").Message);
-        }
-        finally
-        {
-            File.SetAttributes("readonly.txt", FileAttributes.Normal);
-        }
+        File.WriteAllText("taken.txt", "y");
+        using var locked = new FileStream("taken.txt", FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Equal("Cannot copy \"taken.txt\" because another process is using it.", Failure("copy_file \"src.txt\" \"taken.txt\"").Message);
     }
 
     [Fact]
     public void ATransferErrorNamesALockedSource()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         File.WriteAllText("src.txt", "x");
         using var locked = new FileStream("src.txt", FileMode.Open, FileAccess.Read, FileShare.None);
 

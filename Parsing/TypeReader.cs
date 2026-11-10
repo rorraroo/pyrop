@@ -17,8 +17,13 @@ public static class TypeReader
                 || QualifiedNames.NamesType(names, cursor));
     }
 
-    public static PyropType ReadValueType(TokenCursor cursor, ModuleNamespace names, string owner)
+    public static PyropType ReadValueType(TokenCursor cursor, ModuleNamespace names, string owner, int depth = 0)
     {
+        if (depth >= Parser.MaxNesting)
+        {
+            throw cursor.Error($"This type is nested more than {Parser.MaxNesting} levels deep.");
+        }
+
         if (cursor.Current.IsWord(Keywords.From))
         {
             return QualifiedNames.ResolveType(names, QualifiedNames.Read(cursor), cursor);
@@ -51,17 +56,17 @@ public static class TypeReader
         for (var index = 0; index < arguments.Length; index++)
         {
             arguments[index] = constructor == PyropTypes.Map && index == 0
-                ? ReadKeyType(cursor, names)
-                : ReadValueType(cursor, names, TypeArgument);
+                ? ReadKeyType(cursor, names, depth + 1)
+                : ReadValueType(cursor, names, TypeArgument, depth + 1);
         }
 
         return new ConstructedType(constructor, arguments);
     }
 
-    public static PyropType ReadKeyType(TokenCursor cursor, ModuleNamespace names)
+    public static PyropType ReadKeyType(TokenCursor cursor, ModuleNamespace names, int depth = 0)
     {
         var start = cursor.Current;
-        var type = ReadValueType(cursor, names, TypeArgument);
+        var type = ReadValueType(cursor, names, TypeArgument, depth);
         if (type is ChoiceType { HasData: true } choice)
         {
             throw cursor.Error(

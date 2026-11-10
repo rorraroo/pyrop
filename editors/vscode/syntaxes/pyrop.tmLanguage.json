@@ -69,7 +69,7 @@
       "endCaptures": { "0": { "name": "punctuation.definition.string.end.pyrop" } },
       "name": "string.quoted.double.pyrop",
       "patterns": [
-        { "match": "\\\\[\"\\\\nt]", "name": "constant.character.escape.pyrop" },
+        { "match": "\\\\[\"\\\\nrt]", "name": "constant.character.escape.pyrop" },
         { "match": "\\\\.", "name": "invalid.illegal.escape.pyrop" }
       ]
     },

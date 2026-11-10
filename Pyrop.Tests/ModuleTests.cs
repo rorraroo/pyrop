@@ -94,11 +94,11 @@ public sealed class ModuleTests : IDisposable
 
     [Theory]
     [InlineData("import from geometry end", 1, 22, "'import' needs at least one name before 'end', such as import from geometry <name> end.")]
-    [InlineData("import from geometry square\nwrite_line square 2", 2, 1, "Expected a name to import or 'end' to close the import started at 1:1, found 'write_line'.")]
-    [InlineData("import from geometry square 5 end", 1, 29, "Expected a name to import or 'end' to close the import started at 1:1, found '5'.")]
-    [InlineData("import from geometry square square end", 1, 29, "'square' is named twice in the import started at 1:1; if the names were meant to stop before it, close the import with 'end'.")]
-    [InlineData("import from geometry square\nsquare 3", 2, 1, "'square' is named twice in the import started at 1:1;")]
-    [InlineData("import from geometry square cube\nrecord r int x", 2, 1, "Expected a name to import or 'end' to close the import started at 1:1, found 'record'.")]
+    [InlineData("import from geometry square\nwrite_line square 2", 2, 1, "Expected a name to import or 'end' to close the import started at line 1, column 1, found 'write_line'.")]
+    [InlineData("import from geometry square 5 end", 1, 29, "Expected a name to import or 'end' to close the import started at line 1, column 1, found '5'.")]
+    [InlineData("import from geometry square square end", 1, 29, "'square' is named twice in the import started at line 1, column 1; if the names were meant to stop before it, close the import with 'end'.")]
+    [InlineData("import from geometry square\nsquare 3", 2, 1, "'square' is named twice in the import started at line 1, column 1;")]
+    [InlineData("import from geometry square cube\nrecord r int x", 2, 1, "Expected a name to import or 'end' to close the import started at line 1, column 1, found 'record'.")]
     [InlineData("import from geometry square hidden end", 1, 29, "Function 'hidden' of module 'geometry' is not exported; mark its definition in ")]
     public void RejectsMalformedImports(string import, int line, int column, string message)
     {
@@ -541,7 +541,7 @@ public sealed class ModuleTests : IDisposable
         var error = FailFile("main.prp", "use t \"sub\"");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
-        Assert.Equal($"Cannot use \"sub\": {Path.Combine(_directory, "sub")} is a directory, not a file.", error.Message);
+        Assert.Equal($"Cannot use \"sub\": {Path.Combine(_directory, "sub")} is a folder, not a file.", error.Message);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Pyrop.Checking;
 using Pyrop.Parsing;
 using Pyrop.Syntax;
@@ -93,8 +94,17 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         public static Completion Normal { get; } = new(CompletionKind.Normal);
     }
 
+    private void RequireStack(SourcePosition position)
+    {
+        if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+        {
+            throw Runtime("The program ran out of stack space because its calls are nested too deeply; check for runaway recursion.", position);
+        }
+    }
+
     private Completion ExecuteStatement(Statement statement, Scope scope)
     {
+        RequireStack(statement.Position);
         switch (statement)
         {
             case DefStatement def:
@@ -331,6 +341,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
 
     private Value Evaluate(Expression expression, Scope scope)
     {
+        RequireStack(expression.Position);
         switch (expression)
         {
             case LiteralExpression literal:

@@ -35,6 +35,22 @@ public sealed class TokenCursor(IReadOnlyList<Token> tokens, bool reportsIncompl
         return new PyropException(ErrorStage.Parse, message, token.Position, reportsIncompleteInput && token.Kind == TokenKind.EndOfInput);
     }
 
+    public bool AppearsAfter(string word, Func<Token, bool> before)
+    {
+        for (var index = 1; index < tokens.Count; index++)
+        {
+            if (tokens[index].IsWord(word) && before(tokens[index - 1]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public PyropException ErrorEndingEarly(string message, Token at) =>
+        new(ErrorStage.Parse, message, at.Position, reportsIncompleteInput && IsAtEnd);
+
     public Token ExpectWord(string expectation)
     {
         if (Current.Kind != TokenKind.Word)

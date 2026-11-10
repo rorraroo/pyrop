@@ -23,6 +23,7 @@ public sealed class TypeChecker
     private static readonly IReadOnlyDictionary<string, PyropType> NoGlobals = new Dictionary<string, PyropType>();
 
     private readonly List<PyropError> _errors = [];
+    private readonly HashSet<string> _undeclared = [];
     private readonly Dictionary<BuiltinCallExpression, BuiltinOverload> _overloads = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<AttemptExpression, PyropType> _attempts = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expression, PyropType> _types = new(ReferenceEqualityComparer.Instance);
@@ -179,7 +180,11 @@ public sealed class TypeChecker
         var valueType = TypeOf(set.Value, scope);
         if (scope.Lookup(set.Name) is not { } variableType)
         {
-            Report($"Undeclared variable '{set.Name}'.", set.Position);
+            if (_undeclared.Add(set.Name))
+            {
+                Report($"Undeclared variable '{set.Name}'. Declare it first with {Keywords.Def} <type> {set.Name} <value>.", set.Position);
+            }
+
             return;
         }
 
@@ -381,7 +386,11 @@ public sealed class TypeChecker
         }
 
         _currentFunction = function.Signature;
+        var undeclaredOutside = _undeclared.ToList();
+        _undeclared.Clear();
         CheckStatement(function.Body, scope);
+        _undeclared.Clear();
+        _undeclared.UnionWith(undeclaredOutside);
         _currentFunction = null;
 
         if (function.Signature.ReturnType != PyropType.Void && !ReturnPaths.AlwaysReturns(function.Body))
@@ -427,7 +436,7 @@ public sealed class TypeChecker
                 return literal.Value.Type;
             case VariableExpression variable:
                 var type = scope.Lookup(variable.Name);
-                if (type is null)
+                if (type is null && _undeclared.Add(variable.Name))
                 {
                     Report(
                         _names?.Uses.ContainsKey(variable.Name) == true

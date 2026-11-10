@@ -16,6 +16,8 @@ if (-not $compiler) { throw 'Inno Setup 6 is required: winget install JRSoftware
 dotnet publish (Join-Path $root 'Pyrop.csproj') -r win-x64
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
+& (Join-Path $PSScriptRoot 'smoke-test.ps1') -Executable (Join-Path $root 'publish\Pyrop.exe')
+
 & (Join-Path $root 'editors\vscode\pack.ps1')
 
 $setupName = "pyrop-setup-$version.exe"

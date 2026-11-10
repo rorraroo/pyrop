@@ -26,7 +26,7 @@ public static class FormatCommand
     {
         if (!File.Exists(path))
         {
-            Terminal.Errors.MarkupLine($"[red bold]Error[/] File '{Markup.Escape(path)}' was not found.");
+            Terminal.Errors.MarkupLine($"[red bold]Error[/] {Markup.Escape(ScriptRunner.MissingScript(path))}");
             return false;
         }
 

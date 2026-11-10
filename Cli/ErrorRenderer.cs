@@ -27,7 +27,7 @@ public static class ErrorRenderer
 
     public static string StageName(ErrorStage stage) => stage switch
     {
-        ErrorStage.Lex => "Syntax error",
+        ErrorStage.Lex => "Parse error",
         ErrorStage.Parse => "Parse error",
         ErrorStage.Type => "Type error",
         ErrorStage.Runtime => "Runtime error",

@@ -278,13 +278,14 @@ public sealed class LibraryTests : IDisposable
     }
 
     [Fact]
-    public void AnOldNameGivenArgumentsGetsTheHintAfterTheStrayValue()
+    public void AnOldNameGivenArgumentsLeadsWithTheHint()
     {
         var error = Run.Failure("write_line roll_dice 1 6");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
-        Assert.EndsWith(
-            "If 'roll_dice' was meant as an operation: 'roll_dice' is now 'roll' in the library random: add use random library and import from random roll end, or write from random roll.",
+        Assert.Equal(12, error.Position.Column);
+        Assert.Equal(
+            "'roll_dice' is now 'roll' in the library random: add use random library and import from random roll end, or write from random roll.",
             error.Message);
     }
 

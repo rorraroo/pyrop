@@ -42,6 +42,45 @@ public sealed class CliTests : IDisposable
         return (output, errors.Result, process.ExitCode);
     }
 
+    [Fact]
+    public void NestedExpressionsInDeepRecursionEndInAnErrorNotACrash()
+    {
+        var nested = string.Concat(Enumerable.Repeat("add 1 ", 200));
+        var (_, errors, exitCode) = Pyrop(Script($"function int down int n\nblock\nif equal n 0 return 0\nreturn {nested}down subtract n 1\nend\nwrite_line down 9999\n"));
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("ran out of stack space", errors);
+    }
+
+    [Fact]
+    public void TheReplKeepsAnUnfinishedBlockAcrossAnEmptyLine()
+    {
+        var (output, errors, _) = PyropWithInput("block\n\nwrite_line 7\nend\n", "--plain");
+
+        Assert.Equal("", errors);
+        Assert.Contains("7\n", output.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void TwoEmptyLinesDropUnfinishedInput()
+    {
+        var (output, errors, _) = PyropWithInput("block\n\n\nwrite_line 7\n", "--plain");
+
+        Assert.Equal("", errors);
+        Assert.Contains("Unfinished input dropped.", output);
+        Assert.Contains("7\n", output.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void TheReplDoesNotRunTheBodyOfARejectedFunction()
+    {
+        var (output, errors, _) = PyropWithInput(
+            "function void f\nblock\nwrite_line 1\nend\n\nfunction void f\nblock\nwrite_line \"BODY\"\nend\n\n", "--plain");
+
+        Assert.Contains("already defined", errors);
+        Assert.DoesNotContain("BODY", output);
+    }
+
     [Theory]
     [InlineData("if true write_line 1\n", "1\n")]
     [InlineData("if true write_line 1", "1\n")]

@@ -248,13 +248,13 @@ public sealed class PyropSession
             switch (mode)
             {
                 case ParseMode.UntilFirstError:
-                    (tree, parseError) = Parser.ParseUntilError(tokens, scan.Names);
+                    (tree, parseError) = Parser.ParseUntilError(tokens, scan.Names, _globals.Keys);
                     break;
                 case ParseMode.FirstError:
-                    tree = Parser.Parse(tokens, scan.Names);
+                    tree = Parser.Parse(tokens, scan.Names, globals: _globals.Keys);
                     break;
                 default:
-                    var report = Parser.ParseAll(tokens, scan.Names);
+                    var report = Parser.ParseAll(tokens, scan.Names, globals: _globals.Keys);
                     (tree, parseError, gaps) = (report.Tree, report.Error, report.Gaps);
                     break;
             }

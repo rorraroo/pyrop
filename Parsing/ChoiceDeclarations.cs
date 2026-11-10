@@ -89,7 +89,7 @@ public static class ChoiceDeclarations
             var token = cursor.Current;
             if (cursor.IsAtEnd)
             {
-                throw cursor.Error($"Expected '{Keywords.End}' to close the choice started at {start.Position}.");
+                throw cursor.Error($"Expected '{Keywords.End}' to close the choice started at {start.Position.Spoken}.");
             }
 
             if (token.IsWord(PyropType.Void.Name))
@@ -117,7 +117,7 @@ public static class ChoiceDeclarations
                 || token.IsWord(Keywords.False))
             {
                 throw cursor.Error(
-                    $"Expected a variant name or '{Keywords.End}' to close the choice started at {start.Position}, found {token.Describe()}.");
+                    $"Expected a variant name or '{Keywords.End}' to close the choice started at {start.Position.Spoken}, found {token.Describe()}.");
             }
 
             if (Keywords.IsReserved(token.Text))

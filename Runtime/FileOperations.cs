@@ -35,15 +35,43 @@ public static class FileOperations
     public static Value? DeleteFile(IBuiltinInvocation invocation, string path)
     {
         RequireExistingFile(invocation, path);
-        Attempt(invocation, "delete", path, "file", () => File.Delete(path));
+        Attempt(invocation, "delete", path, "file", () =>
+        {
+            AllowDeleting(path);
+            File.Delete(path);
+        });
         return null;
     }
 
     public static Value? CopyFile(IBuiltinInvocation invocation, string from, string to) =>
-        Transfer(invocation, "copied", "copy", from, to, FileShare.ReadWrite | FileShare.Delete, () => File.Copy(from, to, overwrite: true));
+        Transfer(invocation, "copied", "copy", from, to, FileShare.ReadWrite | FileShare.Delete, () =>
+        {
+            AllowReplacing(to);
+            File.Copy(from, to, overwrite: true);
+        });
 
     public static Value? MoveFile(IBuiltinInvocation invocation, string from, string to) =>
-        Transfer(invocation, "moved", "move", from, to, FileShare.None, () => File.Move(from, to, overwrite: true));
+        Transfer(invocation, "moved", "move", from, to, FileShare.None, () =>
+        {
+            AllowDeleting(to);
+            File.Move(from, to, overwrite: true);
+        });
+
+    private static void AllowDeleting(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            AllowReplacing(path);
+        }
+    }
+
+    private static void AllowReplacing(string path)
+    {
+        if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0)
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
 
     public static Value? MakeFolder(IBuiltinInvocation invocation, string path)
     {
@@ -136,6 +164,11 @@ public static class FileOperations
 
     private static void RemoveLinksBelow(string path)
     {
+        foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", new EnumerationOptions { AttributesToSkip = 0, RecurseSubdirectories = false }))
+        {
+            AllowDeleting(file.FullName);
+        }
+
         foreach (var entry in new DirectoryInfo(path).EnumerateDirectories("*", new EnumerationOptions { AttributesToSkip = 0, RecurseSubdirectories = false }))
         {
             if (entry.LinkTarget is not null || (entry.Attributes & FileAttributes.ReparsePoint) != 0)

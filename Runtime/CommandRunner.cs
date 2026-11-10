@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Pyrop.Runtime;
@@ -36,8 +37,11 @@ public sealed class ProcessCommandRunner(int outputLimit = TextOperations.MaxLen
     private const int WindowsNameTooLong = 206;
     private const int UnixArgumentsTooLong = 7;
     private const int UnixNameTooLong = 36;
+    private const uint OemCodePage = 1;
+    private const long MostBytesPerCharacter = 4;
 
     private static readonly string[] BatchExtensions = [".bat", ".cmd"];
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     public static ProcessCommandRunner Instance { get; } = new();
 
@@ -45,10 +49,11 @@ public sealed class ProcessCommandRunner(int outputLimit = TextOperations.MaxLen
     {
         using var process = Started(command, arguments, captures: true);
         CloseInput(process);
-        var output = ReadWithinLimit(process.StandardOutput, process);
-        var errors = ReadWithinLimit(process.StandardError, process);
+        var output = ReadWithinLimit(process.StandardOutput.BaseStream, process);
+        var errors = ReadWithinLimit(process.StandardError.BaseStream, process);
         process.WaitForExit();
-        var (written, reported) = (output.GetAwaiter().GetResult(), errors.GetAwaiter().GetResult());
+        var written = Decoded(command, output.GetAwaiter().GetResult());
+        var reported = Decoded(command, errors.GetAwaiter().GetResult());
         if (written is null || reported is null)
         {
             throw new CommandFailedException($"Cannot run \"{command}\": it wrote more than {outputLimit} characters.");
@@ -75,12 +80,6 @@ public sealed class ProcessCommandRunner(int outputLimit = TextOperations.MaxLen
             RedirectStandardOutput = captures,
             RedirectStandardError = captures,
         };
-        if (captures)
-        {
-            start.StandardOutputEncoding = Encoding.UTF8;
-            start.StandardErrorEncoding = Encoding.UTF8;
-        }
-
         foreach (var argument in arguments)
         {
             start.ArgumentList.Add(argument);
@@ -115,27 +114,63 @@ public sealed class ProcessCommandRunner(int outputLimit = TextOperations.MaxLen
         _ => "the system could not start it.",
     };
 
-    private async Task<string?> ReadWithinLimit(StreamReader reader, Process process)
+    private async Task<byte[]?> ReadWithinLimit(Stream stream, Process process)
     {
-        var text = new StringBuilder();
-        var buffer = new char[81920];
+        var bytes = new MemoryStream();
+        var buffer = new byte[81920];
         while (true)
         {
-            var count = await reader.ReadAsync(buffer);
+            var count = await stream.ReadAsync(buffer);
             if (count == 0)
             {
-                return text.ToString();
+                return bytes.ToArray();
             }
 
-            if (text.Length + count > outputLimit)
+            if (bytes.Length + count > outputLimit * MostBytesPerCharacter)
             {
                 Stop(process);
                 return null;
             }
 
-            text.Append(buffer, 0, count);
+            bytes.Write(buffer, 0, count);
         }
     }
+
+    private string? Decoded(string command, byte[]? bytes)
+    {
+        if (bytes is null)
+        {
+            return null;
+        }
+
+        var text = DecodedText(command, bytes);
+        return text.Length > outputLimit ? null : text;
+    }
+
+    private static string DecodedText(string command, byte[] bytes)
+    {
+        try
+        {
+            var text = StrictUtf8.GetString(bytes);
+            return text.StartsWith('﻿') ? text[1..] : text;
+        }
+        catch (DecoderFallbackException)
+        {
+            return OperatingSystem.IsWindows()
+                ? OemText(bytes)
+                : throw new CommandFailedException($"Cannot read what \"{command}\" wrote: it is not UTF-8 text.");
+        }
+    }
+
+    private static string OemText(byte[] bytes)
+    {
+        var characters = new char[MultiByteToWideChar(OemCodePage, 0, bytes, bytes.Length, null, 0)];
+        var written = MultiByteToWideChar(OemCodePage, 0, bytes, bytes.Length, characters, characters.Length);
+        return new string(characters, 0, written);
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MultiByteToWideChar(uint codePage, uint flags, byte[] bytes, int byteCount, [Out] char[]? characters, int characterCount);
 
     private static void Stop(Process process)
     {

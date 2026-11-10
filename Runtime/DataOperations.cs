@@ -22,7 +22,9 @@ public static class DataOperations
     private const int Map = 6;
 
     private const string CoreTagPrefix = "tag:yaml.org,2002:";
-    private const int MostYamlNesting = 1000;
+    private const int MostTextNesting = 1000;
+    private const string Json = "JSON";
+    private const string Yaml = "YAML";
 
     private static readonly string[] KindNames = ["null", "bool", "int", "float", "text", "list", "map"];
 
@@ -80,12 +82,13 @@ public static class DataOperations
     {
         try
         {
-            using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = int.MaxValue });
+            using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = MostTextNesting });
             return FromJson(invocation, document.RootElement, 0);
         }
         catch (JsonException exception)
         {
-            throw invocation.Fail($"The text is not valid JSON (line {(exception.LineNumber ?? 0) + 1}).");
+            throw invocation.Fail(
+                NestsTooDeeply(text) ? TooDeepInText(Json) : $"The text is not valid JSON (line {(exception.LineNumber ?? 0) + 1}).");
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -217,15 +220,51 @@ public static class DataOperations
 
     private static string Where(string path) => path.Length == 0 ? "The value" : $"The value at \"{path}\"";
 
-    private static void GuardYamlDepth(IBuiltinInvocation invocation, int depth)
+    private static string TooDeepInText(string format) =>
+        $"{format} can nest at most {MostTextNesting.ToString("N0", CultureInfo.InvariantCulture)} levels deep.";
+
+    private static bool NestsTooDeeply(string json)
     {
-        if (depth >= MostYamlNesting)
+        var depth = 0;
+        var inString = false;
+        for (var index = 0; index < json.Length; index++)
         {
-            throw invocation.Fail($"YAML can nest at most {MostYamlNesting.ToString("N0", CultureInfo.InvariantCulture)} levels deep.");
+            var character = json[index];
+            if (inString)
+            {
+                index += character == '\\' ? 1 : 0;
+                inString = character != '"';
+            }
+            else if (character == '"')
+            {
+                inString = true;
+            }
+            else if (character is '[' or '{' && ++depth > MostTextNesting)
+            {
+                return true;
+            }
+            else if (character is ']' or '}')
+            {
+                depth--;
+            }
+        }
+
+        return false;
+    }
+
+    private static void GuardTextDepth(IBuiltinInvocation invocation, int depth, string format, bool isContainer)
+    {
+        if (isContainer && depth >= MostTextNesting)
+        {
+            throw invocation.Fail(TooDeepInText(format));
         }
 
         GuardDepth(invocation, depth);
     }
+
+    private static void GuardYamlDepth(IBuiltinInvocation invocation, int depth, bool isContainer) => GuardTextDepth(invocation, depth, Yaml, isContainer);
+
+    private static void GuardJsonDepth(IBuiltinInvocation invocation, int depth, bool isContainer) => GuardTextDepth(invocation, depth, Json, isContainer);
 
     private static void GuardDepth(IBuiltinInvocation invocation, int depth)
     {
@@ -237,7 +276,7 @@ public static class DataOperations
 
     private static Value FromJson(IBuiltinInvocation invocation, JsonElement element, int depth)
     {
-        GuardDepth(invocation, depth);
+        GuardJsonDepth(invocation, depth, element.ValueKind is JsonValueKind.Array or JsonValueKind.Object);
         switch (element.ValueKind)
         {
             case JsonValueKind.Null:
@@ -286,8 +325,8 @@ public static class DataOperations
 
     private static void WriteJson(IBuiltinInvocation invocation, Utf8JsonWriter writer, Value data, int depth)
     {
-        GuardDepth(invocation, depth);
         var value = (ChoiceValue)data;
+        GuardJsonDepth(invocation, depth, value.Index is List or Map);
         switch (value.Index)
         {
             case Null:
@@ -300,7 +339,11 @@ public static class DataOperations
                 writer.WriteNumberValue(value.Data[0].AsInt());
                 break;
             case Float:
-                writer.WriteRawValue(value.Data[0].ToText(), skipInputValidation: true);
+                using (var number = JsonDocument.Parse(value.Data[0].ToText()))
+                {
+                    number.RootElement.WriteTo(writer);
+                }
+
                 break;
             case Text:
                 writer.WriteStringValue(value.Data[0].AsString());
@@ -329,8 +372,8 @@ public static class DataOperations
 
     private static void WriteYaml(IBuiltinInvocation invocation, Emitter emitter, Value data, int depth)
     {
-        GuardYamlDepth(invocation, depth);
         var value = (ChoiceValue)data;
+        GuardYamlDepth(invocation, depth, value.Index is List or Map);
         switch (value.Index)
         {
             case Null:
@@ -652,9 +695,9 @@ public static class DataOperations
 
         private Value ReadNode(int depth)
         {
-            GuardYamlDepth(invocation, depth);
-            var before = _count;
             var current = _parser.Current!;
+            GuardYamlDepth(invocation, depth, current is SequenceStart or MappingStart);
+            var before = _count;
             Value node;
             AnchorName anchor;
             switch (current)

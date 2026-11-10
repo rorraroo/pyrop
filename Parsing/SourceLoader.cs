@@ -1,3 +1,4 @@
+using System.Text;
 using Pyrop.Lexing;
 
 namespace Pyrop.Parsing;
@@ -58,7 +59,7 @@ public sealed class SourceLoader(ISourceStore store)
         {
             source = store.Read(fullPath);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
         {
             throw CannotUse(path, DescribeFailure(exception, fullPath), requestedAt);
         }
@@ -74,7 +75,9 @@ public sealed class SourceLoader(ISourceStore store)
 
     private static string DescribeFailure(Exception exception, string fullPath) => exception switch
     {
-        _ when Directory.Exists(fullPath) => $"{fullPath} is a directory, not a file.",
+        _ when Directory.Exists(fullPath) => $"{fullPath} is a folder, not a file.",
+        PathTooLongException => "the path is too long.",
+        DecoderFallbackException => $"{fullPath} is not UTF-8 text.",
         FileNotFoundException or DirectoryNotFoundException => $"no file at {fullPath}.",
         UnauthorizedAccessException => $"access to {fullPath} was denied.",
         _ => exception.Message,

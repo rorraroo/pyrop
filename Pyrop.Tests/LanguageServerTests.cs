@@ -176,10 +176,10 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, string.Concat(Enumerable.Repeat("if true\n", 1500)) + "write_line 1\n");
+        client.Open(uri, string.Concat(Enumerable.Repeat("if true\n", 900)) + "write_line 1\n");
         client.Diagnostics();
 
-        var result = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 1500, character = 0 } }))
+        var result = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 900, character = 0 } }))
             .GetProperty("result");
 
         Assert.Equal("```pyrop\nwrite_line 1\n```", result.GetProperty("contents").GetProperty("value").GetString());
@@ -391,11 +391,11 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
 
-        client.Open(UriOf("main.prp"), "write_line add 1");
+        client.Open(UriOf("main.prp"), "block");
 
         var range = Assert.Single(client.Diagnostics().Diagnostics.EnumerateArray()).GetProperty("range");
-        Assert.Equal(16, range.GetProperty("start").GetProperty("character").GetInt32());
-        Assert.Equal(16, range.GetProperty("end").GetProperty("character").GetInt32());
+        Assert.Equal(5, range.GetProperty("start").GetProperty("character").GetInt32());
+        Assert.Equal(5, range.GetProperty("end").GetProperty("character").GetInt32());
     }
 
     [Fact]
