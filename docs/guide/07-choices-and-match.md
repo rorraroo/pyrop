@@ -114,5 +114,3 @@ west
 ```
 
 A text that names no variant stops the program with an error listing the variants. The next chapter shows how to handle such a mistake instead.
-
-Next: [When something can go wrong: options and `attempt`](08-options-and-attempt.md)

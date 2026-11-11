@@ -143,8 +143,6 @@ write_line add "Reading " get arguments 0
 Usage: report <file>
 ```
 
-Next: [Full-screen programs: views and keys](11-views-and-keys.md)
-
 ## Running other programs
 
 `run` from the library `program` starts another program and gives its exit code, output and errors. The program's name and each argument are separate values, so nothing needs quoting:

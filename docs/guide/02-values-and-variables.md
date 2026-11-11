@@ -137,5 +137,3 @@ write_line " done"
 ```output
 Loading... done
 ```
-
-Next: [Making decisions and repeating](03-decisions-and-loops.md)

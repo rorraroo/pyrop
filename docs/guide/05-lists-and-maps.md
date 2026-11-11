@@ -164,5 +164,3 @@ rope costs 2
 ```
 
 Asking `get` for a position or a key that is not there stops the program with an error. Chapter 8 shows how to ask safely.
-
-Next: [Records](06-records.md)

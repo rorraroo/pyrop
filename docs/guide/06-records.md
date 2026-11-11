@@ -134,5 +134,3 @@ write_line equal Point 1.0 2.0 Point 1.0 2.0
 ```output
 true
 ```
-
-Next: [Choices and `match`](07-choices-and-match.md)

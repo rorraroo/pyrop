@@ -132,5 +132,3 @@ write_line guess
 ```output
 7
 ```
-
-Next: [Functions](04-functions.md)

@@ -110,5 +110,3 @@ Read the last line slot by slot: `multiply` takes `n` and `factorial …`, and `
 ## What a function can see
 
 Inside a function you can use its parameters, its own variables, and the variables declared at the top level of the file. Variables of the code that calls it are not visible, so a function depends only on what it is given and on the file's own globals.
-
-Next: [Lists and maps](05-lists-and-maps.md)

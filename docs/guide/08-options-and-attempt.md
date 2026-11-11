@@ -117,5 +117,3 @@ Division by zero.
 ```
 
 That keeps real mistakes visible. A bug in your code is never quietly turned into "no value".
-
-Next: [Programs in several files](09-modules-and-libraries.md)

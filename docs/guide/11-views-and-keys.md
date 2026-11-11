@@ -273,5 +273,3 @@ done
 ## Two complete programs
 
 The `samples` folder that comes with Pyrop has two full-screen programs built this way: `samples/rogue/`, a small roguelite in four modules with a map, an inventory and saved progress, and `samples/logwatch/`, a dashboard that follows a log file and redraws once a second. The [reference page for the library `terminal`](../reference/operations/terminal.md) lists every kind, every key name and the rules for fitting the window.
-
-Next: [Building a standalone program](12-standalone-programs.md)

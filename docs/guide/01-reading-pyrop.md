@@ -113,5 +113,3 @@ pyrop hello.prp
 ```
 
 Running `pyrop` alone starts the REPL, where you type statements and see their results at once. It is a good place to try the examples in this guide.
-
-Next: [Values, variables and output](02-values-and-variables.md)

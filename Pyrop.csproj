@@ -6,10 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>0.31.1</Version>
+    <Version>1.0.0</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>pyrop</ToolCommandName>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Pyrop.Tests/**;editors/**;tools/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(_IsPublishing)' == 'true'">

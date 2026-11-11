@@ -141,5 +141,3 @@ This is run number 1.
 ```
 
 The file then holds `Progress runs 1 best_score 0`. A missing file and a damaged one both leave the starting value in place.
-
-Next: [Talking to the user](10-talking-to-the-user.md)

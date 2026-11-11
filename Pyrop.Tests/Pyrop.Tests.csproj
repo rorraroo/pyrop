@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Pyrop.csproj" />
+    <ProjectReference Include="..\tools\DocsSite\DocsSite.csproj" />
   </ItemGroup>
 
 </Project>
