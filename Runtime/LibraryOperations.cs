@@ -113,13 +113,16 @@ public static class LibraryOperations
             Overload([S, S], Moment, c => TimeOperations.Parse(c, c.Argument(0).AsString(), c.Argument(1).AsString()))),
         Operation("milliseconds_between",
             Overload([Moment, Moment], I, c => new IntValue(TimeOperations.MillisecondsBetween(c, c.Argument(0), c.Argument(1))))),
-        Operation("plus_milliseconds",
+        Operation("add_milliseconds",
             Overload([Moment, I], Moment, c => TimeOperations.PlusMilliseconds(c, c.Argument(0), c.Argument(1).AsInt()))),
         Operation("is_before",
             Overload([Moment, Moment], B, c => BoolValue.Of(TimeOperations.IsBefore(c, c.Argument(0), c.Argument(1))))),
         Operation("wait",
             Overload([I], V, c => TimeOperations.Wait(c, c.Argument(0).AsInt()))),
-    ], new Dictionary<string, string>(), TimeModule, records: [Moment]);
+    ], new Dictionary<string, string>
+    {
+        ["plus_milliseconds"] = "add_milliseconds",
+    }, TimeModule, records: [Moment]);
 
     public static BuiltinLibrary Files { get; } = new("files",
     [
@@ -129,11 +132,11 @@ public static class LibraryOperations
             Overload([S, S], V, c => TextFiles.Write(c, c.Argument(0).AsString(), c.Argument(1).AsString(), append: false))),
         Operation("append",
             Overload([S, S], V, c => TextFiles.Write(c, c.Argument(0).AsString(), c.Argument(1).AsString(), append: true))),
-        Operation("exists",
+        Operation("file_exists",
             Overload([S], B, c => BoolValue.Of(File.Exists(c.Argument(0).AsString())))),
         Operation("load_lines",
             Overload([S], Strings, c => TextFiles.ReadLines(c, c.Argument(0).AsString()))),
-        Operation("listing",
+        Operation("files_in",
             Overload([S], Strings, c => TextFiles.ListFiles(c, c.Argument(0).AsString()))),
         Operation("name_of",
             Overload([S], S, c => new StringValue(FileOperations.NameOf(c.Argument(0).AsString())))),
@@ -153,7 +156,7 @@ public static class LibraryOperations
             Overload([S], S, c => new StringValue(FileOperations.FolderOf(c.Argument(0).AsString())))),
         Operation("extension_of",
             Overload([S], S, c => new StringValue(FileOperations.ExtensionOf(c.Argument(0).AsString())))),
-        Operation("listing_all",
+        Operation("files_under",
             Overload([S], Strings, c => TextFiles.ListAllFiles(c, c.Argument(0).AsString()))),
         Operation("current_folder",
             Overload([], S, c => new StringValue(Environment.CurrentDirectory))),
@@ -168,9 +171,11 @@ public static class LibraryOperations
         ["read_file"] = "load",
         ["write_file"] = "save",
         ["append_file"] = "append",
-        ["file_exists"] = "exists",
+        ["exists"] = "file_exists",
         ["read_lines"] = "load_lines",
-        ["list_files"] = "listing",
+        ["list_files"] = "files_in",
+        ["listing"] = "files_in",
+        ["listing_all"] = "files_under",
     });
 
     private static readonly Module ProgramModule = BuiltinLibrary.ModuleFor("program");
@@ -182,10 +187,10 @@ public static class LibraryOperations
         Operation("arguments",
             Overload([], Strings, c => new ListValue(Strings, [.. c.Host.Arguments.Select(argument => (Value)new StringValue(argument))]))),
         Operation("environment",
-            Overload([S], S, c => new StringValue(ReadEnvironment(c, c.Argument(0).AsString())))),
-        Operation("run",
+            Overload([S], PyropTypes.OptionOf(S), c => ReadEnvironment(c, c.Argument(0).AsString()))),
+        Effect("run",
             Overload([S, Strings], CommandResult, RunCaptured)),
-        Operation("run_attached",
+        Effect("run_attached",
             Overload([S, Strings], I, RunAttached)),
     ], new Dictionary<string, string>
     {
@@ -196,7 +201,7 @@ public static class LibraryOperations
 
     public static BuiltinLibrary Math { get; } = new("math",
     [
-        Operation("abs",
+        Operation("absolute",
             Overload([I], I, c => Int(c, () => System.Math.Abs(c.Argument(0).AsInt()))),
             Overload([F], F, c => new FloatValue(System.Math.Abs(c.Argument(0).AsFloat())))),
         Operation("sign",
@@ -214,19 +219,21 @@ public static class LibraryOperations
     ], new Dictionary<string, string>
     {
         ["to_power"] = "power",
+        ["abs"] = "absolute",
     });
 
     public static BuiltinLibrary Random { get; } = new("random",
     [
-        Operation("between",
+        Effect("float_between",
             Overload([F, F], F, c => new FloatValue(Between(c, c.Argument(0).AsFloat(), c.Argument(1).AsFloat())))),
-        Operation("roll",
+        Effect("roll",
             Overload([I, I], I, c => new IntValue(Roll(c, c.Argument(0).AsInt(), c.Argument(1).AsInt())))),
         Operation("seed",
             Overload([I], V, c => Seed(c, c.Argument(0).AsInt()))),
     ], new Dictionary<string, string>
     {
-        ["random"] = "between",
+        ["random"] = "float_between",
+        ["between"] = "float_between",
         ["roll_dice"] = "roll",
         ["seed_random"] = "seed",
     });
@@ -241,9 +248,9 @@ public static class LibraryOperations
             Overload([TerminalView], V, c => Views.Show(c, c.Argument(0)))),
         Operation("write_view",
             Overload([TerminalView], V, c => Views.WriteView(c, c.Argument(0)))),
-        Operation("read_key",
+        Effect("read_key",
             Overload([], S, c => new StringValue(Keys.Read(c)))),
-        Operation("read_key_within",
+        Effect("read_key_within",
             Overload([I], PyropTypes.OptionOf(S), c => Keys.ReadWithin(c, c.Argument(0).AsInt()))),
     ], new Dictionary<string, string>(), TerminalModule, [TerminalView]);
 
@@ -283,7 +290,7 @@ public static class LibraryOperations
         if (!(lower < upper))
         {
             throw invocation.Fail(
-                $"'between' needs a lower bound below its upper bound, found {new FloatValue(lower).ToText()} and {new FloatValue(upper).ToText()}.");
+                $"'float_between' needs a lower bound below its upper bound, found {new FloatValue(lower).ToText()} and {new FloatValue(upper).ToText()}.");
         }
 
         var fraction = invocation.Random.NextFraction();
@@ -302,7 +309,7 @@ public static class LibraryOperations
         return null;
     }
 
-    private static string ReadEnvironment(IBuiltinInvocation invocation, string name)
+    private static OptionValue ReadEnvironment(IBuiltinInvocation invocation, string name)
     {
         if (name.Length == 0)
         {
@@ -314,7 +321,6 @@ public static class LibraryOperations
             throw invocation.Fail($"\"{name}\" is not a valid environment variable name; it cannot contain '=' or control characters.");
         }
 
-        return invocation.Host.ReadEnvironment(name)
-            ?? (invocation.IsAttempted ? throw invocation.Fail($"Environment variable \"{name}\" is not set.") : "");
+        return invocation.Host.ReadEnvironment(name) is { } value ? OptionValue.Some(new StringValue(value)) : OptionValue.None(PyropTypes.OptionOf(PyropType.String));
     }
 }

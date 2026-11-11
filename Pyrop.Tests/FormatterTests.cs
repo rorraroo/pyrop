@@ -28,10 +28,10 @@ public class FormatterTests
     [Fact]
     public void ABlockOnItsOwnLineStaysAtItsHeadersLevel()
     {
-        const string source = "function int one\n    block\n  def int x 1\nreturn x\n    end\nif true write_line one\nelse\n    block\nwrite_line 2\nend\n";
+        const string source = "function int one\n    block\n  define int x 1\nreturn x\n    end\nif true write_line one\nelse\n    block\nwrite_line 2\nend\n";
 
         Assert.Equal(
-            "function int one\nblock\n    def int x 1\n    return x\nend\nif true write_line one\nelse\nblock\n    write_line 2\nend\n",
+            "function int one\nblock\n    define int x 1\n    return x\nend\nif true write_line one\nelse\nblock\n    write_line 2\nend\n",
             Format(source));
     }
 
@@ -39,10 +39,10 @@ public class FormatterTests
     public void MatchBranchesAreOneLevelInAndTheirBodiesOneMore()
     {
         const string source =
-            "choice Mode on off end\ndef Mode mode on\nmatch mode\nwhen on write_line 1\nwhen off\nwrite_line 2\n      end\n";
+            "choice Mode on off end\ndefine Mode mode on\nmatch mode\nwhen on write_line 1\nwhen off\nwrite_line 2\n      end\n";
 
         Assert.Equal(
-            "choice Mode on off end\ndef Mode mode on\nmatch mode\n    when on write_line 1\n    when off\n        write_line 2\nend\n",
+            "choice Mode on off end\ndefine Mode mode on\nmatch mode\n    when on write_line 1\n    when off\n        write_line 2\nend\n",
             Format(source));
     }
 
@@ -51,7 +51,7 @@ public class FormatterTests
     [InlineData("when circle\nc r write_line c\nwhen dot write_line 1\n", "    when circle\n        c r write_line c\n    when dot write_line 1\n")]
     public void AWhenContinuedOnTheNextLineIsOneLevelInFromTheWhen(string branches, string expected)
     {
-        const string start = "choice Shape dot circle int int end\ndef Shape s dot\nmatch s\n";
+        const string start = "choice Shape dot circle int int end\ndefine Shape s dot\nmatch s\n";
 
         Assert.Equal($"{start}{expected}end\n", Format($"{start}{branches}end\n"));
     }
@@ -60,10 +60,10 @@ public class FormatterTests
     public void ListItemsAreOneLevelInAndEndReturnsToTheOpeningLine()
     {
         const string source =
-            "def list list int rows list_of list int\nlist_of int\n1\n2\nend\n  list_of int 3 end\n    end\nwrite_line rows\n";
+            "define list list int rows list_of list int\nlist_of int\n1\n2\nend\n  list_of int 3 end\n    end\nwrite_line rows\n";
 
         Assert.Equal(
-            "def list list int rows list_of list int\n    list_of int\n        1\n        2\n    end\n    list_of int 3 end\nend\nwrite_line rows\n",
+            "define list list int rows list_of list int\n    list_of int\n        1\n        2\n    end\n    list_of int 3 end\nend\nwrite_line rows\n",
             Format(source));
     }
 
@@ -71,17 +71,17 @@ public class FormatterTests
     public void AContinuedStatementIsOneLevelInFromItsStart()
     {
         Assert.Equal(
-            "if true block\n    def int x add 1\n        multiply 2\n        3\nend\n",
-            Format("if true block\ndef int x add 1\nmultiply 2\n3\nend\n"));
+            "if true block\n    define int x add 1\n        multiply 2\n        3\nend\n",
+            Format("if true block\ndefine int x add 1\nmultiply 2\n3\nend\n"));
     }
 
     [Fact]
     public void AWithLineIsOneLevelInFromItsCopy()
     {
-        const string source = "record Point int x int y\nrecord Hero int hp Point pos\ndef Hero h Hero 1 Point 2 3\nset h copy h with hp 1\nwith pos copy the pos of h\nwith x 4\nwith y 5\n";
+        const string source = "record Point int x int y end\nrecord Hero int hp Point pos end\ndefine Hero h Hero 1 Point 2 3\nset h copy h with hp 1\nwith pos copy the pos of h\nwith x 4\nwith y 5 end end\n";
 
         Assert.Equal(
-            "record Point int x int y\nrecord Hero int hp Point pos\ndef Hero h Hero 1 Point 2 3\nset h copy h with hp 1\n    with pos copy the pos of h\n        with x 4\n        with y 5\n",
+            "record Point int x int y end\nrecord Hero int hp Point pos end\ndefine Hero h Hero 1 Point 2 3\nset h copy h with hp 1\n    with pos copy the pos of h\n        with x 4\n        with y 5 end end\n",
             Format(source));
     }
 
@@ -89,10 +89,10 @@ public class FormatterTests
     public void ChoicesImportsAndRecordsContinueOneLevelIn()
     {
         const string source =
-            "export choice Shape\ncircle float\nsquare float\nend\nrecord Point\nfloat x\nfloat y\nexport function float area Shape shape\nmatch shape\nwhen circle r return multiply r r\nwhen square s return multiply s s\nend\n";
+            "export choice Shape\ncircle float\nsquare float\nend\nrecord Point\nfloat x\nfloat y\nend\nexport function float area Shape shape\nmatch shape\nwhen circle r return multiply r r\nwhen square s return multiply s s\nend\n";
 
         Assert.Equal(
-            "export choice Shape\n    circle float\n    square float\nend\nrecord Point\n    float x\n    float y\nexport function float area Shape shape\n    match shape\n        when circle r return multiply r r\n        when square s return multiply s s\n    end\n",
+            "export choice Shape\n    circle float\n    square float\nend\nrecord Point\n    float x\n    float y\nend\nexport function float area Shape shape\n    match shape\n        when circle r return multiply r r\n        when square s return multiply s s\n    end\n",
             Format(source));
     }
 

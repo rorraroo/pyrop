@@ -8,7 +8,33 @@ public static class FileOperations
 
     public static string NameOf(string path) => path[(path.LastIndexOfAny(EverySeparator) + 1)..];
 
-    public static string FolderOf(string path) => path[..Math.Max(path.LastIndexOfAny(EverySeparator), 0)];
+    public static string FolderOf(string path)
+    {
+        var last = path.LastIndexOfAny(EverySeparator);
+        if (last < 0)
+        {
+            return "";
+        }
+
+        var root = RootLengthOf(path);
+        return last < root ? path[..root] : path[..last];
+    }
+
+    private static int RootLengthOf(string path)
+    {
+        if (path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' && EverySeparator.Contains(path[2]))
+        {
+            return 3;
+        }
+
+        var leading = 0;
+        while (leading < path.Length && EverySeparator.Contains(path[leading]))
+        {
+            leading++;
+        }
+
+        return leading;
+    }
 
     public static string ExtensionOf(string path)
     {

@@ -47,6 +47,9 @@ public static class CollectionOperations
     public static ListValue KeysOf(MapValue map) =>
         new(PyropTypes.ListOf(map.KeyType), map.Keys.ToImmutableList());
 
+    public static ListValue ValuesOf(MapValue map) =>
+        new(PyropTypes.ListOf(((ConstructedType)map.Type).Arguments[1]), map.Entries.Select(entry => entry.Value).ToImmutableList());
+
     public static ListValue PositionsOf(ListValue list) =>
         new(PyropTypes.ListOf(PyropType.Int), Enumerable.Range(0, list.Count).Select(index => (Value)new IntValue(index)).ToImmutableList());
 

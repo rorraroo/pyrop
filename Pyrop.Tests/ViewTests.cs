@@ -2,7 +2,7 @@ namespace Pyrop.Tests;
 
 public sealed class ViewTests
 {
-    private const string Terminal = "use terminal library\nimport from terminal View show write_view read_key read_key_within end\n";
+    private const string Terminal = "use terminal library\nimport from terminal View text table menu bar panel rows columns grid in_style in_color colored_grid show write_view read_key read_key_within end\n";
 
     private static string Views(string body, string input = "") => Run.Program(Terminal + body, input);
 
@@ -87,7 +87,7 @@ public sealed class ViewTests
     [Fact]
     public void AComputedStyleIsUsed()
     {
-        Assert.Equal("<success>done\n</success>", Views("def string mood \"success\"\nwrite_view in_style mood text \"done\""));
+        Assert.Equal("<success>done\n</success>", Views("define string mood \"success\"\nwrite_view in_style mood text \"done\""));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class ViewTests
     public void ViewsAreComparedAndTakenApartLikeAnyChoice()
     {
         Assert.Equal("true\nbar Health\n", Views(
-            "def View health bar \"Health\" 7 20\n" +
+            "define View health bar \"Health\" 7 20\n" +
             "write_line equal health bar \"Health\" 7 20\n" +
             "match health\n" +
             "    when bar label value maximum write_line add \"bar \" label\n" +
@@ -135,7 +135,7 @@ public sealed class ViewTests
     public void ViewsWorkQualifiedWithoutAnImport()
     {
         Assert.Equal("x\n", Run.Program(
-            "use terminal library\ndef from terminal View v from terminal text \"x\"\nfrom terminal write_view v"));
+            "use terminal library\ndefine from terminal View v from terminal text \"x\"\nfrom terminal write_view v"));
     }
 
     [Fact]
@@ -213,14 +213,14 @@ public sealed class ViewTests
     public void AnUnimportedVariantGetsTheLibraryHint()
     {
         Assert.Equal(
-            "'panel' comes from the library terminal: add use terminal library and import from terminal View end, or write from terminal panel.",
+            "'panel' comes from the library terminal: add use terminal library and import from terminal panel end, or write from terminal panel.",
             Run.Failure("write_line panel").Message);
     }
 
     [Fact]
     public void ViewNamesStayFreeWithoutAnImport()
     {
-        Assert.Equal("3\n", Run.Program("use terminal library\ndef int text 3\nwrite_line text"));
+        Assert.Equal("3\n", Run.Program("use terminal library\ndefine int text 3\nwrite_line text"));
     }
 
     [Fact]
@@ -237,7 +237,7 @@ public sealed class ViewTests
     [Fact]
     public void AnUnknownComputedStyleFailsWhenShown()
     {
-        var error = ViewFailure("def string mood \"loud\"\nwrite_view in_style mood text \"x\"");
+        var error = ViewFailure("define string mood \"loud\"\nwrite_view in_style mood text \"x\"");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Contains("loud", error.Message);
@@ -262,7 +262,7 @@ public sealed class ViewTests
     {
         Assert.Equal(
             "#g#\n#.\n",
-            Views("write_view colored_grid list_of string \"#g#\" \"#.\" end map_of string string \"g\" \"green\" \"#\" \"grey\" end 0 0"));
+            Views("write_view colored_grid list_of string \"#g#\" \"#.\" end map_of string string \"g\" \"green\" \"#\" \"gray\" end 0 0"));
     }
 
     [Fact]
@@ -277,9 +277,9 @@ public sealed class ViewTests
     [InlineData("write_view in_color \"pink\" text \"x\"", "Unknown color \"pink\"")]
     [InlineData("write_view in_color \"Red\" text \"x\"", "Unknown color \"Red\"")]
     [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"#\" \"danger\" end 0 0", "Unknown color \"danger\"")]
-    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"##\" \"grey\" end 0 0", "must be one character that is not a control character, found \"##\"")]
-    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\" \"grey\" end 0 0", "must be one character that is not a control character, found \"\"")]
-    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\\t\" \"grey\" end 0 0", "found \"\\t\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"##\" \"gray\" end 0 0", "must be one character that is not a control character, found \"##\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\" \"gray\" end 0 0", "must be one character that is not a control character, found \"\"")]
+    [InlineData("write_view colored_grid list_of string \"#\" end map_of string string \"\\t\" \"gray\" end 0 0", "found \"\\t\"")]
     public void ColorLiteralsAreChecked(string body, string message)
     {
         var error = ViewFailure(body);
@@ -305,10 +305,10 @@ public sealed class ViewTests
     }
 
     [Theory]
-    [InlineData("def string tint \"pink\"\nwrite_view in_color tint text \"x\"", "Unknown color \"pink\"")]
-    [InlineData("def string tint \"pink\"\nwrite_view colored_grid list_of string \"#\" end map_of string string \"#\" tint end 0 0", "Unknown color \"pink\"")]
-    [InlineData("def string key \"ab\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"grey\" end 0 0", "found \"ab\"")]
-    [InlineData("def string key \"\\n\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"grey\" end 0 0", "found \"\\n\"")]
+    [InlineData("define string tint \"pink\"\nwrite_view in_color tint text \"x\"", "Unknown color \"pink\"")]
+    [InlineData("define string tint \"pink\"\nwrite_view colored_grid list_of string \"#\" end map_of string string \"#\" tint end 0 0", "Unknown color \"pink\"")]
+    [InlineData("define string key \"ab\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"gray\" end 0 0", "found \"ab\"")]
+    [InlineData("define string key \"\\n\"\nwrite_view colored_grid list_of string \"#\" end map_of string string key \"gray\" end 0 0", "found \"\\n\"")]
     public void ComputedColorsAreCheckedWhenShown(string body, string message)
     {
         var error = ViewFailure(body);
@@ -326,7 +326,7 @@ public sealed class ViewTests
     [Fact]
     public void AttemptGivesFalseForABadColor()
     {
-        Assert.Equal("false\n", Views("def string tint \"pink\"\nwrite_line attempt write_view in_color tint text \"x\""));
+        Assert.Equal("false\n", Views("define string tint \"pink\"\nwrite_line attempt write_view in_color tint text \"x\""));
     }
 
     [Fact]
@@ -355,13 +355,13 @@ public sealed class ViewTests
     public void AttemptGivesFalseForAViewThatCannotBeShown()
     {
         Assert.Equal("false\n", Views("write_line attempt show table list_of string end list_of list string end"));
-        Assert.Equal("x\ntrue\n", Views("def bool shown attempt write_view text \"x\"\nwrite_line shown"));
+        Assert.Equal("x\ntrue\n", Views("define bool shown attempt write_view text \"x\"\nwrite_line shown"));
     }
 
     [Fact]
     public void AViewNestedTooDeeplyIsNotShown()
     {
-        const string build = "def View view text \"core\"\ndef int depth 0\nwhile less depth {0} block\n    set view panel \"p\" view\n    set depth add depth 1\nend\n";
+        const string build = "define View view text \"core\"\ndefine int depth 0\nwhile less depth {0} block\n    set view panel \"p\" view\n    set depth add depth 1\nend\n";
 
         var deep = ViewFailure(string.Format(build, 1000) + "write_view view");
         Assert.Equal(ErrorStage.Runtime, deep.Stage);
@@ -417,7 +417,7 @@ public sealed class ViewTests
     public void ADashboardLoopReadsKeysOnATimer()
     {
         Assert.Equal("Lines: 0 of 0\n\nLines: 1 of 1\n\nbye\n", Views(
-            "def int count 0\n" +
+            "define int count 0\n" +
             "while true block\n" +
             "    show bar \"Lines\" count count\n" +
             "    if_some string key read_key_within 1000 block\n" +

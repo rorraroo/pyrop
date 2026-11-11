@@ -33,7 +33,7 @@ public sealed class PolishTests : IDisposable
     [Fact]
     public void ATypeNestedTooDeeplyIsAParseError()
     {
-        var failure = Run.Failure($"def {string.Concat(Enumerable.Repeat("list ", 5_000))}int x none int");
+        var failure = Run.Failure($"define {string.Concat(Enumerable.Repeat("list ", 5_000))}int x none int");
 
         Assert.Contains("nested more than 1000 levels", failure.Message);
     }
@@ -47,7 +47,7 @@ public sealed class PolishTests : IDisposable
     {
         var path = Quoted("note.txt");
         var output = Run.Program(
-            $"use files library\nimport from files save load end\nrecord Note string body\ndef Note before Note \"x\\r\\ny\\rz\"\nsave {path} convert string before\nwrite_line equal before convert Note load {path}\n");
+            $"use files library\nimport from files save load end\nrecord Note string body end\ndefine Note before Note \"x\\r\\ny\\rz\"\nsave {path} convert string before\nwrite_line equal before convert Note load {path}\n");
 
         Assert.Equal("true\n", output);
     }
@@ -59,7 +59,7 @@ public sealed class PolishTests : IDisposable
     [Fact]
     public void TheTextFormReaderRefusesALineBreakInsideQuotes()
     {
-        var output = Run.Program("record R string s\nwrite_line attempt convert R \"R s \\\"a\nb\\\"\"\n".Replace("\nb", "\\nb"));
+        var output = Run.Program("record R string s end\nwrite_line attempt convert R \"R s \\\"a\nb\\\"\"\n".Replace("\nb", "\\nb"));
 
         Assert.Equal("none\n", output);
     }
@@ -136,7 +136,7 @@ public sealed class PolishTests : IDisposable
 
     [Theory]
     [InlineData("write_line ad 1 2", "'ad' is not an operation or function", "Did you mean 'add'?")]
-    [InlineData("deff int x 1", "'deff' is not a statement, operation or function", "Did you mean 'def'?")]
+    [InlineData("defin int x 1", "'defin' is not a statement, operation or function", "Did you mean 'define'?")]
     [InlineData("Write_Line 1", "'Write_Line' is not a statement", "Did you mean 'write_line'?")]
     [InlineData("print 1", "'print' is not a statement", "use write_line")]
     [InlineData("if true then write_line 1", "'then' is not a statement", "Nothing comes between")]
@@ -163,11 +163,11 @@ public sealed class PolishTests : IDisposable
 
     [Fact]
     public void SettingAFieldSaysHowToMakeANewRecord() =>
-        Assert.Contains("A record does not change", Run.Failure("record P int x\ndef P p P 1\nset the x of p 3\n").Message);
+        Assert.Contains("A record does not change", Run.Failure("record P int x end\ndefine P p P 1\nset the x of p 3\n").Message);
 
     [Fact]
     public void SettingAnUndeclaredVariableSaysToDeclareIt() =>
-        Assert.Contains("Declare it first with def", Run.Failure("set y 3\n").Message);
+        Assert.Contains("Declare it first with define", Run.Failure("set y 3\n").Message);
 
     [Fact]
     public void AnUndeclaredNameIsReportedOnce() =>
@@ -177,7 +177,7 @@ public sealed class PolishTests : IDisposable
     [InlineData("write_line 1 // no", "a comment starts with #")]
     [InlineData("write_line 'a'", "double quotes")]
     [InlineData("write_line a.b", "from math round")]
-    [InlineData("def int my-var 1", "underscores")]
+    [InlineData("define int my-var 1", "underscores")]
     [InlineData("write_line (1)", "no brackets")]
     [InlineData("write_line 1e5", "no exponent form")]
     public void ASymbolGetsAHintOfItsOwn(string source, string hint) =>
@@ -190,9 +190,10 @@ public sealed class PolishTests : IDisposable
     [Fact]
     public void ALongCopyChainCountsAsNesting()
     {
-        var chain = string.Concat(Enumerable.Repeat(" with x 1", 1500));
+        var chain = string.Concat(Enumerable.Range(0, 1500).Select(index => $" with f{index} 1"));
+        var fields = string.Concat(Enumerable.Range(0, 1500).Select(index => $" int f{index}"));
 
-        Assert.Contains("nested more than 1000 levels", Run.Failure($"record R int x\ndef R p R 1\nwrite_line copy p{chain}\n").Message);
+        Assert.Contains("nested more than 1000 levels", Run.Failure($"record R{fields} end\ndefine R p R{string.Concat(Enumerable.Repeat(" 1", 1500))}\nwrite_line copy p{chain} end\n").Message);
     }
 
     [Fact]
@@ -201,7 +202,7 @@ public sealed class PolishTests : IDisposable
 
     [Fact]
     public void AGlobalDeclaredLaterIsNotCalledUnknown() =>
-        Assert.StartsWith("'5' cannot stand alone", Run.Failure("function void f\n    write_line total 5\n\ndef int total 1\n").Message);
+        Assert.StartsWith("'5' cannot stand alone", Run.Failure("function void f\n    write_line total 5\n\ndefine int total 1\n").Message);
 
     [Fact]
     public void AQualifiedFunctionIsNotCalledUnknown()

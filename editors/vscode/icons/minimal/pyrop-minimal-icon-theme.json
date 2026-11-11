@@ -1,0 +1,35 @@
+{
+  "iconDefinitions": {
+    "_root_folder_dark": { "iconPath": "./root-folder-dark.svg" },
+    "_root_folder_open_dark": { "iconPath": "./root-folder-open-dark.svg" },
+    "_folder_dark": { "iconPath": "./folder-dark.svg" },
+    "_folder_open_dark": { "iconPath": "./folder-open-dark.svg" },
+    "_file_dark": { "iconPath": "./document-dark.svg" },
+    "_root_folder_light": { "iconPath": "./root-folder-light.svg" },
+    "_root_folder_open_light": { "iconPath": "./root-folder-open-light.svg" },
+    "_folder_light": { "iconPath": "./folder-light.svg" },
+    "_folder_open_light": { "iconPath": "./folder-open-light.svg" },
+    "_file_light": { "iconPath": "./document-light.svg" },
+    "_pyrop": { "iconPath": "../pyrop.svg" }
+  },
+  "file": "_file_dark",
+  "folder": "_folder_dark",
+  "folderExpanded": "_folder_open_dark",
+  "rootFolder": "_root_folder_dark",
+  "rootFolderExpanded": "_root_folder_open_dark",
+  "fileExtensions": { "prp": "_pyrop" },
+  "languageIds": { "pyrop": "_pyrop" },
+  "light": {
+    "file": "_file_light",
+    "folder": "_folder_light",
+    "folderExpanded": "_folder_open_light",
+    "rootFolder": "_root_folder_light",
+    "rootFolderExpanded": "_root_folder_open_light",
+    "fileExtensions": { "prp": "_pyrop" },
+    "languageIds": { "pyrop": "_pyrop" }
+  },
+  "highContrast": {
+    "fileExtensions": { "prp": "_pyrop" },
+    "languageIds": { "pyrop": "_pyrop" }
+  }
+}

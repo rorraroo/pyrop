@@ -9,7 +9,7 @@ public sealed class FileOperationCollection;
 public sealed class FileOperationTests : IDisposable
 {
     private const string Imports =
-        "use files library\nimport from files delete_file copy_file move_file make_folder delete_folder join_path extension_of listing_all current_folder folder_exists folders_in modified_at exists load save end\n";
+        "use files library\nimport from files delete_file copy_file move_file make_folder delete_folder join_path extension_of files_under current_folder folder_exists folders_in modified_at file_exists load save end\n";
 
     private readonly string _directory = Directory.CreateTempSubdirectory("pyrop-files-").FullName;
     private readonly string _previous = Environment.CurrentDirectory;
@@ -207,7 +207,7 @@ public sealed class FileOperationTests : IDisposable
 
         Assert.Equal(
             "[\"A.txt\", \"b.txt\", \"sub/c.txt\", \"sub/deep/d.txt\"]\n",
-            Program("write_line listing_all \"top\""));
+            Program("write_line files_under \"top\""));
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public sealed class FileOperationTests : IDisposable
         Directory.CreateDirectory("top/sub");
         File.WriteAllText("top/sub/c.txt", "");
 
-        Assert.Equal("[\"sub/c.txt\"]\n", Program("write_line listing_all \"top/\""));
+        Assert.Equal("[\"sub/c.txt\"]\n", Program("write_line files_under \"top/\""));
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public sealed class FileOperationTests : IDisposable
     }
 
     [Theory]
-    [InlineData("listing_all")]
+    [InlineData("files_under")]
     [InlineData("folders_in")]
     public void FolderListingsFailPlainly(string operation)
     {
@@ -249,7 +249,7 @@ public sealed class FileOperationTests : IDisposable
 
         Assert.Equal(
             $"{Environment.CurrentDirectory}\ntrue\nfalse\nfalse\ntrue\n",
-            Program("write_line current_folder\nwrite_line folder_exists \"here\"\nwrite_line folder_exists \"a.txt\"\nwrite_line folder_exists \"no\"\nwrite_line exists \"a.txt\""));
+            Program("write_line current_folder\nwrite_line folder_exists \"here\"\nwrite_line folder_exists \"a.txt\"\nwrite_line folder_exists \"no\"\nwrite_line file_exists \"a.txt\""));
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public sealed class FileOperationTests : IDisposable
         File.SetLastWriteTimeUtc("a.txt", new DateTime(2026, 3, 4, 10, 0, 0, 500, DateTimeKind.Utc));
         var clock = new FixedClock(new DateTimeOffset(2026, 11, 9, 12, 0, 0, TimeSpan.FromHours(2)));
         const string source =
-            "use time library\nimport from time Moment end\ndef Moment m modified_at \"a.txt\"\n" +
+            "use time library\nimport from time Moment end\ndefine Moment m modified_at \"a.txt\"\n" +
             "write_line list_of int the year of m the month of m the day of m the hour of m the minute of m the second of m the millisecond of m the offset_minutes of m end";
 
         Assert.Equal("[2026, 3, 4, 12, 0, 0, 500, 120]\n", Run.Program(Imports + source, host: HostContext.Isolated with { Clock = clock }));
@@ -292,7 +292,7 @@ public sealed class FileOperationTests : IDisposable
         Junction("tree/link", "outside");
         Junction("tree/inner/back", "tree");
 
-        Assert.Equal("[\"inner/f.txt\"]\n", Program("write_line listing_all \"tree\""));
+        Assert.Equal("[\"inner/f.txt\"]\n", Program("write_line files_under \"tree\""));
     }
 
     [Fact]

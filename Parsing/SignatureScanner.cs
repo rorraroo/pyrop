@@ -300,7 +300,7 @@ public static class SignatureScanner
                 else if (!record.HasSameFields(fields))
                 {
                     throw cursor.Error(
-                        $"Record '{record.Name}' was declared earlier in this session as {Keywords.Record} {record.Name} {record.DescribeFields()}, and cannot be declared again with other fields.",
+                        $"Record '{record.Name}' was declared earlier in this session as {Keywords.Record} {record.Name} {record.DescribeFields()} {Keywords.End}, and cannot be declared again with other fields.",
                         declaration.Name);
                 }
             }
@@ -394,9 +394,6 @@ public static class SignatureScanner
                 var from = cursor.Advance();
                 var module = cursor.Advance();
                 var inStatement = new HashSet<string>();
-                var first = imports.Count;
-                var named = new HashSet<ChoiceType>();
-                var repeated = new List<(ModuleImport Earlier, QualifiedName Name)>();
                 while (cursor.Current.Kind == TokenKind.Word
                     && !cursor.Current.IsWord(Keywords.End)
                     && !Keywords.IsStatement(cursor.Current.Text))
@@ -410,41 +407,14 @@ public static class SignatureScanner
                         continue;
                     }
 
-                    var (target, earlier) = ScanImportedName(qualified, token, cursor, names, seen, imports, failures);
-                    if (target is ChoiceVariant variant)
-                    {
-                        named.Add(variant.Choice);
-                    }
-
-                    if (earlier is not null)
-                    {
-                        repeated.Add((earlier, qualified));
-                    }
-                }
-
-                foreach (var (earlier, qualified) in repeated)
-                {
-                    if (earlier.Choice is { } partial && !earlier.AllVariants && !named.Contains(partial))
-                    {
-                        failures.Add(token, qualified.Name.Text, cursor.Error(
-                            $"'{partial.Name}' was imported earlier with only some of its variants; import the others by name, as in {Keywords.Import} {Keywords.From} {qualified.Module.Text} {string.Join(" ", partial.Variants.Where(missing => names.FindVariant(missing.Name) != missing).Select(missing => missing.Name))} {Keywords.End}.",
-                            qualified.Name));
-                    }
-                }
-
-                for (var index = first; index < imports.Count; index++)
-                {
-                    if (imports[index].Choice is { } choice && named.Contains(choice))
-                    {
-                        imports[index] = imports[index] with { AllVariants = false };
-                    }
+                    ScanImportedName(qualified, token, cursor, names, seen, imports, failures);
                 }
             }
 
             return imports;
         }
 
-        private static (object? Target, ModuleImport? Earlier) ScanImportedName(
+        private static void ScanImportedName(
             QualifiedName qualified,
             Token token,
             TokenCursor cursor,
@@ -466,19 +436,17 @@ public static class SignatureScanner
                 {
                     if (ReferenceEquals(earlier.Target, target))
                     {
-                        return (target, earlier);
+                        return;
                     }
 
                     throw cursor.Error($"'{name}' is already imported in this file.", qualified.Name);
                 }
 
                 imports.Add(new ModuleImport(qualified.Module.Text, name, target, qualified.Name.Position, token));
-                return (target, null);
             }
             catch (PyropException error)
             {
                 failures.Add(token, name, error);
-                return (null, null);
             }
         }
 

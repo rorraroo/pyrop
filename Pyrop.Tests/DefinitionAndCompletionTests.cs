@@ -63,13 +63,13 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void AVariableGoesToItsDef()
     {
-        Assert.Equal((1, 9), Definition("def int total 1\nwrite_line |total\n")?.Pair());
+        Assert.Equal((1, 12), Definition("define int total 1\nwrite_line |total\n")?.Pair());
     }
 
     [Fact]
     public void ASetGoesToTheDefOfItsVariable()
     {
-        Assert.Equal((1, 9), Definition("def int total 1\nset |total 2\n")?.Pair());
+        Assert.Equal((1, 12), Definition("define int total 1\nset |total 2\n")?.Pair());
     }
 
     [Fact]
@@ -81,19 +81,19 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void AnInnerNameIsFoundBeforeAGlobalOfTheSameName()
     {
-        Assert.Equal((3, 13), Definition("def int n 1\nfunction void f\n    for int n in list_of int 1 end\n        write_line |n\n")?.Pair());
+        Assert.Equal((3, 13), Definition("define int n 1\nfunction void f\n    for int n in list_of int 1 end\n        write_line |n\n")?.Pair());
     }
 
     [Fact]
     public void AFunctionReadsAGlobalDeclaredLater()
     {
-        Assert.Equal((3, 9), Definition("function int f\n    return |later\ndef int later 1\n")?.Pair());
+        Assert.Equal((3, 12), Definition("function int f\n    return |later\ndefine int later 1\n")?.Pair());
     }
 
     [Fact]
     public void ABlockScopeEnds()
     {
-        Assert.Equal((1, 9), Definition("def int n 1\nblock\n    def int m 2\n    write_line m\nend\nwrite_line |n\n")?.Pair());
+        Assert.Equal((1, 12), Definition("define int n 1\nblock\n    define int m 2\n    write_line m\nend\nwrite_line |n\n")?.Pair());
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void AFieldGoesToTheFieldOfTheValuesRecord()
     {
-        const string source = "record A int x\nrecord B int x\ndef B b B 1\nwrite_line the |x of b\n";
+        const string source = "record A int x end\nrecord B int x end\ndefine B b B 1\nwrite_line the |x of b\n";
 
         Assert.Equal((2, 14), Definition(source)?.Pair());
     }
@@ -119,8 +119,8 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void ARecordTypeAndVariantGoToTheirDeclarations()
     {
-        Assert.Equal((1, 8), Definition("record Point int x\ndef |Point p Point 1\nwrite_line the x of p\n")?.Pair());
-        Assert.Equal((1, 18), Definition("choice Color red green end\ndef Color c |green\nwrite_line c\n")?.Pair());
+        Assert.Equal((1, 8), Definition("record Point int x end\ndefine |Point p Point 1\nwrite_line the x of p\n")?.Pair());
+        Assert.Equal((1, 18), Definition("choice Color red green end\ndefine Color c |green\nwrite_line c\n")?.Pair());
     }
 
     [Fact]
@@ -154,8 +154,8 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Theory]
     [InlineData("write_line |add 1 2\n")]
     [InlineData("|write_line 1\n")]
-    [InlineData("use math library\nwrite_line from |math abs 1\n")]
-    [InlineData("use math library\nwrite_line from math |abs 1\n")]
+    [InlineData("use math library\nwrite_line from |math absolute 1\n")]
+    [InlineData("use math library\nwrite_line from math |absolute 1\n")]
     public void BuiltInsHaveNoDefinition(string source)
     {
         Assert.Null(Definition(source));
@@ -191,7 +191,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void ARecordConstructorAndAVariantShowWhatTheyTake()
     {
-        var words = Complete("record Point int x int y\nchoice Shape dot circle int end\nwrite_line |").ToDictionary(entry => entry.Label);
+        var words = Complete("record Point int x int y end\nchoice Shape dot circle int end\nwrite_line |").ToDictionary(entry => entry.Label);
         Assert.Equal("takes 2", words["Point"].Takes);
         Assert.Equal("takes 1", words["circle"].Takes);
         Assert.Null(words["dot"].Takes);
@@ -200,13 +200,13 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void ANoArgumentOperationTakesNothing()
     {
-        Assert.Equal("takes nothing", Assert.Single(Complete("def string s rea|"), entry => entry.Label == "read").Takes);
+        Assert.Equal("takes nothing", Assert.Single(Complete("define string s rea|"), entry => entry.Label == "read").Takes);
     }
 
     [Fact]
     public void LocalsComeFirstAndOnlyThoseDeclaredBeforeTheCursor()
     {
-        var labels = Labels("function void f int count\n    def int total 1\n    write_line |\n    def int later 2\n").ToList();
+        var labels = Labels("function void f int count\n    define int total 1\n    write_line |\n    define int later 2\n").ToList();
 
         Assert.Equal(["count", "total"], labels.Take(2));
         Assert.DoesNotContain("later", labels);
@@ -215,7 +215,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void AnotherFunctionsLocalsAreNotListed()
     {
-        var labels = Labels("function void g\n    def int other 1\n    write_line other\n\nfunction void f\n    write_line |\n");
+        var labels = Labels("function void g\n    define int other 1\n    write_line other\n\nfunction void f\n    write_line |\n");
 
         Assert.DoesNotContain("other", labels);
     }
@@ -223,7 +223,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void GlobalsAreListedInsideAFunctionEvenIfDeclaredLater()
     {
-        Assert.Contains("later", Labels("function int f\n    return |\n\ndef int later 1\n"));
+        Assert.Contains("later", Labels("function int f\n    return |\n\ndefine int later 1\n"));
     }
 
     [Fact]
@@ -247,7 +247,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     {
         var entry = Assert.Single(Complete("use math library\nwrite_line from math ab|"));
 
-        Assert.Equal(("abs", "takes 1"), (entry.Label, entry.Takes));
+        Assert.Equal(("absolute", "takes 1"), (entry.Label, entry.Takes));
     }
 
     [Fact]
@@ -269,22 +269,22 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void FieldsAreListedAfterTheAndWith()
     {
-        const string declarations = "record P int x int y\ndef P p P 1 2\n";
+        const string declarations = "record P int x int y end\ndefine P p P 1 2\n";
 
         Assert.Equal(["x", "y"], Labels(declarations + "write_line the |"));
         Assert.Equal(["y"], Labels(declarations + "write_line copy p with y|"));
     }
 
     [Theory]
-    [InlineData("def |")]
-    [InlineData("def li|")]
+    [InlineData("define |")]
+    [InlineData("define li|")]
     [InlineData("for |")]
     [InlineData("write_line convert |")]
     [InlineData("write_line list_of |")]
     [InlineData("write_line map_of int |")]
-    [InlineData("def list |")]
-    [InlineData("def map |")]
-    [InlineData("def map int |")]
+    [InlineData("define list |")]
+    [InlineData("define map |")]
+    [InlineData("define map int |")]
     [InlineData("function list |")]
     [InlineData("function int f list |")]
     [InlineData("write_line convert list |")]
@@ -302,18 +302,18 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     {
         Assert.Contains("void", Labels("function vo|"));
         Assert.Contains("void", Labels("function |"));
-        Assert.DoesNotContain("void", Labels("def |"));
+        Assert.DoesNotContain("void", Labels("define |"));
     }
 
     [Fact]
     public void DeclaredTypesAreListed()
     {
-        Assert.Contains("Point", Labels("record Point int x\ndef Po|"));
+        Assert.Contains("Point", Labels("record Point int x end\ndefine Po|"));
     }
 
     [Theory]
-    [InlineData("def int |")]
-    [InlineData("def list int na|")]
+    [InlineData("define int |")]
+    [InlineData("define list int na|")]
     [InlineData("function int na|")]
     [InlineData("function int f int na|")]
     [InlineData("use na|")]
@@ -346,8 +346,8 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     public void ASpaceOnlyOpensClosedLists()
     {
         Assert.Empty(Complete("write_line |", typedSpace: true));
-        Assert.NotEmpty(Complete("write_line the |".Insert(0, "record P int x\n"), typedSpace: true));
-        Assert.Contains("int", Labels("def |", typedSpace: true));
+        Assert.NotEmpty(Complete("write_line the |".Insert(0, "record P int x end\n"), typedSpace: true));
+        Assert.Contains("int", Labels("define |", typedSpace: true));
         Assert.DoesNotContain("write_line", Labels("function void f int a\n    |\n", typedSpace: true));
     }
 
@@ -379,7 +379,7 @@ public sealed class DefinitionAndCompletionTests : IDisposable
     [Fact]
     public void KeywordsAreListedLast()
     {
-        var entries = Complete("def int while_count 1\nwhi|");
+        var entries = Complete("define int while_count 1\nwhi|");
 
         Assert.Equal(["while_count", "while"], entries.OrderBy(entry => entry.Rank).Select(entry => entry.Label));
     }

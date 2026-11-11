@@ -90,7 +90,20 @@ public sealed class Lexer
             return ReadString(start);
         }
 
-        if (char.IsAsciiDigit(Current) || (Current == '-' && PeekAhead(1) is { } next && char.IsAsciiDigit(next)))
+        if (Current == '-' && PeekAhead(1) is { } next && char.IsAsciiDigit(next))
+        {
+            if (_index > 0 && !char.IsWhiteSpace(_source[_index - 1]))
+            {
+                throw Error(
+                    "A minus sign joined to what comes before it is not a negative number, because Pyrop has no subtraction sign. " +
+                    "Write subtract to subtract, as in subtract 5 3, and leave a space before a negative number, as in add 5 -3.",
+                    start);
+            }
+
+            return ReadNumber(start);
+        }
+
+        if (char.IsAsciiDigit(Current))
         {
             return ReadNumber(start);
         }
@@ -113,7 +126,7 @@ public sealed class Lexer
         '.' => "; write from math round for a name in a library, and the x of p for a field.",
         '-' => "; write subtract 0 x to change a sign, and join the words of a name with underscores.",
         '(' or ')' or '[' or ']' or '{' or '}' => "; there are no brackets, because each word knows how many values it takes.",
-        '=' => "; write def or set to give a variable a value, and equal to compare.",
+        '=' => "; write define or set to give a variable a value, and equal to compare.",
         _ => ".",
     };
 

@@ -158,7 +158,7 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "def int x 2\nwrite_line add 1 multiply 2 x");
+        client.Open(uri, "define int x 2\nwrite_line add 1 multiply 2 x");
         client.Diagnostics();
 
         var result = client.Response(client.Request("textDocument/hover", new { textDocument = new { uri }, position = new { line = 1, character = 12 } }))
@@ -357,16 +357,16 @@ public sealed class LanguageServerTests : IDisposable
         using var client = Started();
         var uri = UriOf("main.prp");
 
-        client.Open(uri, "write_line 1\ndef int x \"text\"\n");
+        client.Open(uri, "write_line 1\ndefine int x \"text\"\n");
 
         var (published, diagnostics) = client.Diagnostics();
         Assert.Equal(uri, published);
         var diagnostic = Assert.Single(diagnostics.EnumerateArray());
         var range = diagnostic.GetProperty("range");
         Assert.Equal(1, range.GetProperty("start").GetProperty("line").GetInt32());
-        Assert.Equal(10, range.GetProperty("start").GetProperty("character").GetInt32());
+        Assert.Equal(13, range.GetProperty("start").GetProperty("character").GetInt32());
         Assert.Equal(1, range.GetProperty("end").GetProperty("line").GetInt32());
-        Assert.Equal(16, range.GetProperty("end").GetProperty("character").GetInt32());
+        Assert.Equal(19, range.GetProperty("end").GetProperty("character").GetInt32());
         Assert.Equal(1, diagnostic.GetProperty("severity").GetInt32());
         Assert.Equal("Type error", diagnostic.GetProperty("code").GetString());
         Assert.Equal("pyrop", diagnostic.GetProperty("source").GetString());
@@ -378,7 +378,7 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
 
-        client.Open(UriOf("types.prp"), "def int a \"x\"\ndef bool b 3\n");
+        client.Open(UriOf("types.prp"), "define int a \"x\"\ndefine bool b 3\n");
         Assert.Equal(2, client.Diagnostics().Diagnostics.GetArrayLength());
 
         client.Change(UriOf("types.prp"), "write_line add 1\nwrite_line add 2\n");
@@ -403,10 +403,10 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "def int x \"text\"");
+        client.Open(uri, "define int x \"text\"");
         Assert.Equal(1, client.Diagnostics().Diagnostics.GetArrayLength());
 
-        client.Change(uri, "def int x 3");
+        client.Change(uri, "define int x 3");
 
         Assert.Equal(0, client.Diagnostics().Diagnostics.GetArrayLength());
     }
@@ -417,8 +417,8 @@ public sealed class LanguageServerTests : IDisposable
         using var client = Started(TimeSpan.FromSeconds(1));
         var uri = UriOf("main.prp");
 
-        client.Open(uri, "def int x \"text\"");
-        client.Change(uri, "def int x 3");
+        client.Open(uri, "define int x \"text\"");
+        client.Change(uri, "define int x 3");
 
         Assert.Equal(0, client.Diagnostics().Diagnostics.GetArrayLength());
     }
@@ -458,7 +458,7 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "def int x \"text\"");
+        client.Open(uri, "define int x \"text\"");
         client.Diagnostics();
 
         client.Notify("textDocument/didClose", new { textDocument = new { uri } });
@@ -473,8 +473,8 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
 
-        client.Open("untitled:Untitled-1", "def int x \"text\"");
-        client.Open(UriOf("main.prp"), "def int x 3");
+        client.Open("untitled:Untitled-1", "define int x \"text\"");
+        client.Open(UriOf("main.prp"), "define int x 3");
 
         Assert.Equal(UriOf("main.prp"), client.Diagnostics().Uri);
         var id = client.Request("shutdown");
@@ -487,7 +487,7 @@ public sealed class LanguageServerTests : IDisposable
         FileOnDisk("lib.prp", "export function int double int n\n    return multiply n 2\n");
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "use lib \"lib.prp\"\nimport from lib double end\nfunction int twice int n return double double n\ndef int x twice 3\n");
+        client.Open(uri, "use lib \"lib.prp\"\nimport from lib double end\nfunction int twice int n return double double n\ndefine int x twice 3\n");
         client.Diagnostics();
 
         var data = client.Response(client.Request("textDocument/semanticTokens/full", new { textDocument = new { uri } }))
@@ -506,7 +506,7 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "record P int x\ndef P p P 1\ndef int x the x of p\nset p copy p with x x\n");
+        client.Open(uri, "record P int x end\ndefine P p P 1\ndefine int x the x of p\nset p copy p with x x end\n");
         client.Diagnostics();
 
         Assert.Equal(
@@ -568,7 +568,7 @@ public sealed class LanguageServerTests : IDisposable
         client.SendRaw("""{"jsonrpc":"2.0","id":7,"method":"textDocument/semanticTokens/full","params":{"textDocument":{"uri":"file:///\udc00.prp"}}}""");
         Assert.Equal(JsonValueKind.Null, client.Response(7).GetProperty("result").ValueKind);
 
-        client.Open(UriOf("good.prp"), "def int x \"text\"");
+        client.Open(UriOf("good.prp"), "define int x \"text\"");
         Assert.Equal(UriOf("good.prp"), client.Diagnostics().Uri);
     }
 
@@ -597,8 +597,8 @@ public sealed class LanguageServerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("def string s \"x\"\r\ndef int x \"a\"\r\n", 1, 10, 13)]
-    [InlineData("def string s \"\U0001F600\" def int x \"a\"\n", 0, 28, 31)]
+    [InlineData("define string s \"x\"\r\ndefine int x \"a\"\r\n", 1, 13, 16)]
+    [InlineData("define string s \"\U0001F600\" define int x \"a\"\n", 0, 34, 37)]
     public void RangesCountUtf16AndIgnoreCarriageReturns(string text, int line, int start, int end)
     {
         using var client = Started();
@@ -617,7 +617,7 @@ public sealed class LanguageServerTests : IDisposable
         FileOnDisk("lib.prp", "end\n");
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "use lib \"lib.prp\"\ndef int x 1\n");
+        client.Open(uri, "use lib \"lib.prp\"\ndefine int x 1\n");
         var published = new[] { client.Diagnostics(), client.Diagnostics() }.ToDictionary(item => item.Uri, item => item.Diagnostics);
         Assert.Equal(1, published[UriOf("lib.prp")].GetArrayLength());
 
@@ -629,7 +629,7 @@ public sealed class LanguageServerTests : IDisposable
     {
         using var client = Started();
         var uri = UriOf("main.prp");
-        client.Open(uri, "function int g int a\n    return add a\ndef int a 3\nwrite_line a\n");
+        client.Open(uri, "function int g int a\n    return add a\ndefine int a 3\nwrite_line a\n");
         client.Diagnostics();
 
         Assert.Equal(["function", "parameter", "function", "parameter", "variable", "variable"], KindsOf(Tokens(client, uri)));

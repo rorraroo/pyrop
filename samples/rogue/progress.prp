@@ -3,10 +3,10 @@ use files library
 import from data Data parse_yaml yaml_text end
 import from files load save end
 
-export record Progress int runs int escapes int best_depth int gold_banked
+export record Progress int runs int escapes int best_depth int gold_banked end
 
-def int most_gold 1000000
-def int most_runs 1000000
+define int most_gold 1000000
+define int most_runs 1000000
 
 export function Progress load_progress string path block
     if_some string text attempt load path
@@ -20,14 +20,14 @@ export function bool save_progress string path Progress progress
     return attempt save path yaml_text convert Data progress
 
 export function Progress after_run Progress before int depth int gold block
-    def Progress after copy before with runs add the runs of before 1
-    if greater depth 3 set after copy after with escapes add the escapes of after 1
-    set after copy after with best_depth larger the best_depth of after smaller depth 3
-    return copy after with gold_banked smaller most_gold add the gold_banked of after gold
+    define Progress after copy before with runs add the runs of before 1 end
+    if greater depth 3 set after copy after with escapes add the escapes of after 1 end
+    set after copy after with best_depth larger_of the best_depth of after smaller_of depth 3 end
+    return copy after with gold_banked smaller_of most_gold add the gold_banked of after gold end
 end
 
 export function int health_bonus Progress progress
-    return smaller 5 divide the gold_banked of progress 25
+    return smaller_of 5 divide the gold_banked of progress 25
 
 function Progress fresh_progress
     return Progress 0 0 0 0

@@ -209,7 +209,7 @@ public static class CompletionProvider
             for (var index = _at - 1; index >= Math.Max(0, _at - 8); index--)
             {
                 var token = _tokens[index];
-                if (token.IsWord(Keywords.Def) || token.IsWord(Keywords.For) || token.IsWord(Keywords.IfSome))
+                if (token.IsWord(Keywords.Define) || token.IsWord(Keywords.For) || token.IsWord(Keywords.IfSome))
                 {
                     var length = TypeLength(index + 1);
                     return _at <= index || _at < index + 1 + Math.Max(length, 1) ? Place.Types
@@ -503,7 +503,7 @@ public static class CompletionProvider
         private IEnumerable<(int NameIndex, string Type)> NamesDeclaredAt(int index)
         {
             var token = _tokens[index];
-            if (token.IsWord(Keywords.Def) || token.IsWord(Keywords.For) || token.IsWord(Keywords.IfSome))
+            if (token.IsWord(Keywords.Define) || token.IsWord(Keywords.For) || token.IsWord(Keywords.IfSome))
             {
                 var length = TypeLength(index + 1);
                 var nameIndex = index + 1 + length;

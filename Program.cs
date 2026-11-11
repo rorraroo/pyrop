@@ -68,12 +68,12 @@ static int ShowHelp()
     AnsiConsole.WriteLine();
     var options = new Grid().AddColumn(new GridColumn().PadLeft(2).PadRight(4)).AddColumn();
     options.AddRow("[bold]file.prp[/] [grey][[arguments]][/]", "Run a script, passing it any further arguments. Exits with the code given to exit, 0 if the script finishes, or 1 on any error.");
-    options.AddRow("[bold]-b[/], [bold]--build[/] [grey]file.prp [[-o output]][/]", "Build a standalone executable containing the script and the modules it uses. Needs the standalone pyrop.");
+    options.AddRow("[bold]-b[/], [bold]--build[/] [grey]file.prp [[-o output]][/]", "Build a standalone executable containing the script and the modules it uses, named after the script or given with -o or --output. Needs the standalone pyrop.");
     options.AddRow("[bold]-t[/], [bold]--tree[/] [grey]file.prp[/]", "Show the program with brackets around every call, to see how the parser grouped it. Statements before a parse error are still shown.");
     options.AddRow("[bold]-f[/], [bold]--format[/] [grey]file.prp…[/]", "Indent each file according to how it parses, rewriting it in place. A file that does not parse is left unchanged.");
     options.AddRow("[bold]--lsp[/]", "Run a language server on standard input and output, for editors to show errors, types and grouping while you type, and to format.");
     options.AddRow("[grey](no arguments)[/]", "Start the interactive REPL.");
-    options.AddRow("[bold]--plain[/]", "Write no colours, styles or prompt decorations. Also on when output is redirected or NO_COLOR is set.");
+    options.AddRow("[bold]--plain[/]", "Write no colours, styles or prompt decorations. It comes before everything else. Also on when output is redirected or NO_COLOR is set.");
     options.AddRow("[bold]-h[/], [bold]--help[/]", "Show this help.");
     options.AddRow("[bold]-v[/], [bold]--version[/]", "Show the version.");
     AnsiConsole.Write(options);
@@ -96,9 +96,9 @@ static int ShowUsage()
 static void WriteUsageLines(IAnsiConsole console)
 {
     console.MarkupLine("Usage: [bold]pyrop[/] [grey][[--plain]] [[file.prp [[arguments]]]][/]");
-    console.MarkupLine("       [bold]pyrop[/] [grey]--build file.prp [[-o output]][/]");
-    console.MarkupLine("       [bold]pyrop[/] [grey]--tree file.prp[/]");
-    console.MarkupLine("       [bold]pyrop[/] [grey]--format file.prp…[/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey][[--plain]] --build file.prp [[-o output]][/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey][[--plain]] --tree file.prp[/]");
+    console.MarkupLine("       [bold]pyrop[/] [grey][[--plain]] --format file.prp…[/]");
     console.MarkupLine("       [bold]pyrop[/] [grey]--lsp[/]");
     console.MarkupLine("       [bold]pyrop[/] [grey]--help | --version[/]");
 }

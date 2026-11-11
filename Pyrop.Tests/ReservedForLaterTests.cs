@@ -27,12 +27,12 @@ public class ReservedForLaterTests
     }
 
     [Theory]
-    [InlineData("def int call 1", "variable name")]
+    [InlineData("define int call 1", "variable name")]
     [InlineData("function int call block return 1 end", "function name")]
     [InlineData("function int f int call block return call end", "parameter name")]
     [InlineData("for int call in list_of int end write_line 1", "loop variable name")]
-    [InlineData("record call int x", "record name")]
-    [InlineData("record Point int call", "field name")]
+    [InlineData("record call int x end", "record name")]
+    [InlineData("record Point int call end", "field name")]
     [InlineData("choice call north end", "choice name")]
     [InlineData("choice Way call end", "variant name")]
     [InlineData("use call library", "module name")]
@@ -45,8 +45,8 @@ public class ReservedForLaterTests
     }
 
     [Theory]
-    [InlineData("def call x 1")]
-    [InlineData("record R call x")]
+    [InlineData("define call x 1")]
+    [InlineData("record R call x end")]
     public void UsingTheWordAsATypeSaysItIsForALaterVersion(string source)
     {
         Assert.Equal("'call' is reserved for a later version of Pyrop.", ParseFailure(source).Message);
@@ -64,6 +64,6 @@ public class ReservedForLaterTests
     [Fact]
     public void OrdinaryReservedWordsKeepTheirMessage()
     {
-        Assert.Equal("'add' is a reserved word and cannot be used as a variable name.", ParseFailure("def int add 1").Message);
+        Assert.Equal("'add' is a reserved word and cannot be used as a variable name.", ParseFailure("define int add 1").Message);
     }
 }

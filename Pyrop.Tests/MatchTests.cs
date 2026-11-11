@@ -16,14 +16,14 @@ public class MatchTests
     public void VariantsCarryData()
     {
         const string source = """
-            record Point int x int y
+            record Point int x int y end
             choice Shape circle float rect float float dot Point empty_shape end
-            def list Shape shapes list_of Shape circle 1.5 rect 2.0 3.0 dot Point 1 2 empty_shape end
+            define list Shape shapes list_of Shape circle 1.5 rect 2.0 3.0 dot Point 1 2 empty_shape end
             write_line shapes
             write_line get shapes 1
             write_line convert string get shapes 2
             write_line some circle 1.0
-            record Holder Shape shape
+            record Holder Shape shape end
             write_line Holder rect 1.0 2.0
             write_line Holder empty_shape
             write_line list_of string "a" end
@@ -94,7 +94,7 @@ public class MatchTests
                     when node left right return add total left total right
                 end
 
-            def Tree tree node leaf 1 node leaf 2 leaf 3
+            define Tree tree node leaf 1 node leaf 2 leaf 3
             write_line total tree
             write_line tree
             choice Chain stop link int Chain end
@@ -127,7 +127,7 @@ public class MatchTests
     public void BranchesCanBreakContinueAndNest()
     {
         const string source = Action + """
-            def list Action actions list_of Action wait go 1 take "x" go 2 end
+            define list Action actions list_of Action wait go 1 take "x" go 2 end
             for Action action in actions
                 match action
                     when go n
@@ -140,7 +140,7 @@ public class MatchTests
                     when wait continue
                 end
             write_line "done"
-            def int count 0
+            define int count 0
             while true block
                 match go count
                     when go n if equal n 3 break else set count add n 1
@@ -173,7 +173,7 @@ public class MatchTests
         var error = Failure(Action + "match go 1\n    when go n write_line n\n    when take t write_line n\n    when wait write_line 0\nend", ErrorStage.Type, 4, 28);
         Assert.Equal("Undeclared variable 'n'.", error.Message);
 
-        Assert.Equal("1\n1\n", Run.Program(Action + "match go 1\n    when go n block\n        set n add n 0\n        write_line n\n    end\n    when take t write_line t\n    when wait write_line 0\nend\ndef int n 1\nwrite_line n"));
+        Assert.Equal("1\n1\n", Run.Program(Action + "match go 1\n    when go n block\n        set n add n 0\n        write_line n\n    end\n    when take t write_line t\n    when wait write_line 0\nend\ndefine int n 1\nwrite_line n"));
     }
 
     [Theory]
@@ -203,11 +203,11 @@ public class MatchTests
         "The variant 'both' carries 2 values (int string), so 'when both' needs a name for each, as in when both value1 value2 …; found 'end'.")]
     [InlineData("choice Pair both int string end\nmatch both 1 \"a\"\n    when both n n write_line n\nend", 4, 17, "The when value 'n' is named twice.")]
     [InlineData("match wait\n    when go add write_line 1\nend", 3, 13, "'add' is a reserved word and cannot be used as a when value name.")]
-    [InlineData("def int n 1\nmatch wait\n    when go n write_line n\nend", 4, 13,
+    [InlineData("define int n 1\nmatch wait\n    when go n write_line n\nend", 4, 13,
         "The when value 'n' would shadow the variable of the same name declared earlier in this block.")]
     [InlineData("function void f int n\n    match wait\n        when go n write_line n\n        when take t write_line t\n        when wait write_line 0\n    end", 4, 17,
         "The when value 'n' would shadow the parameter of the same name.")]
-    [InlineData("match go 1\n    when go n block\n        def int n 2\n    end\nend", 4, 17, "Variable 'n' would shadow the when value of the same name.")]
+    [InlineData("match go 1\n    when go n block\n        define int n 2\n    end\nend", 4, 20, "Variable 'n' would shadow the when value of the same name.")]
     [InlineData("match wait\n    write_line 1\nend", 3, 5, "Expected 'when' or 'end' to close the match started at line 2, column 1, found 'write_line'.")]
     [InlineData("match wait end", 2, 12, "'match' needs a branch for each variant before 'end', such as when <variant> <statement>.")]
     [InlineData("match wait\n    when Action write_line 1\nend", 3, 10, "'Action' is a choice; 'when' names one of its variants, such as when go ….")]
@@ -215,12 +215,12 @@ public class MatchTests
     [InlineData("when wait write_line 1", 2, 1, "'when' without a matching 'match'.")]
     [InlineData("go 1", 2, 1,
         "A variant that carries data cannot be a statement: 'go …' would make a value only to throw it away. Use it as a value, as in set <name> go ….")]
-    [InlineData("def map Action int m map_of Action int end", 2, 9,
+    [InlineData("define map Action int m map_of Action int end", 2, 12,
         "The choice 'Action' cannot be a map key, because some of its variants carry data; only a choice whose variants carry none can.")]
-    [InlineData("def int match 1", 2, 9, "'match' is a reserved word and cannot be used as a variable name.")]
-    [InlineData("def int when 1", 2, 9, "'when' is a reserved word and cannot be used as a variable name.")]
-    [InlineData("match wait\n    when wait def int x 1\nend", 3, 15, "A def cannot be the body of a when; wrap it in block … end.")]
-    [InlineData("def Action a Action", 2, 14, "'Action' is a choice, not a value; name one of its variants, such as go ….")]
+    [InlineData("define int match 1", 2, 12, "'match' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("define int when 1", 2, 12, "'when' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("match wait\n    when wait define int x 1\nend", 3, 15, "A define cannot be the body of a when; wrap it in block … end.")]
+    [InlineData("define Action a Action", 2, 17, "'Action' is a choice, not a value; name one of its variants, such as go ….")]
     public void MatchAndVariantParseErrors(string body, int line, int column, string message)
     {
         var error = Failure(Action + body, ErrorStage.Parse, line, column);
@@ -230,7 +230,7 @@ public class MatchTests
     [Theory]
     [InlineData("choice C more C end", 1, 8,
         "Choice 'C' contains itself: every variant carries data that cannot be made without a C, so no C could ever be made. Give it a variant that does not need one, such as a variant without data.")]
-    [InlineData("record R C c\nchoice C wrap R end", 2, 8,
+    [InlineData("record R C c end\nchoice C wrap R end", 2, 8,
         "Choice 'C' contains itself: every variant carries data that cannot be made without a C, so no C could ever be made. Give it a variant that does not need one, such as a variant without data.")]
     [InlineData("choice D a void end", 1, 12, "The variant 'a' cannot carry void; void has no values.")]
     [InlineData("choice D void end", 1, 10, "'void' is a reserved word and cannot be used as a variant name.")]
@@ -251,7 +251,7 @@ public class MatchTests
         const string source = """
             choice Event moved Place list int noted map string option Event quiet end
             choice Place inside outside end
-            def Event e moved outside list_of int 1 2 end
+            define Event e moved outside list_of int 1 2 end
             write_line e
             write_line noted map_of string option Event "x" some quiet "y" none Event end
             """;
@@ -266,7 +266,7 @@ public class MatchTests
         var session = new PyropSession(new StringReader(""), output);
 
         session.Run(Action);
-        session.Run(Action + "def Action a go 4");
+        session.Run(Action + "define Action a go 4");
         session.Run("match a\n    when go n write_line n\n    when take t write_line t\n    when wait write_line 0\nend");
         var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run("choice Action go float take string wait end")).Errors);
 
@@ -292,7 +292,7 @@ public class MatchTests
     [Fact]
     public void VariantsNestedBeyondTheLimitAreRuntimeErrors()
     {
-        const string declarations = "choice Tree leaf node Tree end\ndef Tree a node node node node leaf\ndef Tree b node node node node leaf\n";
+        const string declarations = "choice Tree leaf node Tree end\ndefine Tree a node node node node leaf\ndefine Tree b node node node node leaf\n";
         var session = new PyropSession(new StringReader(""), new StringOutput()) { NestingLimit = 3 };
 
         var equal = Assert.Single(Assert.Throws<PyropException>(() => session.Run(declarations + "write_line equal a b")).Errors);

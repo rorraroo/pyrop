@@ -2,43 +2,43 @@ use lines "lines.prp"
 use files library
 use program library
 import from lines counted end
-import from files exists load_lines save end
+import from files file_exists load_lines save end
 
-def list string arguments from program arguments
+define list string arguments from program arguments
 
 if less length_of arguments 1 block
     write_error_line "usage: logcheck <log file> [report file]"
     exit 2
 end
 
-def string log_path get arguments 0
-def string report_path "report.txt"
+define string log_path get arguments 0
+define string report_path "report.txt"
 if greater length_of arguments 1 set report_path get arguments 1
 
-if not exists log_path block
+if not file_exists log_path block
     styled "danger" write_error_line add "No such file: " log_path
     exit 3
 end
 
-def int line_number 0
-def int total 0
-def int errors 0
-def int warnings 0
-def list string report list_of string add "Errors in " log_path "" end
+define int line_number 0
+define int total 0
+define int errors 0
+define int warnings 0
+define list string report list_of string add "Errors in " log_path "" end
 
 for string text in load_lines log_path block
     set line_number add line_number 1
-    def string line trim text
+    define string line trim text
     if equal line "" continue
     set total add total 1
-    if starts_with upper line "ERROR" block
+    if starts_with uppercase line "ERROR" block
         set errors add errors 1
         set report push report add pad_left convert string line_number 5 " " add ": " line
     end
-    else if starts_with upper line "WARN" set warnings add warnings 1
+    else if starts_with uppercase line "WARN" set warnings add warnings 1
 end
 
-def string summary add counted total "line" add ", " add counted errors "error" add ", " counted warnings "warning"
+define string summary add counted total "line" add ", " add counted errors "error" add ", " counted warnings "warning"
 set report push report ""
 set report push report summary
 set report push report ""

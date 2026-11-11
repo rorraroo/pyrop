@@ -8,7 +8,7 @@
   #define Vsix "..\vscode\pyrop-" + AppVersion + ".vsix"
 #endif
 #ifndef ExtensionId
-  #define ExtensionId "radardev.pyrop"
+  #define ExtensionId "rorraroo.pyrop"
 #endif
 #ifndef OutputFolder
   #define OutputFolder "..\..\publish"
@@ -19,7 +19,7 @@ AppId={{9DA2DB72-0F06-4A53-86F7-B38A3A0A36EB}
 AppName=Pyrop
 AppVersion={#AppVersion}
 AppVerName=Pyrop {#AppVersion}
-AppPublisher=radardev
+AppPublisher=rorraroo
 DefaultDirName={autopf}\Pyrop
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

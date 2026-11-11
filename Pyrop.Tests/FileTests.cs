@@ -10,7 +10,7 @@ public sealed class FileTests : IDisposable
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private const string Libraries =
-        "use files library\nimport from files load save append exists end\n" +
+        "use files library\nimport from files load save append file_exists end\n" +
         "use program library\nimport from program arguments end\n";
 
     private string PathOf(string name) => Path.Combine(_directory, name);
@@ -188,14 +188,14 @@ public sealed class FileTests : IDisposable
         Assert.Equal(
             "true\nfalse\nfalse\nfalse\n",
             RunWith(
-                "write_line exists get arguments 0\nwrite_line exists get arguments 1\n" +
-                "write_line exists get arguments 2\nwrite_line exists \"\"",
+                "write_line file_exists get arguments 0\nwrite_line file_exists get arguments 1\n" +
+                "write_line file_exists get arguments 2\nwrite_line file_exists \"\"",
                 "present.txt", "absent.txt", "folder"));
     }
 
     [Theory]
     [InlineData("write_line save \"a\" \"b\"")]
-    [InlineData("def string s append \"a\" \"b\"")]
+    [InlineData("define string s append \"a\" \"b\"")]
     public void RejectsAVoidOperationUsedAsAValue(string source)
     {
         var error = Run.Failure(Libraries + source);

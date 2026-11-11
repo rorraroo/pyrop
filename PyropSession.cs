@@ -16,7 +16,6 @@ public enum InputStatus
     Ready,
     Incomplete,
     AwaitingElse,
-    AwaitingFields,
 }
 
 public sealed class PyropSession
@@ -88,7 +87,6 @@ public sealed class PyropSession
         {
             var statements = Parse(source, null, null).Program.Main.Tree.Statements;
             return statements.Count == 0 ? InputStatus.Ready
-                : statements[^1] is RecordStatement ? InputStatus.AwaitingFields
                 : EndsWithOpenIf(statements[^1]) ? InputStatus.AwaitingElse
                 : InputStatus.Ready;
         }

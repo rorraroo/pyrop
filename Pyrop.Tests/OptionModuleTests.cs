@@ -15,10 +15,10 @@ public sealed class OptionModuleTests : IDisposable
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private const string Geometry =
-        "export record Point float x float y\n" +
+        "export record Point float x float y end\n" +
         "export function option Point parse_point string text\n" +
         "block\n" +
-        "    def list string parts split text \",\"\n" +
+        "    define list string parts split text \",\"\n" +
         "    if not equal length_of parts 2 return none Point\n" +
         "    if_some float x attempt convert float get parts 0\n" +
         "        if_some float y attempt convert float get parts 1 return some Point x y\n" +
@@ -50,7 +50,7 @@ public sealed class OptionModuleTests : IDisposable
     {
         const string source = """
             use geo "geo.prp"
-            def option from geo Point found from geo parse_point "1.5,2"
+            define option from geo Point found from geo parse_point "1.5,2"
             write_line found
             write_line from geo parse_point "1.5"
             write_line from geo parse_point "a,b"
@@ -73,7 +73,7 @@ public sealed class OptionModuleTests : IDisposable
     [Fact]
     public void AnExportedFunctionCannotExposeAPrivateRecordThroughAnOption()
     {
-        WriteFile("hidden.prp", "record Secret int code\nexport function option Secret lookup return none Secret\n");
+        WriteFile("hidden.prp", "record Secret int code end\nexport function option Secret lookup return none Secret\n");
         var error = FailFile("use hidden \"hidden.prp\"\nwrite_line 1");
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Equal(

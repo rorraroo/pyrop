@@ -37,11 +37,10 @@ public sealed class BuiltinLibrary
 
     public LoadedModule Loaded { get; }
 
-    public bool Exports(string name) => ImportNameFor(name) is not null;
-
-    public string? ImportNameFor(string name) =>
-        Operations.ContainsKey(name) || Choices.Any(choice => choice.Name == name) || Records.Any(record => record.Name == name) ? name
-        : Choices.FirstOrDefault(choice => choice.FindVariant(name) is not null)?.Name;
+    public bool Exports(string name) =>
+        Operations.ContainsKey(name)
+        || Choices.Any(choice => choice.Name == name || choice.FindVariant(name) is not null)
+        || Records.Any(record => record.Name == name);
 
     public string KindOf(string name) =>
         Operations.ContainsKey(name) ? "an operation"
@@ -105,13 +104,7 @@ public sealed class BuiltinLibraries
 
     private static string HowToReach(BuiltinLibrary library, string name, ModuleNamespace names)
     {
-        var importName = library.ImportNameFor(name) ?? name;
-        if (importName != name && names.Imports.TryGetValue(importName, out var imported) && imported.Module == library.Name)
-        {
-            importName = name;
-        }
-
-        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {importName} {Keywords.End}";
+        var import = $"{Keywords.Import} {Keywords.From} {library.Name} {name} {Keywords.End}";
         var qualified = $"{Keywords.From} {library.Name} {name}";
         return names.Uses.TryGetValue(library.Name, out var use) && use.Target.Module == library.Module
             ? $"add {import}, or write {qualified}"

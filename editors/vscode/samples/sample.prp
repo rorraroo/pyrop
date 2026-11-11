@@ -2,23 +2,23 @@
 use shapes "shapes.prp"
 use files library
 import from shapes circle_area Size end
-import from files exists load_lines end
+import from files file_exists load_lines end
 
 export function int factorial int n
     if less n 2 return 1
     else return multiply n factorial subtract n 1
 
 function string combine string a string b block
-    def string text add a b
+    define string text add a b
     return text
 end
 
 function void greet string name
     write_line add "Hi \"" add name "\"\n"
 
-def int i 0
-def float ratio divide convert float 7 2.0
-def bool done false
+define int i 0
+define float ratio divide convert float 7 2.0
+define bool done false
 
 while not done block
     set i add i 1
@@ -40,9 +40,9 @@ write_line Size 2.0 3.0
 function int total list int numbers map string list int groups
     return add length_of numbers length_of groups
 
-def list string bag list_of string "lamp" "rope" end
+define list string bag list_of string "lamp" "rope" end
 set bag push bag "key"
-def map string int prices map_of string int end
+define map string int prices map_of string int end
 set prices put prices "lamp" 5
 if has prices "lamp" write_line get prices "lamp"
 write_line keys_of prices
@@ -53,26 +53,26 @@ for string item in bag block
 end
 for string name in keys_of prices write_line name
 
-def list string words split "a,b,c" ","
+define list string words split "a,b,c" ","
 write_line join words " "
-if exists "notes.txt" for string line in load_lines "notes.txt" write_line line
-for string file in from files listing "." write_line file
+if file_exists "notes.txt" for string line in load_lines "notes.txt" write_line line
+for string file in from files files_in "." write_line file
 styled "warning" write_error "careful: "
 write_error_line "usage: sample <file>"
 
-export record Point float x float y
-record Hero string name int health Point position list string inventory
-def Hero hero Hero "Ann" 10 Point 0.0 0.0 list_of string end
-set hero copy hero with health subtract the health of hero 1
+export record Point float x float y end
+record Hero string name int health Point position list string inventory end
+define Hero hero Hero "Ann" 10 Point 0.0 0.0 list_of string end
+set hero copy hero with health subtract the health of hero 1 end
 write_line hero
 
 export choice Direction north east south west end
-def Direction facing north
-def map Direction string exits map_of Direction string south "cellar" end
+define Direction facing north
+define map Direction string exits map_of Direction string south "cellar" end
 if equal facing convert Direction "north" write_line facing
 
 if_some int age attempt convert int read write_line age
 else write_line "not a number"
 if not attempt from files save "save.txt" "data" write_error_line "could not save"
-def option Point spot none Point
+define option Point spot none Point
 write_line value_or spot Point 1.0 2.0

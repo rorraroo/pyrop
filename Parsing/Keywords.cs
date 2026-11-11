@@ -4,7 +4,7 @@ namespace Pyrop.Parsing;
 
 public static class Keywords
 {
-    public const string Def = "def";
+    public const string Define = "define";
     public const string Set = "set";
     public const string If = "if";
     public const string Else = "else";
@@ -59,15 +59,21 @@ public static class Keywords
         ["replace_at"] = "use put <list> <index> <item>",
         ["negate"] = "write subtract 0 <number>, or subtract 0.0 <number> for a float",
         ["get_field"] = "write the <field> of <record>",
-        ["with_field"] = "write copy <record> with <field> <value>",
+        ["with_field"] = "write copy <record> with <field> <value> end",
         ["with_style"] = "it is now called styled, as in styled \"warning\" write_line \"Careful\"",
+        ["substring"] = "use slice <text> <start> <count>",
+        ["def"] = "a variable is now declared with define, as in define int count 0",
+        ["upper"] = "it is now called uppercase",
+        ["lower"] = "it is now called lowercase",
+        ["smaller"] = "it is now called smaller_of",
+        ["larger"] = "it is now called larger_of",
     };
 
     private static readonly HashSet<string> ForLater = ["call", "function_type", "function_of", "at_once"];
 
     public static IReadOnlyList<string> LanguageWords { get; } =
     [
-        Def, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
+        Define, Set, If, Else, While, For, In, Break, Continue, Block, End, Function, Return, Write, WriteLine,
         WriteError, WriteErrorLine, Convert, ListOf, MapOf, VariantsOf, Exit, Styled, Use, Import, Export, From, Library, Record, Choice,
         The, Of, Copy, With, Attempt, IfSome, Match, When, None, True, False,
     ];
@@ -77,13 +83,12 @@ public static class Keywords
         .. LanguageWords,
         .. PyropTypes.Names,
         .. Builtins.All.Keys,
-        .. Retired.Keys,
         .. ForLater,
     ];
 
     private static readonly HashSet<string> Statements =
     [
-        Def, Set, If, Else, While, For, Break, Continue, Block, End, Function, Return, Write, WriteLine,
+        Define, Set, If, Else, While, For, Break, Continue, Block, End, Function, Return, Write, WriteLine,
         WriteError, WriteErrorLine, Exit, Styled, Use, Import, Export, Record, Choice, IfSome, Match, When,
     ];
 
@@ -107,7 +112,7 @@ public static class Keywords
 
     public static string? UnderscoredSpelling(string word) =>
         Reserved.FirstOrDefault(reserved =>
-            reserved != word && !Retired.ContainsKey(reserved) && !ForLater.Contains(reserved) && reserved.Replace("_", "") == word);
+            reserved != word && !ForLater.Contains(reserved) && reserved.Replace("_", "") == word);
 
     public static string UnderscoreHint(string word, string spelling) =>
         $"'{word}' is not a Pyrop word; did you mean '{spelling}'? Names made of several words are joined with underscores.";

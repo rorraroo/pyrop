@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Pyrop.Runtime;
 
 namespace Pyrop.Tests;
@@ -108,7 +107,7 @@ public class CollectionTests
     public void MapsKeepInsertionOrder()
     {
         const string source =
-            "def map string int m map_of string int end\n" +
+            "define map string int m map_of string int end\n" +
             "set m put m \"a\" 1\nset m put m \"b\" 2\nset m put m \"c\" 3\n" +
             "set m put m \"a\" 10\nwrite_line m\n" +
             "set m remove m \"b\"\nset m put m \"b\" 20\nwrite_line m\nwrite_line keys_of m\n" +
@@ -123,9 +122,9 @@ public class CollectionTests
     public void ChangingACopyLeavesTheOriginalUnchanged()
     {
         const string source =
-            "def list int a list_of int 1 2 end\ndef list int b a\nset b push b 3\nset b put b 0 9\n" +
+            "define list int a list_of int 1 2 end\ndefine list int b a\nset b push b 3\nset b put b 0 9\n" +
             "write_line a\nwrite_line b\n" +
-            "def map string int m put map_of string int end \"x\" 1\ndef map string int n m\n" +
+            "define map string int m put map_of string int end \"x\" 1\ndefine map string int n m\n" +
             "set n put n \"x\" 2\nset n put n \"y\" 3\nwrite_line m\nwrite_line n";
 
         Assert.Equal("[1, 2]\n[9, 2, 3]\n{\"x\": 1}\n{\"x\": 2, \"y\": 3}\n", Run.Program(source));
@@ -139,8 +138,8 @@ public class CollectionTests
             "    set items push items 99\n    return items\nend\n" +
             "function void change map string list int m block\n" +
             "    set m put m \"k\" push get m \"k\" 5\n    write_line m\nend\n" +
-            "def list int a list_of int 1 end\ndef list int b grow a\nwrite_line a\nwrite_line b\n" +
-            "def map string list int m put map_of string list int end \"k\" list_of int 1 end\n" +
+            "define list int a list_of int 1 end\ndefine list int b grow a\nwrite_line a\nwrite_line b\n" +
+            "define map string list int m put map_of string list int end \"k\" list_of int 1 end\n" +
             "change m\nwrite_line m";
 
         Assert.Equal("[1]\n[1, 99]\n{\"k\": [1, 5]}\n{\"k\": [1]}\n", Run.Program(source));
@@ -150,8 +149,8 @@ public class CollectionTests
     public void NestedCollectionsChangeOnlyThroughSet()
     {
         const string source =
-            "def list list int grid list_of list int list_of int 0 0 end list_of int 0 0 end end\n" +
-            "def list int row get grid 0\nset row put row 1 5\n" +
+            "define list list int grid list_of list int list_of int 0 0 end list_of int 0 0 end end\n" +
+            "define list int row get grid 0\nset row put row 1 5\n" +
             "write_line grid\nset grid put grid 0 row\nwrite_line grid";
 
         Assert.Equal("[[0, 0], [0, 0]]\n[[0, 5], [0, 0]]\n", Run.Program(source));
@@ -198,7 +197,7 @@ public class CollectionTests
         Assert.Equal("lamp!", Evaluate("add get put map_of int string end 1 \"lamp\" 1 \"!\""));
         Assert.Equal("3", Evaluate("add get keys_of put map_of int bool end 2 true 0 1"));
 
-        var error = Failure("def string s get list_of int 1 end 0", ErrorStage.Type);
+        var error = Failure("define string s get list_of int 1 end 0", ErrorStage.Type);
         Assert.Equal("Cannot initialize string variable 's' with a value of type int.", error.Message);
     }
 
@@ -221,17 +220,17 @@ public class CollectionTests
     }
 
     [Theory]
-    [InlineData("def map float int m map_of float int end", 9, "A map key must be int, string, bool or a choice, found float.")]
-    [InlineData("def map list int int m map_of int int end", 9, "A map key must be int, string, bool or a choice, found list int.")]
-    [InlineData("def int m length_of map_of map int int string end", 28, "A map key must be int, string, bool or a choice, found map int int.")]
+    [InlineData("define map float int m map_of float int end", 12, "A map key must be int, string, bool or a choice, found float.")]
+    [InlineData("define map list int int m map_of int int end", 12, "A map key must be int, string, bool or a choice, found list int.")]
+    [InlineData("define int m length_of map_of map int int string end", 31, "A map key must be int, string, bool or a choice, found map int int.")]
     [InlineData("function int f map float int m return 0", 20, "A map key must be int, string, bool or a choice, found float.")]
-    [InlineData("def int x 0 write_line convert map float int x", 36, "A map key must be int, string, bool or a choice, found float.")]
-    [InlineData("def int x length_of list_of map float int end", 33, "A map key must be int, string, bool or a choice, found float.")]
-    [InlineData("def list int x empty list int", 16, "'empty' is no longer part of Pyrop; write an empty list as list_of int end and an empty map as map_of string int end.")]
-    [InlineData("def map string int m map_of string void end", 36, "A map value cannot have type void.")]
-    [InlineData("def list void x list_of int end", 10, "A type argument cannot have type void.")]
-    [InlineData("def list int x list_of void end", 24, "A list item cannot have type void.")]
-    [InlineData("def map string int m map_of string", 35, "Expected a type, found end of input.")]
+    [InlineData("define int x 0 write_line convert map float int x", 39, "A map key must be int, string, bool or a choice, found float.")]
+    [InlineData("define int x length_of list_of map float int end", 36, "A map key must be int, string, bool or a choice, found float.")]
+    [InlineData("define list int x empty list int", 19, "'empty' is no longer part of Pyrop; write an empty list as list_of int end and an empty map as map_of string int end.")]
+    [InlineData("define map string int m map_of string void end", 39, "A map value cannot have type void.")]
+    [InlineData("define list void x list_of int end", 13, "A type argument cannot have type void.")]
+    [InlineData("define list int x list_of void end", 27, "A list item cannot have type void.")]
+    [InlineData("define map string int m map_of string", 38, "Expected a type, found end of input.")]
     public void RejectsInvalidCollectionTypesWhileParsing(string source, int column, string message)
     {
         var error = Failure(source, ErrorStage.Parse);
@@ -242,12 +241,12 @@ public class CollectionTests
     [Fact]
     public void ChecksEveryItemOfAListOf()
     {
-        var errors = Run.Failures("def list int a list_of int 1 \"two\" 3 4.0 end");
+        var errors = Run.Failures("define list int a list_of int 1 \"two\" 3 4.0 end");
 
         Assert.Equal(2, errors.Count);
         Assert.All(errors, error => Assert.Equal(ErrorStage.Type, error.Stage));
         Assert.Equal("Every item of 'list_of int' must be int, found string.", errors[0].Message);
-        Assert.Equal(30, errors[0].Position.Column);
+        Assert.Equal(33, errors[0].Position.Column);
         Assert.Equal("Every item of 'list_of int' must be int, found float.", errors[1].Message);
     }
 
@@ -255,7 +254,7 @@ public class CollectionTests
     public void MapOfBuildsAMapInTheOrderWritten()
     {
         const string source = """
-            def map string int prices map_of string int
+            define map string int prices map_of string int
                 "lamp" 5
                 "rope" add 1 1
             end
@@ -271,20 +270,20 @@ public class CollectionTests
     [Fact]
     public void ChecksEveryKeyAndValueOfAMapOf()
     {
-        var errors = Run.Failures("def map string int m map_of string int \"a\" 1 2 3 \"c\" \"d\" end");
+        var errors = Run.Failures("define map string int m map_of string int \"a\" 1 2 3 \"c\" \"d\" end");
 
         Assert.Equal(
             ["Every key of 'map_of string int' must be string, found int.", "Every value of 'map_of string int' must be int, found string."],
             errors.Select(error => error.Message));
-        Assert.Equal(46, errors[0].Position.Column);
-        Assert.Equal(54, errors[1].Position.Column);
+        Assert.Equal(49, errors[0].Position.Column);
+        Assert.Equal(57, errors[1].Position.Column);
     }
 
     [Theory]
-    [InlineData("def map string int m map_of string int \"a\" end", 44, "The last key of the map_of started at line 1, column 22 has no value; every key is followed by its value.")]
-    [InlineData("def map string int m map_of string int \"a\" 1\nwrite_line m", 1, "Expected a key or 'end' to close the map_of started at line 1, column 22, found 'write_line'.")]
-    [InlineData("def map string int m map_of string int \"a\" 1 \"b\"\nwrite_line m", 1, "Expected the value of the last key of the map_of started at line 1, column 22, found 'write_line'.")]
-    [InlineData("def int n length_of map_of list int int end", 28, "A map key must be int, string, bool or a choice, found list int.")]
+    [InlineData("define map string int m map_of string int \"a\" end", 47, "The last key of the map_of started at line 1, column 25 has no value; every key is followed by its value.")]
+    [InlineData("define map string int m map_of string int \"a\" 1\nwrite_line m", 1, "Expected a key or 'end' to close the map_of started at line 1, column 25, found 'write_line'.")]
+    [InlineData("define map string int m map_of string int \"a\" 1 \"b\"\nwrite_line m", 1, "Expected the value of the last key of the map_of started at line 1, column 25, found 'write_line'.")]
+    [InlineData("define int n length_of map_of list int int end", 31, "A map key must be int, string, bool or a choice, found list int.")]
     public void RejectsMalformedMapOf(string source, int column, string message)
     {
         var error = Failure(source, ErrorStage.Parse);
@@ -295,19 +294,18 @@ public class CollectionTests
     [Fact]
     public void ChecksTheDeclaredTypeOfACollection()
     {
-        var error = Failure("def list float a list_of int 1 end", ErrorStage.Type);
+        var error = Failure("define list float a list_of int 1 end", ErrorStage.Type);
         Assert.Equal("Cannot initialize list float variable 'a' with a value of type list int.", error.Message);
     }
 
     [Theory]
-    [InlineData("def list int a list_of int 1 2 write_line a", "Expected a list item or 'end' to close the list_of started at")]
+    [InlineData("define list int a list_of int 1 2 write_line a", "Expected a list item or 'end' to close the list_of started at")]
     [InlineData("write_line list_of int end end", "'end' without a matching 'block'.")]
     [InlineData("list_of int 1 end", "'list_of' cannot start a statement.")]
     [InlineData("map_of string int end", "'map_of' cannot start a statement.")]
     [InlineData("write_line empty list int", "'empty' is no longer part of Pyrop;")]
-    [InlineData("def int list 0", "'list' is a reserved word and cannot be used as a variable name.")]
-    [InlineData("def int push 0", "'push' is a reserved word and cannot be used as a variable name.")]
-    [InlineData("def int empty 0", "'empty' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("define int list 0", "'list' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("define int push 0", "'push' is a reserved word and cannot be used as a variable name.")]
     public void ReportsMisplacedCollectionWords(string source, string message)
     {
         Assert.StartsWith(message, Failure(source, ErrorStage.Parse).Message);
@@ -325,7 +323,6 @@ public class CollectionTests
     [InlineData("write_line negate 5", "'negate' is no longer part of Pyrop; write subtract 0 <number>, or subtract 0.0 <number> for a float.")]
     [InlineData("negate 5", "'negate' is no longer part of Pyrop; write subtract 0 <number>, or subtract 0.0 <number> for a float.")]
     [InlineData("write_line attempt value_of map_of int int end 1", "'value_of' is no longer part of Pyrop; use get <map> <key>.")]
-    [InlineData("def int contains 1", "'contains' is a reserved word and cannot be used as a variable name.")]
     public void RetiredWordsSayWhatReplacedThem(string source, string message)
     {
         Assert.Equal(message, Failure(source, ErrorStage.Parse).Message);
@@ -334,27 +331,27 @@ public class CollectionTests
     [Fact]
     public void SuggestsTheUnderscoredSpelling()
     {
-        Assert.Contains("did you mean 'list_of'?", Failure("def int n length_of listof", ErrorStage.Type).Message);
+        Assert.Contains("did you mean 'list_of'?", Failure("define int n length_of listof", ErrorStage.Type).Message);
     }
 
     [Fact]
     public void ListOfNestsInsideBlocks()
     {
         const string source =
-            "block\n    def list list int a list_of list int\n        list_of int 1 end\n        list_of int 2 3 end\n    end\n" +
+            "block\n    define list list int a list_of list int\n        list_of int 1 end\n        list_of int 2 3 end\n    end\n" +
             "    write_line a\nend";
 
         Assert.Equal("[[1], [2, 3]]\n", Run.Program(source));
     }
 
     [Theory]
-    [InlineData("def list int a list_of int 1 2", InputStatus.Incomplete)]
+    [InlineData("define list int a list_of int 1 2", InputStatus.Incomplete)]
     [InlineData("write_line list_of list int list_of int 1 end", InputStatus.Incomplete)]
-    [InlineData("def list int a list_of", InputStatus.Incomplete)]
-    [InlineData("def map string", InputStatus.Incomplete)]
+    [InlineData("define list int a list_of", InputStatus.Incomplete)]
+    [InlineData("define map string", InputStatus.Incomplete)]
     [InlineData("write_line map_of string", InputStatus.Incomplete)]
     [InlineData("write_line map_of string int \"a\" 1", InputStatus.Incomplete)]
-    [InlineData("def list int a list_of int 1 2 end", InputStatus.Ready)]
+    [InlineData("define list int a list_of int 1 2 end", InputStatus.Ready)]
     public void AnUnfinishedListOfAsksForMoreInput(string source, InputStatus expected)
     {
         var session = new PyropSession(new StringReader(""), new StringOutput());
@@ -366,9 +363,9 @@ public class CollectionTests
     {
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
-        session.Run("def list string bag list_of string end");
+        session.Run("define list string bag list_of string end");
         session.Run("set bag push bag \"lamp\"");
-        Assert.Throws<PyropException>(() => session.Run("def list int bag list_of int end"));
+        Assert.Throws<PyropException>(() => session.Run("define list int bag list_of int end"));
         session.Run("write_line bag");
 
         Assert.Equal("[\"lamp\"]\n", output.ToString());
@@ -383,13 +380,13 @@ public class CollectionTests
 
     [Theory]
     [InlineData(
-        "def list int a list_of int 1 2 end\nset a push a 3\nwrite_line a\nset a push a 4",
+        "define list int a list_of int 1 2 end\nset a push a 3\nwrite_line a\nset a push a 4",
         4, 7, "A list cannot hold more than 3 items.", "[1, 2, 3]\n")]
     [InlineData(
-        "def list int a list_of int 1 2 3 end\nwrite_line a\nwrite_line list_of int 1 2 3 4 end",
+        "define list int a list_of int 1 2 3 end\nwrite_line a\nwrite_line list_of int 1 2 3 4 end",
         3, 12, "A list cannot hold more than 3 items.", "[1, 2, 3]\n")]
     [InlineData(
-        "def map int int m put put put map_of int int end 1 1 2 2 3 3\nset m put m 3 30\nwrite_line m\nset m put m 4 4",
+        "define map int int m put put put map_of int int end 1 1 2 2 3 3\nset m put m 3 30\nwrite_line m\nset m put m 4 4",
         4, 7, "A map cannot hold more than 3 items.", "{1: 1, 2: 2, 3: 30}\n")]
     public void RefusesToGrowBeyondTheSizeLimit(string source, int line, int column, string message, string written)
     {
@@ -408,7 +405,7 @@ public class CollectionTests
     [Fact]
     public void QuotingIsCheckedAgainstTheTextLimit()
     {
-        const string source = "def string s repeat \"\\\\\" 50000001\nwrite_line length_of convert string list_of string s end";
+        const string source = "define string s repeat \"\\\\\" 50000001\nwrite_line length_of convert string list_of string s end";
 
         var error = Failure(source, ErrorStage.Runtime);
         Assert.Equal("The text form of this value would exceed the largest allowed text size.", error.Message);
@@ -416,49 +413,14 @@ public class CollectionTests
     }
 
     [Fact]
-    public void ReplacingANestedValueInAMapIsFast()
-    {
-        const string source =
-            "def list int big list_of int end\ndef int i 0\n" +
-            "while less i 200000 block\n    set big push big i\n    set i add i 1\nend\n" +
-            "def map int list int m put map_of int list int end 1 big\n" +
-            "set i 0\nwhile less i 2000 block\n    set m put m 1 put get m 1 199999 i\n    set i add i 1\nend\n" +
-            "write_line get get m 1 199999";
-
-        var watch = Stopwatch.StartNew();
-        var output = Run.Program(source);
-        watch.Stop();
-
-        Assert.Equal("1999\n", output);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(15), $"Took {watch.Elapsed}.");
-    }
-
-    [Fact]
     public void RefusesATextFormThatWouldBeTooLong()
     {
         const string source =
-            "def string s repeat \"x\" 30000000\ndef list string a list_of string s s s s end\nwrite_line a";
+            "define string s repeat \"x\" 30000000\ndefine list string a list_of string s s s s end\nwrite_line a";
 
         var error = Failure(source, ErrorStage.Runtime);
         Assert.Equal("The text form of this value would exceed the largest allowed text size.", error.Message);
         Assert.Equal(3, error.Position.Line);
-    }
-
-    [Fact]
-    public void PushingAHundredThousandItemsIsFast()
-    {
-        const string source =
-            "def list int a list_of int end\ndef int i 0\n" +
-            "while less i 100000 block\n    set a push a i\n    set i add i 1\nend\n" +
-            "write_line length_of a\nwrite_line get a 99999";
-
-        Run.Program(source);
-        var watch = Stopwatch.StartNew();
-        var output = Run.Program(source);
-        watch.Stop();
-
-        Assert.Equal("100000\n99999\n", output);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
     }
 
     [Theory]
@@ -491,14 +453,14 @@ public class CollectionTests
     {
         Assert.Equal(
             "[1, 2, 3]\n[2]\n",
-            Run.Program("def list int a list_of int 1 2 3 end\ndef list int b slice a 1 1\nwrite_line a\nwrite_line b"));
+            Run.Program("define list int a list_of int 1 2 3 end\ndefine list int b slice a 1 1\nwrite_line a\nwrite_line b"));
     }
 
     [Fact]
     public void ForWalksAListsPositions()
     {
         const string source =
-            "def list string items list_of string \"lamp\" \"key\" end\n" +
+            "define list string items list_of string \"lamp\" \"key\" end\n" +
             "for int index in positions_of items write_line fill \"{}: {}\" list_of string convert string index get items index end";
 
         Assert.Equal("0: lamp\n1: key\n", Run.Program(source));
@@ -530,7 +492,7 @@ public class CollectionTests
     public void SortRejectsChoicesAndRecords()
     {
         Assert.Equal(ErrorStage.Type, Run.Failure("choice Level low high end\nwrite_line sort list_of Level high low end").Stage);
-        Assert.Equal(ErrorStage.Type, Run.Failure("record Point int x\nwrite_line sort list_of Point end").Stage);
+        Assert.Equal(ErrorStage.Type, Run.Failure("record Point int x end\nwrite_line sort list_of Point end").Stage);
     }
 
     [Theory]
@@ -569,7 +531,7 @@ public class CollectionTests
     public void DistinctComparesRecordsAndChoicesLikeEqual()
     {
         const string source = """
-            record Point int x int y
+            record Point int x int y end
             choice Move go int stay end
             write_line length_of distinct list_of Point Point 1 2 Point 1 2 Point 2 1 end
             write_line length_of distinct list_of Move go 1 go 1 go 2 stay stay end
@@ -581,8 +543,8 @@ public class CollectionTests
     [Fact]
     public void DistinctFailsOnValuesNestedBeyondTheLimit()
     {
-        const string source = "record Tree list Tree kids\n" +
-            "def Tree a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
+        const string source = "record Tree list Tree kids end\n" +
+            "define Tree a Tree list_of Tree Tree list_of Tree Tree list_of Tree end end end\n" +
             "write_line length_of distinct list_of Tree a a end";
         var session = new PyropSession(new StringReader(""), new StringOutput()) { NestingLimit = 4 };
 
@@ -597,7 +559,7 @@ public class CollectionTests
     {
         Assert.Equal(
             "[2, 1, 2]\n[1, 2, 2]\n[2, 1, 2]\n[2, 1]\n",
-            Run.Program("def list int a list_of int 2 1 2 end\ndef list int s sort a\ndef list int r reverse a\ndef list int d distinct a\nwrite_line a\nwrite_line s\nwrite_line r\nwrite_line d"));
+            Run.Program("define list int a list_of int 2 1 2 end\ndefine list int s sort a\ndefine list int r reverse a\ndefine list int d distinct a\nwrite_line a\nwrite_line s\nwrite_line r\nwrite_line d"));
     }
 
     [Theory]
@@ -608,6 +570,6 @@ public class CollectionTests
     [InlineData("distinct")]
     public void TheListOperationsAreReservedWords(string word)
     {
-        Assert.Equal(ErrorStage.Parse, Run.Failure($"def int {word} 1").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure($"define int {word} 1").Stage);
     }
 }

@@ -44,14 +44,14 @@ public class ProcessTests
     }
 
     [Fact]
-    public void ReadsEnvironmentVariablesAndTreatsUnsetAsEmpty()
+    public void ReadsEnvironmentVariablesAndTreatsUnsetAsNone()
     {
         var host = Host([], new Dictionary<string, string> { ["HOME"] = "/home/ann" });
 
         Assert.Equal(
             "/home/ann\nunset\n",
             Run.Program(
-                Program + "write_line environment \"HOME\"\nif equal environment \"MISSING\" \"\" write_line \"unset\"",
+                Program + "write_line value_or environment \"HOME\" \"\"\nif is_none environment \"MISSING\" write_line \"unset\"",
                 host: host));
     }
 
@@ -222,8 +222,8 @@ public class ProcessTests
     }
 
     [Theory]
-    [InlineData("def int exit 1")]
-    [InlineData("def string library \"\"")]
+    [InlineData("define int exit 1")]
+    [InlineData("define string library \"\"")]
     public void ReservesTheNewNames(string source)
     {
         var error = Run.Failure(source);
@@ -240,7 +240,7 @@ public class ProcessTests
     [InlineData("environment")]
     public void ProcessNamesOutsideTheCoreAreFreeVariableNames(string name)
     {
-        Assert.Equal("x\n", Run.Program($"def string {name} \"x\"\nwrite_line {name}"));
+        Assert.Equal("x\n", Run.Program($"define string {name} \"x\"\nwrite_line {name}"));
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public class ProcessTests
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
 
-        Assert.Null(session.Run("def int count 5"));
+        Assert.Null(session.Run("define int count 5"));
         Assert.Equal(4, session.Run("write_line count\nexit 4"));
         Assert.Equal("5\n", output.ToString());
     }

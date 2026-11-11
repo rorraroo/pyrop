@@ -17,7 +17,7 @@ public enum OutputStyle
     Magenta,
     Cyan,
     White,
-    Grey,
+    Gray,
     BrightRed,
     BrightGreen,
     BrightYellow,
@@ -49,7 +49,7 @@ public static class OutputStyles
         ("magenta", OutputStyle.Magenta, "35"),
         ("cyan", OutputStyle.Cyan, "36"),
         ("white", OutputStyle.White, "37"),
-        ("grey", OutputStyle.Grey, "90"),
+        ("gray", OutputStyle.Gray, "90"),
         ("bright_red", OutputStyle.BrightRed, "91"),
         ("bright_green", OutputStyle.BrightGreen, "92"),
         ("bright_yellow", OutputStyle.BrightYellow, "93"),
@@ -81,8 +81,9 @@ public static class OutputStyles
     public static string UnknownMessage(string name) =>
         $"Unknown style \"{name}\"; the styles are {string.Join(", ", Names)}.";
 
-    public static string UnknownColorMessage(string name) =>
-        $"Unknown color \"{name}\"; the colors are {string.Join(", ", ColorNames)}.";
+    public static string UnknownColorMessage(string name) => name == "grey"
+        ? $"Unknown color \"grey\"; it is spelled \"gray\"."
+        : $"Unknown color \"{name}\"; the colors are {string.Join(", ", ColorNames)}.";
 
     public static bool IsColorKey(string key) => TextOperations.LengthOf(key) == 1 && !key.Any(char.IsControl);
 

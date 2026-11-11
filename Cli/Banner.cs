@@ -16,9 +16,9 @@ public static class Banner
         "........#####...................##",
     ];
 
-    private static readonly Color Ember = Color.FromHex("#F28A5C");
-    private static readonly Color Flame = Color.FromHex("#D9453E");
-    private static readonly Color Garnet = Color.FromHex("#7A1C1C");
+    private static readonly Color Sheen = Color.FromHex("#F16986");
+    private static readonly Color Crimson = Color.FromHex("#D3386A");
+    private static readonly Color Garnet = Color.FromHex("#811532");
 
     private static int Width => Pixels.Max(row => row.Length);
 
@@ -71,7 +71,7 @@ public static class Banner
     {
         var position = (float)y / (Pixels.Length - 1);
         return position < 0.5f
-            ? Ember.Blend(Flame, position * 2)
-            : Flame.Blend(Garnet, (position - 0.5f) * 2);
+            ? Sheen.Blend(Crimson, position * 2)
+            : Crimson.Blend(Garnet, (position - 0.5f) * 2);
     }
 }

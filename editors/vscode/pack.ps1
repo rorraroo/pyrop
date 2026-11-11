@@ -8,7 +8,7 @@ $output = Join-Path $root "$($manifest.name)-$($manifest.version).vsix"
 
 $files = @('package.json', 'extension.js', 'language-configuration.json', 'README.md') +
     (Get-ChildItem (Join-Path $root 'syntaxes') -File | ForEach-Object { "syntaxes/$($_.Name)" }) +
-    (Get-ChildItem (Join-Path $root 'icons') -File | ForEach-Object { "icons/$($_.Name)" })
+    (Get-ChildItem (Join-Path $root 'icons') -File -Recurse | ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\', '/') })
 
 $vsixManifest = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -41,6 +41,7 @@ $contentTypes = @"
   <Default Extension=".md" ContentType="text/markdown" />
   <Default Extension=".png" ContentType="image/png" />
   <Default Extension=".svg" ContentType="image/svg+xml" />
+  <Default Extension=".txt" ContentType="text/plain" />
   <Default Extension=".vsixmanifest" ContentType="text/xml" />
 </Types>
 "@

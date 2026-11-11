@@ -1,5 +1,5 @@
 export function string counted int count string word block
-    def string text add convert string count add " " word
+    define string text add convert string count add " " word
     if equal count 1 return text
     return add text "s"
 end

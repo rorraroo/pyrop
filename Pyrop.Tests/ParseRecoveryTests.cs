@@ -140,7 +140,7 @@ public sealed class ParseRecoveryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("def int use 1\nwrite_line use\nfunction void b\n    write_line 1\n")]
+    [InlineData("define int use 1\nwrite_line use\nfunction void b\n    write_line 1\n")]
     [InlineData("write_line 1 2\nwrite_line import\nwrite_line export\n")]
     public void AReservedWordInSkippedCodeIsNotADeclaration(string source)
     {

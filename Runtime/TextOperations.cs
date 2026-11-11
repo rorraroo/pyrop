@@ -17,7 +17,7 @@ public static class TextOperations
 
     public static long LengthOf(string text) => MapOf(text).Count;
 
-    public static string Substring(IBuiltinInvocation invocation, string text, long start, long count)
+    public static string Slice(IBuiltinInvocation invocation, string text, long start, long count)
     {
         var map = MapOf(text);
         if (start < 0 || start > map.Count)
@@ -27,7 +27,7 @@ public static class TextOperations
 
         if (count < 0)
         {
-            throw invocation.Fail($"'substring' cannot take a negative count ({count}).");
+            throw invocation.Fail($"'slice' cannot take a negative count ({count}).");
         }
 
         if (count > map.Count - start)

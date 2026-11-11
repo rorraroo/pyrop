@@ -20,8 +20,6 @@ public interface IBuiltinInvocation
 
     int NestingLimit { get; }
 
-    bool IsAttempted { get; }
-
     Exception Fail(string message);
 
     Exception FailAtLimit(string message);
@@ -39,6 +37,10 @@ public sealed record OverloadMatch(BuiltinOverload Overload, PyropType Result);
 
 public sealed record BuiltinOperation(string Name, int Arity, IReadOnlyList<BuiltinOverload> Overloads)
 {
+    public bool HasEffect { get; init; }
+
+    public bool MayBeDiscarded => HasEffect || ReturnsVoid;
+
     public bool ReturnsVoid => Overloads.All(overload => overload.Result == PyropType.Void);
 
     public string DescribeAccepted()
@@ -118,13 +120,13 @@ public static class Builtins
             Overload([B, B], B, c => BoolValue.Of(c.Argument(0).AsBool() || c.Argument(1).AsBool()))),
         Operation("not",
             Overload([B], B, c => BoolValue.Of(!c.Argument(0).AsBool()))),
-        Operation("read",
+        Effect("read",
             Overload([], S, c => new StringValue(ReadLine(c, "read reached the end of input.")))),
-        Operation("ask",
+        Effect("ask",
             Overload([S], S, c => new StringValue(Ask(c, c.Argument(0).AsString())))),
-        Operation("confirm",
+        Effect("confirm",
             Overload([S], B, c => BoolValue.Of(Confirm(c, c.Argument(0).AsString())))),
-        Operation("choose",
+        Effect("choose",
             Overload([S, PyropTypes.ListOf(S)], S, c => new StringValue(
                 TerminalOperations.Choose(c, c.Argument(0).AsString(), c.Argument(1).AsList())))),
         Operation("write_table",
@@ -155,11 +157,15 @@ public static class Builtins
             Overload([MapKV, Key], B, c => BoolValue.Of(c.Argument(0).AsMap().ContainsKey(c.Argument(1))))),
         Operation("keys_of",
             Overload([MapKV], PyropTypes.ListOf(Key), c => CollectionOperations.KeysOf(c.Argument(0).AsMap()))),
+        Operation("values_of",
+            Overload([MapKV], PyropTypes.ListOf(Stored), c => CollectionOperations.ValuesOf(c.Argument(0).AsMap()))),
         Operation("positions_of",
             Overload([ListT], PyropTypes.ListOf(I), c => CollectionOperations.PositionsOf(c.Argument(0).AsList()))),
         Operation("slice",
             Overload([ListT, I, I], ListT, c => CollectionOperations.Slice(
-                c, c.Argument(0).AsList(), c.Argument(1).AsInt(), c.Argument(2).AsInt()))),
+                c, c.Argument(0).AsList(), c.Argument(1).AsInt(), c.Argument(2).AsInt())),
+            Overload([S, I, I], S, c => new StringValue(
+                TextOperations.Slice(c, c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsInt())))),
         Operation("sort",
             SortOf(I, (first, second) => first.AsInt().CompareTo(second.AsInt())),
             SortOf(F, (first, second) => first.AsFloat().CompareTo(second.AsFloat())),
@@ -176,9 +182,6 @@ public static class Builtins
             Overload([OptionT], B, c => BoolValue.Of(c.Argument(0).AsOption().Content is not null))),
         Operation("is_none",
             Overload([OptionT], B, c => BoolValue.Of(c.Argument(0).AsOption().Content is null))),
-        Operation("substring",
-            Overload([S, I, I], S, c => new StringValue(
-                TextOperations.Substring(c, c.Argument(0).AsString(), c.Argument(1).AsInt(), c.Argument(2).AsInt())))),
         Operation("find",
             Overload([S, S], PyropTypes.OptionOf(I), c => TextOperations.Find(c.Argument(0).AsString(), c.Argument(1).AsString()))),
         Operation("find_from",
@@ -191,9 +194,9 @@ public static class Builtins
             Overload([S, S], B, c => BoolValue.Of(TextOperations.StartsWith(c.Argument(0).AsString(), c.Argument(1).AsString())))),
         Operation("ends_with",
             Overload([S, S], B, c => BoolValue.Of(TextOperations.EndsWith(c.Argument(0).AsString(), c.Argument(1).AsString())))),
-        Operation("upper",
+        Operation("uppercase",
             Overload([S], S, c => new StringValue(c.Argument(0).AsString().ToUpperInvariant()))),
-        Operation("lower",
+        Operation("lowercase",
             Overload([S], S, c => new StringValue(c.Argument(0).AsString().ToLowerInvariant()))),
         Operation("trim",
             Overload([S], S, c => new StringValue(TextOperations.Trim(c.Argument(0).AsString())))),
@@ -212,8 +215,8 @@ public static class Builtins
                 TextOperations.Join(c, c.Argument(0).AsList(), c.Argument(1).AsString())))),
         Operation("fill",
             Overload([S, ListT], S, c => new StringValue(TextOperations.Fill(c, c.Argument(0).AsString(), c.Argument(1).AsList())))),
-        Operation("smaller", Choices(smaller: true)),
-        Operation("larger", Choices(smaller: false)),
+        Operation("smaller_of", Choices(smaller: true)),
+        Operation("larger_of", Choices(smaller: false)),
     }.ToDictionary(operation => operation.Name);
 
     private static BuiltinOverload[] Comparisons(Func<int, bool> holds) =>
@@ -246,6 +249,9 @@ public static class Builtins
 
     internal static BuiltinOperation Operation(string name, params BuiltinOverload[] overloads) =>
         new(name, overloads[0].Parameters.Count, overloads);
+
+    internal static BuiltinOperation Effect(string name, params BuiltinOverload[] overloads) =>
+        Operation(name, overloads) with { HasEffect = true };
 
     internal static BuiltinOverload Overload(PyropType[] parameters, PyropType result, BuiltinImplementation implementation) =>
         new(parameters, result, implementation);

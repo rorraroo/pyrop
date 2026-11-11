@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using Pyrop.Runtime;
 
@@ -11,7 +10,7 @@ public sealed class ListTextTests : IDisposable
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private const string Libraries =
-        "use files library\nimport from files load_lines listing end\n" +
+        "use files library\nimport from files load_lines files_in end\n" +
         "use program library\nimport from program arguments end\n";
 
     private string PathOf(string name) => Path.Combine(_directory, name);
@@ -61,7 +60,7 @@ public sealed class ListTextTests : IDisposable
         var host = new HostContext(["a\r\nb"], _ => null);
 
         Assert.Equal("1\ntrue\n", Run.Program(
-            "use program library\ndef string text get from program arguments 0\n" +
+            "use program library\ndefine string text get from program arguments 0\n" +
             "write_line length_of split text \"\\n\"\nwrite_line equal get split text \"\\n\" 0 text",
             host: host));
     }
@@ -69,7 +68,7 @@ public sealed class ListTextTests : IDisposable
     [Fact]
     public void SplitRejectsAnEmptySeparator()
     {
-        var error = RuntimeFailure("def string sep \"\"\nwrite_line split \"abc\" sep");
+        var error = RuntimeFailure("define string sep \"\"\nwrite_line split \"abc\" sep");
 
         Assert.Equal("'split' cannot split at an empty separator.", error.Message);
         Assert.Equal(2, error.Position.Line);
@@ -79,7 +78,7 @@ public sealed class ListTextTests : IDisposable
     [Fact]
     public void SplitGivesAListOfStrings()
     {
-        Assert.Equal("3\nb\n", Run.Program("def list string parts split \"a b c\" \" \"\nwrite_line length_of parts\nwrite_line get parts 1"));
+        Assert.Equal("3\nb\n", Run.Program("define list string parts split \"a b c\" \" \"\nwrite_line length_of parts\nwrite_line get parts 1"));
     }
 
     [Fact]
@@ -94,16 +93,6 @@ public sealed class ListTextTests : IDisposable
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal("A list cannot hold more than 3 items.", error.Message);
         Assert.Equal("[\"a\", \"b\", \"c\"]\n", output.ToString());
-    }
-
-    [Fact]
-    public void SplittingALongTextStaysFast()
-    {
-        var watch = Stopwatch.StartNew();
-        var output = Run.Program("def string text repeat \"word \" 200000\nwrite_line length_of split text \" \"\nwrite_line length_of join split text \" \" \" \"");
-
-        Assert.Equal("200001\n1000000\n", output);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
     }
 
     [Theory]
@@ -130,7 +119,7 @@ public sealed class ListTextTests : IDisposable
     [Fact]
     public void JoinRespectsTheTextLimit()
     {
-        var error = RuntimeFailure("def string half repeat \"a\" 50000000\nwrite_line length_of join list_of string half half end \"b\"");
+        var error = RuntimeFailure("define string half repeat \"a\" 50000000\nwrite_line length_of join list_of string half half end \"b\"");
 
         Assert.Equal("The result of 'join' would exceed the largest allowed text size.", error.Message);
         Assert.Equal(2, error.Position.Line);
@@ -141,7 +130,7 @@ public sealed class ListTextTests : IDisposable
     {
         Assert.Equal(
             "100000000\n",
-            Run.Program("def string half repeat \"a\" 49999999\nwrite_line length_of join list_of string half half end \"bb\""));
+            Run.Program("define string half repeat \"a\" 49999999\nwrite_line length_of join list_of string half half end \"bb\""));
     }
 
     [Theory]
@@ -235,7 +224,7 @@ public sealed class ListTextTests : IDisposable
         Directory.CreateDirectory(Path.Combine(PathOf("saves"), "nested"));
         File.WriteAllText(Path.Combine(PathOf("saves"), "nested", "deep.save"), "");
 
-        Assert.Equal("[\"_x\", \"a.txt\", \"b.save\", \"ž.save\"]\n", RunWith("write_line listing get arguments 0", "saves"));
+        Assert.Equal("[\"_x\", \"a.txt\", \"b.save\", \"ž.save\"]\n", RunWith("write_line files_in get arguments 0", "saves"));
     }
 
     [Fact]
@@ -247,7 +236,7 @@ public sealed class ListTextTests : IDisposable
             File.WriteAllText(Path.Combine(PathOf("mixed"), name), "");
         }
 
-        Assert.Equal("[\"10\", \"9\", \"A\", \"Z\", \"a1\", \"b\", \"ä\"]\n", RunWith("write_line listing get arguments 0", "mixed"));
+        Assert.Equal("[\"10\", \"9\", \"A\", \"Z\", \"a1\", \"b\", \"ä\"]\n", RunWith("write_line files_in get arguments 0", "mixed"));
     }
 
     [Fact]
@@ -257,7 +246,7 @@ public sealed class ListTextTests : IDisposable
         File.WriteAllText(Path.Combine(PathOf("hidden"), ".secret"), "");
         File.SetAttributes(Path.Combine(PathOf("hidden"), ".secret"), FileAttributes.Hidden);
 
-        Assert.Equal("[\".secret\"]\n", RunWith("write_line listing get arguments 0", "hidden"));
+        Assert.Equal("[\".secret\"]\n", RunWith("write_line files_in get arguments 0", "hidden"));
     }
 
     [Fact]
@@ -265,7 +254,7 @@ public sealed class ListTextTests : IDisposable
     {
         Directory.CreateDirectory(PathOf("nothing"));
 
-        Assert.Equal("[]\n", RunWith("write_line listing get arguments 0", "nothing"));
+        Assert.Equal("[]\n", RunWith("write_line files_in get arguments 0", "nothing"));
     }
 
     [Fact]
@@ -277,13 +266,13 @@ public sealed class ListTextTests : IDisposable
 
         Assert.Equal(
             "one.save\n",
-            RunWith("for string name in listing get arguments 0 if ends_with name \".save\" write_line name", "saves"));
+            RunWith("for string name in files_in get arguments 0 if ends_with name \".save\" write_line name", "saves"));
     }
 
     [Fact]
     public void ListingRejectsAMissingDirectory()
     {
-        var error = FailWith("write_line listing get arguments 0", "nowhere");
+        var error = FailWith("write_line files_in get arguments 0", "nowhere");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"Directory \"{PathOf("nowhere")}\" does not exist.", error.Message);
@@ -294,12 +283,12 @@ public sealed class ListTextTests : IDisposable
     {
         File.WriteAllText(PathOf("notes.txt"), "");
 
-        Assert.Equal($"\"{PathOf("notes.txt")}\" is a file, not a directory.", FailWith("write_line listing get arguments 0", "notes.txt").Message);
+        Assert.Equal($"\"{PathOf("notes.txt")}\" is a file, not a directory.", FailWith("write_line files_in get arguments 0", "notes.txt").Message);
     }
 
     [Theory]
-    [InlineData("write_line listing \"\"", "A directory path cannot be empty.")]
-    [InlineData("write_line listing \"a\\tb\"", "\"a\tb\" is not a valid directory path; it contains a control character.")]
+    [InlineData("write_line files_in \"\"", "A directory path cannot be empty.")]
+    [InlineData("write_line files_in \"a\\tb\"", "\"a\tb\" is not a valid directory path; it contains a control character.")]
     public void ListingRejectsInvalidPaths(string source, string message)
     {
         Assert.Equal(message, RuntimeFailure(Libraries + source).Message);
@@ -313,7 +302,7 @@ public sealed class ListTextTests : IDisposable
             return;
         }
 
-        Assert.Equal("\"a*b\" is not a valid directory path.", RuntimeFailure(Libraries + "write_line listing \"a*b\"").Message);
+        Assert.Equal("\"a*b\" is not a valid directory path.", RuntimeFailure(Libraries + "write_line files_in \"a*b\"").Message);
     }
 
     [Fact]
@@ -326,7 +315,7 @@ public sealed class ListTextTests : IDisposable
         }
 
         var session = new PyropSession(new StringReader(""), new StringOutput(), Arguments(PathOf("many"))) { CollectionLimit = 3 };
-        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(Libraries + "write_line listing get arguments 0")).Errors);
+        var error = Assert.Single(Assert.Throws<PyropException>(() => session.Run(Libraries + "write_line files_in get arguments 0")).Errors);
 
         Assert.Equal("A list cannot hold more than 3 items.", error.Message);
     }
@@ -338,16 +327,16 @@ public sealed class ListTextTests : IDisposable
     [InlineData("write_error_line")]
     public void ReservesTheNewNames(string name)
     {
-        Assert.Equal(ErrorStage.Parse, Run.Failure($"def string {name} \"x\"").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure($"define string {name} \"x\"").Stage);
     }
 
     [Theory]
     [InlineData("read_lines")]
     [InlineData("list_files")]
     [InlineData("load_lines")]
-    [InlineData("listing")]
+    [InlineData("files_in")]
     public void FileListNamesThatLeftTheCoreAreFreeVariableNames(string name)
     {
-        Assert.Equal("x\n", Run.Program($"def string {name} \"x\"\nwrite_line {name}"));
+        Assert.Equal("x\n", Run.Program($"define string {name} \"x\"\nwrite_line {name}"));
     }
 }

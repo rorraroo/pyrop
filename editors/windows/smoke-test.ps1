@@ -9,8 +9,8 @@ use time library
 import from data parse_json json_text parse_yaml yaml_text end
 import from files save load end
 import from time now end
-record Note string body int count
-def Note note Note "first\r\nsecond" 2
+record Note string body int count end
+define Note note Note "first\r\nsecond" 2
 save "smoke.txt" convert string note
 write_line convert Note load "smoke.txt"
 write_line json_text parse_json "[1, 2.5]"

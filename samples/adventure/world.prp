@@ -1,5 +1,5 @@
 use items "items.prp"
-import from items ItemKind end
+import from items ItemKind lamp key crown end
 
 export choice Direction north east south west end
 export choice Place hall cellar study tower garden end
@@ -11,12 +11,13 @@ export record Room
     list ItemKind items
     bool dark
     option ItemKind needs
+end
 
 export function list Direction compass
     return variants_of Direction
 
 export function map Place Room build_world block
-    def map Place Room rooms map_of Place Room end
+    define map Place Room rooms map_of Place Room end
     set rooms put rooms hall Room
         "Great Hall"
         "Dust lies thick on a long table. Doors lead north, south and east."

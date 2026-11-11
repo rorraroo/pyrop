@@ -84,7 +84,6 @@ public sealed class CliTests : IDisposable
     [Theory]
     [InlineData("if true write_line 1\n", "1\n")]
     [InlineData("if true write_line 1", "1\n")]
-    [InlineData("write_line 7 record Point int x\n", "7\n")]
     [InlineData("write_line add 1\n", "")]
     public void TheReplRunsAnInputThatOnlyWaitsWhenInputEnds(string input, string expected)
     {

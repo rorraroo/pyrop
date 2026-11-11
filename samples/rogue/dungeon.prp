@@ -4,14 +4,14 @@ import from random roll end
 export choice Item draught blade end
 export choice Treasure coins int supply Item end
 
-export record Monster string name int x int y int health int strength
-export record Loot Treasure treasure int x int y
-export record Level int depth list string terrain list Monster monsters list Loot loot
+export record Monster string name int x int y int health int strength end
+export record Loot Treasure treasure int x int y end
+export record Level int depth list string terrain list Monster monsters list Loot loot end
 
-record Spot int x int y
+record Spot int x int y end
 
-def int width 24
-def int height 9
+define int width 24
+define int height 9
 
 export function string item_name Item kind
     match kind
@@ -26,28 +26,28 @@ export function string item_description Item kind
     end
 
 export function Level make_level int depth block
-    def list string terrain list_of string end
-    def int y 0
+    define list string terrain list_of string end
+    define int y 0
     while less y height block
         set terrain push terrain terrain_row y
         set y add y 1
     end
-    def Level level Level depth terrain list_of Monster end list_of Loot end
-    def Spot stairs free_spot level
-    set level copy level with terrain put_mark terrain the x of stairs the y of stairs ">"
-    def int count 0
+    define Level level Level depth terrain list_of Monster end list_of Loot end
+    define Spot stairs free_spot level
+    set level copy level with terrain put_mark terrain the x of stairs the y of stairs ">" end
+    define int count 0
     while less count add depth 1 block
-        set level copy level with monsters push the monsters of level new_monster depth free_spot level
+        set level copy level with monsters push the monsters of level new_monster depth free_spot level end
         set count add count 1
     end
-    set level copy level with loot push the loot of level new_loot coins roll 2 multiply depth 6 free_spot level
-    set level copy level with loot push the loot of level new_loot coins roll 2 multiply depth 6 free_spot level
-    set level copy level with loot push the loot of level new_loot supply random_item free_spot level
+    set level copy level with loot push the loot of level new_loot coins roll 2 multiply depth 6 free_spot level end
+    set level copy level with loot push the loot of level new_loot coins roll 2 multiply depth 6 free_spot level end
+    set level copy level with loot push the loot of level new_loot supply random_item free_spot level end
     return level
 end
 
 export function list string map_lines Level level int hero_x int hero_y block
-    def list string lines the terrain of level
+    define list string lines the terrain of level
     for Loot found in the loot of level
         set lines put_mark lines the x of found the y of found mark_of the treasure of found
     for Monster monster in the monsters of level
@@ -62,18 +62,18 @@ export function bool is_wall Level level int x int y
     return equal tile_at level x y "#"
 
 export function option int monster_at Level level int x int y block
-    def list Monster monsters the monsters of level
+    define list Monster monsters the monsters of level
     for int index in positions_of monsters block
-        def Monster monster get monsters index
+        define Monster monster get monsters index
         if and equal the x of monster x equal the y of monster y return some index
     end
     return none int
 end
 
 export function option int loot_at Level level int x int y block
-    def list Loot loot the loot of level
+    define list Loot loot the loot of level
     for int index in positions_of loot block
-        def Loot found get loot index
+        define Loot found get loot index
         if and equal the x of found x equal the y of found y return some index
     end
     return none int
@@ -81,8 +81,8 @@ end
 
 function string terrain_row int y block
     if or equal y 0 equal y subtract height 1 return repeat "#" width
-    def list string cells list_of string "#" end
-    def int x 1
+    define list string cells list_of string "#" end
+    define int x 1
     while less x subtract width 1 block
         if and pillar_spot x y equal roll 1 3 1 set cells push cells "#"
         else set cells push cells "."
@@ -95,9 +95,9 @@ function bool pillar_spot int x int y
     return and equal modulo x 2 0 equal modulo y 2 0
 
 function list string put_mark list string lines int x int y string mark block
-    def string line get lines y
-    def string before substring line 0 x
-    def string after substring line add x 1 subtract length_of line add x 1
+    define string line get lines y
+    define string before slice line 0 x
+    define string after slice line add x 1 subtract length_of line add x 1
     return put lines y add before add mark after
 end
 
@@ -108,13 +108,13 @@ end
 
 function Spot free_spot Level level
     while true block
-        def int x roll 1 subtract width 2
-        def int y roll 1 subtract height 2
+        define int x roll 1 subtract width 2
+        define int y roll 1 subtract height 2
         if and greater add x y 5 not taken level x y return Spot x y
     end
 
 function Monster new_monster int depth Spot spot block
-    def int kind roll 1 depth
+    define int kind roll 1 depth
     if equal kind 1 return Monster "rat" the x of spot the y of spot 2 1
     if equal kind 2 return Monster "goblin" the x of spot the y of spot 4 2
     return Monster "orc" the x of spot the y of spot 7 3

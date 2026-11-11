@@ -1,9 +1,9 @@
 use items "items.prp"
 use world "world.prp"
-import from items ItemKind end
-import from world Place Room end
+import from items ItemKind lamp end
+import from world Place hall Room end
 
-export record Player Place place int moves list ItemKind inventory
+export record Player Place place int moves list ItemKind inventory end
 
 export function Player new_player
     return Player hall 0 list_of ItemKind end
@@ -15,7 +15,7 @@ export function bool can_see Room room Player player
     return or not the dark of room carries player lamp
 
 export function list ItemKind items_in Room room Player player block
-    def list ItemKind found list_of ItemKind end
+    define list ItemKind found list_of ItemKind end
     for ItemKind item in the items of room
         if not carries player item set found push found item
     return found

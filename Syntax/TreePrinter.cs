@@ -145,7 +145,7 @@ public static class TreePrinter
 
         private string Simple(Statement statement) => statement switch
         {
-            DefStatement def => $"{Keywords.Def} {TypeText(def.Type)} {def.Name} {Operand(def.Value)}",
+            DefStatement def => $"{Keywords.Define} {TypeText(def.Type)} {def.Name} {Operand(def.Value)}",
             SetStatement set => $"{Keywords.Set} {set.Name} {Operand(set.Value)}",
             ReturnStatement { Value: null } => $"{Keywords.Return} {PyropType.Void.Name}",
             ReturnStatement { Value: { } value } => $"{Keywords.Return} {Operand(value)}",
@@ -184,6 +184,7 @@ public static class TreePrinter
                 Keywords.Record,
                 record.Name,
                 .. record.Fields.SelectMany(field => new[] { TypeText(field.Type), field.Name }),
+                Keywords.End,
             ]);
 
         public string ChoiceHeader(ChoiceType choice) =>
@@ -269,6 +270,22 @@ public static class TreePrinter
             AppendBare(builder, expression);
         }
 
+        private void AppendChanges(StringBuilder builder, WithFieldExpression change)
+        {
+            if (change is { Chained: true, Record: WithFieldExpression earlier })
+            {
+                AppendChanges(builder, earlier);
+            }
+            else
+            {
+                builder.Append(Keywords.Copy).Append(' ');
+                AppendOperand(builder, change.Record);
+            }
+
+            builder.Append(' ').Append(Keywords.With).Append(' ').Append(change.Field).Append(' ');
+            AppendOperand(builder, change.Value);
+        }
+
         private void AppendBare(StringBuilder builder, Expression expression)
         {
             switch (expression)
@@ -321,16 +338,9 @@ public static class TreePrinter
                 case GetFieldExpression read:
                     AppendApplied(builder, $"{Keywords.The} {read.Field} {Keywords.Of}", [read.Record]);
                     break;
-                case WithFieldExpression { Chained: true } change:
-                    AppendBare(builder, change.Record);
-                    builder.Append(' ').Append(Keywords.With).Append(' ').Append(change.Field).Append(' ');
-                    AppendOperand(builder, change.Value);
-                    break;
                 case WithFieldExpression change:
-                    builder.Append(Keywords.Copy).Append(' ');
-                    AppendOperand(builder, change.Record);
-                    builder.Append(' ').Append(Keywords.With).Append(' ').Append(change.Field).Append(' ');
-                    AppendOperand(builder, change.Value);
+                    AppendChanges(builder, change);
+                    builder.Append(' ').Append(Keywords.End);
                     break;
                 case VariantExpression variant:
                     AppendApplied(builder, Callee(variant.Module, variant.Variant.Name), variant.Arguments);

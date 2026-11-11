@@ -122,7 +122,7 @@ public sealed class Parser
     private Statement ParseListedStatement(HashSet<string> declared, OuterNames outer)
     {
         var token = _cursor.Current;
-        if (token.IsWord(Keywords.Def))
+        if (token.IsWord(Keywords.Define))
         {
             return ParseDef(declared, outer);
         }
@@ -252,7 +252,7 @@ public sealed class Parser
 
         if (!_cursor.Current.IsWord(Keywords.Function))
         {
-            if (_cursor.Current.Kind == TokenKind.Word && Keywords.UnavailableHint(_cursor.Current.Text) is { } unavailable)
+            if (_cursor.Current.Kind == TokenKind.Word && (Keywords.IsReservedForLater(_cursor.Current.Text) || IsUnknownWord(_cursor.Current)) && Keywords.UnavailableHint(_cursor.Current.Text) is { } unavailable)
             {
                 throw _cursor.Error(unavailable);
             }
@@ -286,9 +286,9 @@ public sealed class Parser
 
     private Statement ParseBody(string owner, OuterNames? outer = null)
     {
-        if (_cursor.Current.IsWord(Keywords.Def))
+        if (_cursor.Current.IsWord(Keywords.Define))
         {
-            throw _cursor.Error($"A def cannot be the body of {owner}; wrap it in block … end.");
+            throw _cursor.Error($"A {Keywords.Define} cannot be the body of {owner}; wrap it in block … end.");
         }
 
         RequireRoomToNest(_nesting);
@@ -343,7 +343,7 @@ public sealed class Parser
 
         return token.Text switch
         {
-            Keywords.Def => throw _cursor.Error("A def cannot be used here; wrap it in block … end."),
+            Keywords.Define => throw _cursor.Error($"A {Keywords.Define} cannot be used here; wrap it in block … end."),
             Keywords.Use or Keywords.Import or Keywords.Export =>
                 throw _cursor.Error($"'{token.Text}' is only allowed at the top level."),
             Keywords.Record => throw _cursor.Error("Records can only be declared at the top level."),
@@ -355,7 +355,7 @@ public sealed class Parser
             Keywords.When => throw _cursor.Error($"'{Keywords.When}' without a matching '{Keywords.Match}'."),
             Keywords.With => throw _cursor.Error(
                 $"'{Keywords.With}' cannot start a statement; it belongs to a {Keywords.Copy}, which changes several fields with one '{Keywords.With}' each: " +
-                $"{Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>."),
+                $"{Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value> {Keywords.End}."),
             Keywords.Attempt => throw _cursor.Error(
                 $"'{Keywords.Attempt}' cannot be a statement: its result tells whether the operation succeeded. " +
                 $"Use it as a value, as in {Keywords.If} not {Keywords.Attempt} {Keywords.From} files save \"save.txt\" text …."),
@@ -383,7 +383,7 @@ public sealed class Parser
             _ when _names.FindChoice(token.Text) is { } choice => throw ChoiceStartingStatement(token, choice),
             _ when _names.FindVariant(token.Text) is { Arity: > 0 } variant => throw VariantStatement(token, variant.Name),
             _ when _names.Failures.OfName(token.Text) is { } failure => throw failure,
-            _ when Keywords.UnavailableHint(token.Text) is { } unavailable => throw _cursor.Error(unavailable),
+            _ when (Keywords.IsReservedForLater(token.Text) || IsUnknownWord(token)) && Keywords.UnavailableHint(token.Text) is { } unavailable => throw _cursor.Error(unavailable),
             _ when Keywords.IsReserved(token.Text) => throw _cursor.Error($"'{token.Text}' cannot start a statement."),
             _ when token.Kind == TokenKind.Word && _names.LibraryHint(token.Text) is { } hint => throw _cursor.Error(hint),
             _ when token.Kind == TokenKind.Word && Keywords.UnderscoredSpelling(token.Text) is { } spelling =>
@@ -431,7 +431,7 @@ public sealed class Parser
             "print" or "println" or "echo" or "puts" => $" To show a value, use {Keywords.WriteLine}.",
             "elif" or "elsif" or "elseif" => $" An {Keywords.Else} takes one statement, so write {Keywords.Else} {Keywords.If}.",
             "then" or "do" => " Nothing comes between a condition and its statement; remove this word.",
-            "var" or "let" or "const" => $" A variable is declared with {Keywords.Def} <type> <name> <value>.",
+            "var" or "let" or "const" => $" A variable is declared with {Keywords.Define} <type> <name> <value>.",
             "func" or "fn" or "fun" or "sub" => $" A function is declared with {Keywords.Function} <return type> <name>, then its parameters and body.",
             _ => DidYouMean(token.Text, KnownWords),
         };
@@ -448,14 +448,14 @@ public sealed class Parser
     private PyropException ConstructorStatement(Token token, string written) =>
         _cursor.Error(
             $"A record constructor cannot be a statement: '{written} …' would make a record only to throw it away, " +
-            "and no statement may start with a type name, so that parameter and field lists know where they end. " +
-            $"Use the new record as a value, as in {Keywords.Def} {written} <name> {written} ….",
+            "and no statement may start with a type name, so that a parameter list knows where it ends. " +
+            $"Use the new record as a value, as in {Keywords.Define} {written} <name> {written} ….",
             token);
 
     private PyropException ChoiceStartingStatement(Token token, ChoiceType choice, string? module = null) =>
         _cursor.Error(
             $"A statement cannot start with the choice '{choice.Name}': a choice is a type, and no statement may start with a type name. " +
-            $"Use one of its variants as a value, as in {Keywords.Def} {Written(module, choice.Name)} <name> {Written(module, choice.Variants[0].Example)}.",
+            $"Use one of its variants as a value, as in {Keywords.Define} {Written(module, choice.Name)} <name> {Written(module, choice.Variants[0].Example)}.",
             token);
 
     private PyropException ChoiceAsValue(Token token, ChoiceType choice, string? module = null) =>
@@ -470,21 +470,6 @@ public sealed class Parser
 
     private static string Written(string? module, string name) => module is null ? name : $"{Keywords.From} {module} {name}";
 
-    private static bool EndsWithCopy(Expression expression) => TrailingCopy(expression) is not null;
-
-    private static WithFieldExpression? TrailingCopy(Expression expression) => expression switch
-    {
-        WithFieldExpression copy => copy,
-        BuiltinCallExpression { Arguments: [.., var last] } => TrailingCopy(last),
-        FunctionCallExpression { Arguments: [.., var last] } => TrailingCopy(last),
-        ConstructExpression { Arguments: [.., var last] } => TrailingCopy(last),
-        VariantExpression { Arguments: [.., var last] } => TrailingCopy(last),
-        GetFieldExpression read => TrailingCopy(read.Record),
-        ConvertExpression convert => TrailingCopy(convert.Operand),
-        AttemptExpression attempt => TrailingCopy(attempt.Operation),
-        _ => null,
-    };
-
     private PyropException StrayValue(Token token, string? described = null)
     {
         if (described is null
@@ -494,7 +479,7 @@ public sealed class Parser
             && _cursor.Behind(3)?.IsWord(Keywords.From) != true
             && IsUnknownWord(previous))
         {
-            return _names.LibraryHint(previous.Text) is { } hint
+            return (_names.LibraryHint(previous.Text) ?? Keywords.UnavailableHint(previous.Text)) is { } hint
                 ? _cursor.Error(hint, previous)
                 : _cursor.Error(
                     $"'{Token.Shortened(previous.Text)}' is not an operation or function, so {token.Describe()} after it cannot be one of its values.{DidYouMean(previous.Text, KnownWords)}",
@@ -541,7 +526,7 @@ public sealed class Parser
 
         if (_cursor.IsAtEnd || (_cursor.Current.Kind == TokenKind.Word && Keywords.IsStatement(_cursor.Current.Text)))
         {
-            throw _cursor.Error($"Variable '{name}' needs an initial value: def {type.Name} {name} <expression>.");
+            throw _cursor.Error($"Variable '{name}' needs an initial value: {Keywords.Define} {type.Name} {name} <expression>.");
         }
 
         return new DefStatement(type, name, ParseExpression(), start.Position);
@@ -553,7 +538,7 @@ public sealed class Parser
         if (_cursor.Current.IsWord(Keywords.The))
         {
             throw _cursor.Error(
-                $"A record does not change, so its field cannot be set. Make a new one instead: {Keywords.Set} <name> {Keywords.Copy} <name> {Keywords.With} <field> <value>.");
+                $"A record does not change, so its field cannot be set. Make a new one instead: {Keywords.Set} <name> {Keywords.Copy} <name> {Keywords.With} <field> <value> {Keywords.End}.");
         }
 
         var name = _cursor.ExpectIdentifier("variable name", _names);
@@ -730,6 +715,7 @@ public sealed class Parser
         throw _cursor.Error(
             token.Kind == TokenKind.Word && _names.FindChoice(token.Text) is { } choice
                 ? $"'{choice.Name}' is a choice; '{Keywords.When}' names one of its variants, such as {Keywords.When} {choice.Variants[0].Example}."
+                : token.Kind == TokenKind.Word && _names.LibraryHint(token.Text) is { } hint ? hint
                 : $"Expected a variant after '{Keywords.When}', found {token.Describe()}.{(token.Kind == TokenKind.Word ? DidYouMean(token.Text, _names.Variants.Keys) : "")}");
     }
 
@@ -931,7 +917,25 @@ public sealed class Parser
                     throw _cursor.Error($"Expected 'end' to close the block started at {start.Position.Spoken}.");
                 }
 
-                statements.Add(ParseListedStatement(declared, outer));
+                var statement = ParseListedStatement(declared, outer);
+                statements.Add(statement);
+                if (statement is ReturnStatement or BreakStatement or ContinueStatement
+                    && !_cursor.Current.IsWord(Keywords.End)
+                    && !_cursor.IsAtEnd)
+                {
+                    var word = statement switch
+                    {
+                        ReturnStatement => Keywords.Return,
+                        BreakStatement => Keywords.Break,
+                        _ => Keywords.Continue,
+                    };
+                    var unreachable = _cursor.Current;
+                    ParseListedStatement(declared, outer);
+                    throw _cursor.Error(
+                        $"This code can never run, because the '{word}' on line {statement.Position.Line} leaves the block before it. " +
+                        $"Remove it, or move it above the '{word}'.",
+                        unreachable);
+                }
             }
         }
         finally
@@ -1010,36 +1014,7 @@ public sealed class Parser
                 ExpectFiller(Keywords.Of, $"after the field name: {Keywords.The} {read.Text} {Keywords.Of} <record>");
                 return new GetFieldExpression(read.Text, read.Position, ParseExpression(), token.Position);
             case Keywords.Copy:
-                _cursor.Advance();
-                var record = ParseExpression();
-                if (EndsWithCopy(record) && !_cursor.Current.IsWord(Keywords.With))
-                {
-                    throw _cursor.Error(
-                        $"This {Keywords.Copy} has no '{Keywords.With}': the {Keywords.Copy} inside it took every '{Keywords.With}' after it. " +
-                        $"Change several fields with one {Keywords.Copy}: {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.With} <field> <value>.",
-                        token);
-                }
-
-                ExpectFiller(Keywords.With, $"after the record: {Keywords.Copy} <record> {Keywords.With} <field> <value>");
-                var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
-                Expression copy = new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), token.Position);
-                var depthBeforeChain = _expressionDepth;
-                try
-                {
-                    while (_cursor.Current.IsWord(Keywords.With))
-                    {
-                        RequireRoomToNest(_expressionDepth++);
-                        _cursor.Advance();
-                        var next = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
-                        copy = new WithFieldExpression(next.Text, next.Position, copy, ParseExpression(), token.Position, Chained: true);
-                    }
-                }
-                finally
-                {
-                    _expressionDepth = depthBeforeChain;
-                }
-
-                return copy;
+                return ParseCopy();
         }
 
         if (token.IsWord(Keywords.From))
@@ -1069,7 +1044,7 @@ public sealed class Parser
             throw ChoiceAsValue(token, choice);
         }
 
-        if (Keywords.UnavailableHint(token.Text) is { } unavailable)
+        if ((Keywords.IsReservedForLater(token.Text) || IsUnknownWord(token)) && Keywords.UnavailableHint(token.Text) is { } unavailable)
         {
             throw _cursor.Error(unavailable);
         }
@@ -1086,6 +1061,45 @@ public sealed class Parser
 
         _cursor.Advance();
         return new VariableExpression(token.Text, token.Position);
+    }
+
+    private Expression ParseCopy()
+    {
+        var start = _cursor.Advance();
+        var record = ParseExpression();
+        ExpectFiller(Keywords.With, $"after the record: {Keywords.Copy} <record> {Keywords.With} <field> <value> {Keywords.End}");
+        var changed = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
+        var named = new HashSet<string> { changed.Text };
+        Expression copy = new WithFieldExpression(changed.Text, changed.Position, record, ParseExpression(), start.Position);
+        var depthBeforeChain = _expressionDepth;
+        try
+        {
+            while (!_cursor.Current.IsWord(Keywords.End))
+            {
+                if (!_cursor.Current.IsWord(Keywords.With))
+                {
+                    throw _cursor.Error(
+                        $"Expected '{Keywords.With}' or '{Keywords.End}' to close the {Keywords.Copy} started at {start.Position.Spoken}, found {_cursor.Current.Describe()}.");
+                }
+
+                RequireRoomToNest(_expressionDepth++);
+                _cursor.Advance();
+                var next = RecordDeclarations.ReadFieldName(_cursor, $"a field name after '{Keywords.With}'");
+                if (!named.Add(next.Text))
+                {
+                    throw _cursor.Error($"Field '{next.Text}' is changed twice in the {Keywords.Copy} started at {start.Position.Spoken}.", next);
+                }
+
+                copy = new WithFieldExpression(next.Text, next.Position, copy, ParseExpression(), start.Position, Chained: true);
+            }
+        }
+        finally
+        {
+            _expressionDepth = depthBeforeChain;
+        }
+
+        _cursor.Advance();
+        return copy;
     }
 
     private void ExpectFiller(string word, string where)
@@ -1124,7 +1138,7 @@ public sealed class Parser
             _cursor.MoveTo(qualifiedStart);
         }
 
-        if (operand.Kind == TokenKind.Word && Keywords.UnavailableHint(operand.Text) is { } unavailable)
+        if (operand.Kind == TokenKind.Word && (Keywords.IsReservedForLater(operand.Text) || IsUnknownWord(operand)) && Keywords.UnavailableHint(operand.Text) is { } unavailable)
         {
             throw _cursor.Error(unavailable);
         }
@@ -1263,7 +1277,7 @@ public sealed class Parser
         {
             if (!_cursor.Current.IsWord(Keywords.With))
             {
-                throw MissingLabels(record, labels, values);
+                throw MissingLabels(record, labels);
             }
 
             _cursor.Advance();
@@ -1286,14 +1300,11 @@ public sealed class Parser
         return new ConstructExpression(record, values, start.Position, module, labels);
     }
 
-    private PyropException MissingLabels(RecordType record, List<FieldLabel> labels, List<Expression> values)
+    private PyropException MissingLabels(RecordType record, List<FieldLabel> labels)
     {
         var missing = record.Fields.Where((_, index) => labels.All(label => label.FieldIndex != index)).Select(field => field.Name);
-        var copyHint = values.Count > 0 && TrailingCopy(values[^1]) is { Chained: true }
-            ? $" The {Keywords.Copy} in the value before took the '{Keywords.With}' that followed it; put that {Keywords.Copy} in a variable first."
-            : "";
         return _cursor.Error(
-            $"'{record.Name}' still needs {string.Join(", ", missing)}: a labelled constructor gives every field with {Keywords.With} <field> <value>, found {_cursor.Current.Describe()}.{copyHint}");
+            $"'{record.Name}' still needs {string.Join(", ", missing)}: a labelled constructor gives every field with {Keywords.With} <field> <value>, found {_cursor.Current.Describe()}.");
     }
 
     private Expression ParseFunctionCall(FunctionSignature function, Token start, string? module, bool allowVoid)

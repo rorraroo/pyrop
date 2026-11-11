@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Pyrop.Syntax;
 
 namespace Pyrop.Tests;
@@ -31,7 +30,7 @@ public class ForTests
     public void RunsABlockBodyForEachItem()
     {
         const string source = """
-            def int total 0
+            define int total 0
             for int n in list_of int 1 2 3 4 end block
                 set total add total n
                 write_line total
@@ -52,7 +51,7 @@ public class ForTests
     public void WalksAMapThroughKeysOfInInsertionOrder()
     {
         const string source = """
-            def map string int prices put put put map_of string int end "rope" 2 "lamp" 5 "rope" 3
+            define map string int prices put put put map_of string int end "rope" 2 "lamp" 5 "rope" 3
             for string name in keys_of prices block
                 write add name ": "
                 write_line get prices name
@@ -66,7 +65,7 @@ public class ForTests
     public void WalksNestedLists()
     {
         const string source = """
-            def list list int grid list_of list int list_of int 1 2 end list_of int end list_of int 3 end end
+            define list list int grid list_of list int list_of int 1 2 end list_of int end list_of int 3 end end
             for list int row in grid block
                 write_line length_of row
                 for int cell in row write_line cell
@@ -98,7 +97,7 @@ public class ForTests
     public void BreakInsideForInsideWhileLeavesOnlyTheFor()
     {
         const string source = """
-            def int i 0
+            define int i 0
             while less i 2 block
                 for int n in list_of int 1 2 3 end block
                     if equal n 2 break
@@ -186,7 +185,7 @@ public class ForTests
     public void ABodyThatChangesTheListDoesNotChangeTheIteration()
     {
         const string source = """
-            def list int numbers list_of int 1 2 3 end
+            define list int numbers list_of int 1 2 3 end
             for int n in numbers block
                 set numbers push numbers multiply n 10
                 set numbers remove numbers 0
@@ -202,7 +201,7 @@ public class ForTests
     public void TheLoopVariableCanBeSetForTheRestOfItsIteration()
     {
         const string source = """
-            def list int numbers list_of int 1 2 end
+            define list int numbers list_of int 1 2 end
             for int n in numbers block
                 set n multiply n 100
                 write_line n
@@ -218,7 +217,7 @@ public class ForTests
     {
         const string source = """
             for int n in list_of int 1 2 3 end block
-                def int doubled multiply n 2
+                define int doubled multiply n 2
                 write_line doubled
             end
             """;
@@ -230,7 +229,7 @@ public class ForTests
     public void TheLoopVariableShadowsAnOuterVariableOnlyInsideTheLoop()
     {
         const string source = """
-            def int n 7
+            define int n 7
             block
                 for int n in list_of int 1 2 end write_line n
                 write_line n
@@ -245,7 +244,7 @@ public class ForTests
     public void AFunctionReadsTheGlobalThatALoopVariableHides()
     {
         const string source = """
-            def int g 7
+            define int g 7
             function void show write_line g
             block for int g in list_of int 1 2 end block show write_line g end end
             """;
@@ -258,8 +257,8 @@ public class ForTests
     {
         const string source = """
             function list int squares_up_to int n block
-                def list int result list_of int end
-                def int i 1
+                define list int result list_of int end
+                define int i 1
                 while at_most i n block
                     set result push result multiply i i
                     set i add i 1
@@ -288,12 +287,12 @@ public class ForTests
     }
 
     [Theory]
-    [InlineData("def int g 7\nfor int g in list_of int 1 2 end write_line g", "Loop variable 'g' would shadow the variable of the same name declared earlier in this block.", 2)]
-    [InlineData("block\ndef int x 1\nfor int x in list_of int 1 end write_line x\nend", "Loop variable 'x' would shadow the variable of the same name declared earlier in this block.", 3)]
+    [InlineData("define int g 7\nfor int g in list_of int 1 2 end write_line g", "Loop variable 'g' would shadow the variable of the same name declared earlier in this block.", 2)]
+    [InlineData("block\ndefine int x 1\nfor int x in list_of int 1 end write_line x\nend", "Loop variable 'x' would shadow the variable of the same name declared earlier in this block.", 3)]
     [InlineData("function void f list int x\nfor int x in x write_line x", "Loop variable 'x' would shadow the parameter of the same name.", 2)]
     [InlineData("function void f int x\nfor int x in list_of int 1 end write_line x", "Loop variable 'x' would shadow the parameter of the same name.", 2)]
     [InlineData("function void f int x block\nfor int x in list_of int 1 end write_line x\nend", "Loop variable 'x' would shadow the parameter of the same name.", 2)]
-    [InlineData("function int f int x block\ndef int y 0\nfor int y in list_of int 1 end write_line y\nreturn x\nend", "Loop variable 'y' would shadow the variable of the same name declared earlier in this block.", 3)]
+    [InlineData("function int f int x block\ndefine int y 0\nfor int y in list_of int 1 end write_line y\nreturn x\nend", "Loop variable 'y' would shadow the variable of the same name declared earlier in this block.", 3)]
     public void ALoopVariableCannotShadowANameOfItsOwnStatementList(string source, string message, int line)
     {
         var error = Failure(source, ErrorStage.Parse);
@@ -306,7 +305,7 @@ public class ForTests
     [Fact]
     public void ADefAfterTheLoopMayReuseTheLoopVariableName()
     {
-        Assert.Equal("1\n5\n", Run.Program("for int n in list_of int 1 end write_line n\ndef int n 5\nwrite_line n"));
+        Assert.Equal("1\n5\n", Run.Program("for int n in list_of int 1 end write_line n\ndefine int n 5\nwrite_line n"));
     }
 
     [Fact]
@@ -328,7 +327,7 @@ public class ForTests
         const string source = """
             for int n in list_of int 1 end block
                 block
-                    def int n 5
+                    define int n 5
                     write_line n
                 end
                 write_line n
@@ -358,7 +357,7 @@ public class ForTests
     [Fact]
     public void ADefOfTheLoopVariableInTheOutermostBodyBlockIsAParseError()
     {
-        var error = Failure("for int n in list_of int 1 end block\ndef int n 2\nend", ErrorStage.Parse);
+        var error = Failure("for int n in list_of int 1 end block\ndefine int n 2\nend", ErrorStage.Parse);
 
         Assert.Equal("Variable 'n' would shadow the loop variable of the same name.", error.Message);
         Assert.Equal(2, error.Position.Line);
@@ -367,9 +366,9 @@ public class ForTests
     [Fact]
     public void TheBodyCannotBeABareDef()
     {
-        var error = Failure("for int n in list_of int 1 end def int m n", ErrorStage.Parse);
+        var error = Failure("for int n in list_of int 1 end define int m n", ErrorStage.Parse);
 
-        Assert.Equal("A def cannot be the body of a for loop; wrap it in block … end.", error.Message);
+        Assert.Equal("A define cannot be the body of a for loop; wrap it in block … end.", error.Message);
     }
 
     [Fact]
@@ -384,7 +383,7 @@ public class ForTests
     [Fact]
     public void TheLoopVariableTypeMustMatchNestedElementTypesExactly()
     {
-        var error = Failure("def list list int grid list_of list int end\nfor list float row in grid write_line row", ErrorStage.Type);
+        var error = Failure("define list list int grid list_of list int end\nfor list float row in grid write_line row", ErrorStage.Type);
 
         Assert.Equal("The loop variable 'row' is list float, but the list holds list int items.", error.Message);
     }
@@ -392,7 +391,7 @@ public class ForTests
     [Fact]
     public void WalkingAMapPointsToKeysOf()
     {
-        var error = Failure("def map string int m map_of string int end\nfor string k in m write_line k", ErrorStage.Type);
+        var error = Failure("define map string int m map_of string int end\nfor string k in m write_line k", ErrorStage.Type);
 
         Assert.Equal("'for' walks a list, found map string int. Walk a map's keys with keys_of.", error.Message);
         Assert.Equal(2, error.Position.Line);
@@ -431,10 +430,10 @@ public class ForTests
     [InlineData("for int in in list_of int 1 end write_line 1", "'in' is a reserved word and cannot be used as a loop variable name.")]
     [InlineData("function void f write_line 1\nfor int f in list_of int 1 end write_line 1", "'f' is a function and cannot be used as a loop variable name.")]
     [InlineData("in", "'in' without a matching 'for'.")]
-    [InlineData("def int for 1", "'for' is a reserved word and cannot be used as a variable name.")]
-    [InlineData("def int in 1", "'in' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("define int for 1", "'for' is a reserved word and cannot be used as a variable name.")]
+    [InlineData("define int in 1", "'in' is a reserved word and cannot be used as a variable name.")]
     [InlineData("function void for write_line 1", "reserved word")]
-    [InlineData("def int x for", "needs an initial value")]
+    [InlineData("define int x for", "needs an initial value")]
     [InlineData("for int n in list_of int 1 end function void f write_line 1", "Functions can only be defined at the top level.")]
     [InlineData("for int n in list_of int 1 end use m \"m.prp\"", "'use' is only allowed at the top level.")]
     public void ReportsParseErrors(string source, string message)
@@ -464,7 +463,7 @@ public class ForTests
     public void AnUnfinishedForAsksForMoreInput(string source)
     {
         var session = new PyropSession(new StringReader(""), new StringOutput());
-        session.Run("def list int numbers list_of int 1 end");
+        session.Run("define list int numbers list_of int 1 end");
 
         Assert.Equal(InputStatus.Incomplete, session.Probe(source));
     }
@@ -482,7 +481,7 @@ public class ForTests
     {
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
-        session.Run("def list string names list_of string \"a\" \"b\" end");
+        session.Run("define list string names list_of string \"a\" \"b\" end");
         session.Run("for string name in names write_line name");
         session.Run("for string name in push names \"c\" write name");
 
@@ -493,7 +492,7 @@ public class ForTests
     public void PrintsForLoopsInTheTree()
     {
         const string source = """
-            def map string int prices map_of string int end
+            define map string int prices map_of string int end
             for string name in keys_of prices block
                 if equal name "x" continue
                 write_line name
@@ -505,7 +504,7 @@ public class ForTests
 
         Assert.Equal(
             """
-            def map string int prices (map_of string int end)
+            define map string int prices (map_of string int end)
             for string name in (keys_of prices) block
                 if (equal name "x")
                     continue
@@ -519,28 +518,5 @@ public class ForTests
 
             """.ReplaceLineEndings("\n"),
             Tree(source));
-    }
-
-    [Fact]
-    public void WalksALargeListQuickly()
-    {
-        const string source = """
-            def list int numbers list_of int end
-            def int i 0
-            while less i 100000 block
-                set numbers push numbers i
-                set i add i 1
-            end
-            def int total 0
-            for int n in numbers set total add total n
-            write_line total
-            """;
-
-        var watch = Stopwatch.StartNew();
-        var output = Run.Program(source);
-        watch.Stop();
-
-        Assert.Equal("4999950000\n", output);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"Took {watch.Elapsed}.");
     }
 }

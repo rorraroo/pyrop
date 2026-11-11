@@ -23,7 +23,7 @@ public class TerminalTests
     [Fact]
     public void AcceptsAComputedStyleName()
     {
-        Assert.Equal("<success>ok</success>", Run.Program("def string mood \"success\"\nstyled mood write \"ok\""));
+        Assert.Equal("<success>ok</success>", Run.Program("define string mood \"success\"\nstyled mood write \"ok\""));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class TerminalTests
     [Fact]
     public void RejectsAnUnknownComputedStyleWhileRunning()
     {
-        var error = Run.Failure("def string mood \"Loud\"\nstyled mood write \"x\"");
+        var error = Run.Failure("define string mood \"Loud\"\nstyled mood write \"x\"");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal("Unknown style \"Loud\"; the styles are emphasis, muted, success, warning, danger, info.", error.Message);
@@ -56,16 +56,16 @@ public class TerminalTests
     [Fact]
     public void RejectsADefAsTheBody()
     {
-        var error = Run.Failure("styled \"info\" def int x 1");
+        var error = Run.Failure("styled \"info\" define int x 1");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
-        Assert.Equal("A def cannot be the body of a styled; wrap it in block … end.", error.Message);
+        Assert.Equal("A define cannot be the body of a styled; wrap it in block … end.", error.Message);
     }
 
     [Fact]
     public void ReservesWithStyle()
     {
-        Assert.Equal(ErrorStage.Parse, Run.Failure("def string styled \"x\"").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure("define string styled \"x\"").Stage);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class TerminalTests
     {
         Assert.Equal(
             "<info>Name: </info>\nAnn\n",
-            Run.Program("def string name \"\"\nstyled \"info\" set name ask \"Name: \"\nwrite_line name", "Ann\n"));
+            Run.Program("define string name \"\"\nstyled \"info\" set name ask \"Name: \"\nwrite_line name", "Ann\n"));
     }
 
     [Fact]
@@ -236,6 +236,6 @@ public class TerminalTests
     [Fact]
     public void StyledIsAReservedWord()
     {
-        Assert.Contains("reserved word", Run.Failure("def int styled 1").Message);
+        Assert.Contains("reserved word", Run.Failure("define int styled 1").Message);
     }
 }

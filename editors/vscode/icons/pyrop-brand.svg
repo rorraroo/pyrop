@@ -1,21 +1,22 @@
 ﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
-  <g stroke-width="0.5" stroke-linejoin="round">
-    <polygon points="35,3 46,17 35,31" fill="#E0605F" stroke="#E0605F"/>
-    <polygon points="28,15 35,3 35,31" fill="#C9424A" stroke="#C9424A"/>
-    <polygon points="46,17 53,31 35,31" fill="#B23339" stroke="#B23339"/>
-    <polygon points="53,31 32,46 35,31" fill="#9A2329" stroke="#9A2329"/>
-    <polygon points="53,31 52.5,44 32,46" fill="#7A1C1C" stroke="#7A1C1C"/>
-    <polygon points="52.5,44 47,54 32,46" fill="#64161A" stroke="#64161A"/>
-    <polygon points="47,54 39,59.5 32,46" fill="#4A0E11" stroke="#4A0E11"/>
-    <polygon points="39,59.5 26,59.5 32,46" fill="#3E0B0E" stroke="#3E0B0E"/>
-    <polygon points="26,59.5 17,54 32,46" fill="#5A1216" stroke="#5A1216"/>
-    <polygon points="17,54 12,45 32,46" fill="#7A1C1C" stroke="#7A1C1C"/>
-    <polygon points="12,45 11.5,33 32,46" fill="#8E2228" stroke="#8E2228"/>
-    <polygon points="11.5,33 24,29 32,46" fill="#A82C33" stroke="#A82C33"/>
-    <polygon points="24,29 35,31 32,46" fill="#C03A41" stroke="#C03A41"/>
-    <polygon points="11.5,33 17,18 24,29" fill="#D2515A" stroke="#D2515A"/>
-    <polygon points="24,29 28,15 35,31" fill="#E87872" stroke="#E87872"/>
+  <polygon points="35,3 46,17 53,31 52.5,44 47,54 39,59.5 26,59.5 17,54 12,45 11.5,33 17,18 24,29 28,15" fill="#811532"/>
+  <g>
+    <polygon points="35,3 46,17 35,31" fill="#EA557C"/>
+    <polygon points="28,15 35,3 35,31" fill="#D3386A"/>
+    <polygon points="46,17 53,31 35,31" fill="#BC2957"/>
+    <polygon points="53,31 32,46 35,31" fill="#A31A45"/>
+    <polygon points="53,31 52.5,44 32,46" fill="#811532"/>
+    <polygon points="52.5,44 47,54 32,46" fill="#6A102D"/>
+    <polygon points="47,54 39,59.5 32,46" fill="#4E0A1F"/>
+    <polygon points="39,59.5 26,59.5 32,46" fill="#42071A"/>
+    <polygon points="26,59.5 17,54 32,46" fill="#5F0D27"/>
+    <polygon points="17,54 12,45 32,46" fill="#811532"/>
+    <polygon points="12,45 11.5,33 32,46" fill="#961A42"/>
+    <polygon points="11.5,33 24,29 32,46" fill="#B12351"/>
+    <polygon points="24,29 35,31 32,46" fill="#CA3061"/>
+    <polygon points="11.5,33 17,18 24,29" fill="#DC4779"/>
+    <polygon points="24,29 28,15 35,31" fill="#F16986"/>
   </g>
-  <polygon points="35,3 39.6,8.9 35,10.6" fill="#F6B3A6"/>
-  <polygon points="17,18 18.6,22.3 15.6,21.8" fill="#F2A196"/>
+  <polygon points="35,3 39.6,8.9 35,10.6" fill="#FCA0AA"/>
+  <polygon points="17,18 18.6,22.3 15.6,21.8" fill="#F98F9F"/>
 </svg>

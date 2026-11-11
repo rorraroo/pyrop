@@ -36,7 +36,7 @@ public sealed record KnownTypes(ModuleNamespace Names, IReadOnlySet<string> Decl
 public static class RecordDeclarations
 {
     private static readonly HashSet<string> NamePositions =
-        [Keywords.Def, Keywords.Set, Keywords.For, Keywords.Use, Keywords.From, Keywords.The, Keywords.With, Keywords.When];
+        [Keywords.Define, Keywords.Set, Keywords.For, Keywords.Use, Keywords.From, Keywords.The, Keywords.With, Keywords.When];
 
     private static readonly HashSet<string> ValuePositions =
     [
@@ -242,8 +242,13 @@ public static class RecordDeclarations
     public static IReadOnlyList<RecordField> ReadFields(TokenCursor cursor, ModuleNamespace names, string record)
     {
         var fields = new List<RecordField>();
-        while (true)
+        while (!cursor.Current.IsWord(Keywords.End))
         {
+            if (cursor.IsAtEnd)
+            {
+                throw cursor.Error($"Expected '{Keywords.End}' to close the record '{record}'.");
+            }
+
             if (cursor.Current.IsWord(PyropType.Void.Name))
             {
                 throw cursor.Error("A field cannot have type void.");
@@ -251,16 +256,15 @@ public static class RecordDeclarations
 
             if (!TypeReader.StartsValueType(cursor, names))
             {
-                if (fields.Count == 0
-                    && cursor.Current.Kind == TokenKind.Word
-                    && !Keywords.IsReserved(cursor.Current.Text)
-                    && cursor.Peek(1).Kind == TokenKind.Word
-                    && !Keywords.IsReserved(cursor.Peek(1).Text))
+                if (cursor.Current.Kind == TokenKind.Word
+                    && (!Keywords.IsReserved(cursor.Current.Text) || Keywords.IsReservedForLater(cursor.Current.Text)))
                 {
                     TypeReader.ReadValueType(cursor, names, "field");
                 }
 
-                break;
+                throw cursor.Error(
+                    $"Expected a field type or '{Keywords.End}' to close the record '{record}', found {cursor.Current.Describe()}. " +
+                    $"A record lists its fields as types and names: {Keywords.Record} {record} int count string label {Keywords.End}.");
             }
 
             var type = TypeReader.ReadValueType(cursor, names, "field");
@@ -276,15 +280,11 @@ public static class RecordDeclarations
 
         if (fields.Count == 0)
         {
-            if (cursor.Current.Kind == TokenKind.Word && Keywords.IsReservedForLater(cursor.Current.Text))
-            {
-                throw cursor.Error(Keywords.UnavailableHint(cursor.Current.Text)!);
-            }
-
             throw cursor.Error(
-                $"Record '{record}' needs at least one field, a type and a name such as {Keywords.Record} {record} int count; found {cursor.Current.Describe()}.");
+                $"Record '{record}' needs at least one field, a type and a name such as {Keywords.Record} {record} int count {Keywords.End}.");
         }
 
+        cursor.Advance();
         return fields;
     }
 

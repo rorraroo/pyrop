@@ -34,7 +34,7 @@ public sealed class CommandsAndConstructorsTests
     {
         var commands = new FakeCommands(new CommandOutcome(3, "out", "err"));
 
-        var output = Run.Program(Uses + "def CommandResult r run \"tool\" list_of string \"a b\" \"c\" end\nwrite_line r\n", host: WithCommands(commands));
+        var output = Run.Program(Uses + "define CommandResult r run \"tool\" list_of string \"a b\" \"c\" end\nwrite_line r\n", host: WithCommands(commands));
 
         Assert.Equal("CommandResult exit_code 3 output \"out\" errors \"err\"\n", output);
         var call = Assert.Single(commands.Calls);
@@ -61,7 +61,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void AHostWithoutCommandsFails()
     {
-        Assert.Contains("this host does not run commands", Run.Failure(Uses + "def CommandResult r run \"git\" list_of string end\n").Message);
+        Assert.Contains("this host does not run commands", Run.Failure(Uses + "define CommandResult r run \"git\" list_of string end\n").Message);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class CommandsAndConstructorsTests
     [InlineData("\"\"", "needs a program name")]
     public void ABadCommandNameIsARuntimeError(string name, string message)
     {
-        Assert.Contains(message, Run.Failure(Uses + $"def CommandResult r run {name} list_of string end\n", host: RealCommands).Message);
+        Assert.Contains(message, Run.Failure(Uses + $"define CommandResult r run {name} list_of string end\n", host: RealCommands).Message);
     }
 
     [Theory]
@@ -85,7 +85,7 @@ public sealed class CommandsAndConstructorsTests
     {
         var host = RealCommands;
 
-        Assert.Contains("A program name cannot", Run.Failure(Uses + $"def CommandResult r run \"{name}\" list_of string end\n", host: host).Message);
+        Assert.Contains("A program name cannot", Run.Failure(Uses + $"define CommandResult r run \"{name}\" list_of string end\n", host: host).Message);
     }
 
     [Theory]
@@ -151,13 +151,13 @@ public sealed class CommandsAndConstructorsTests
     public void APlainScreenIsWrittenInFullAfterAnAttachedCommand()
     {
         Assert.Equal(1, TimesShown(""));
-        Assert.Equal(2, TimesShown("def int code from program run_attached \"tool\" list_of string end\n"));
+        Assert.Equal(2, TimesShown("define int code from program run_attached \"tool\" list_of string end\n"));
     }
 
     [Fact]
     public void AQualifiedTypeAndCallWork()
     {
-        const string source = "use program library\ndef from program CommandResult r from program run \"tool\" list_of string end\nwrite_line the output of r\n";
+        const string source = "use program library\ndefine from program CommandResult r from program run \"tool\" list_of string end\nwrite_line the output of r\n";
 
         Assert.Equal("hi\n", Run.Program(source, host: WithCommands(new FakeCommands(new CommandOutcome(0, "hi", "")))));
     }
@@ -165,7 +165,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void ARealProgramRuns()
     {
-        var output = Run.Program(Uses + "def CommandResult r run \"git\" list_of string \"--version\" end\nwrite_line starts_with the output of r \"git version\"\nwrite_line the exit_code of r\n", host: RealCommands);
+        var output = Run.Program(Uses + "define CommandResult r run \"git\" list_of string \"--version\" end\nwrite_line starts_with the output of r \"git version\"\nwrite_line the exit_code of r\n", host: RealCommands);
 
         Assert.Equal("true\n0\n", output);
     }
@@ -173,7 +173,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void ARealFailureFillsErrorsAndExitCode()
     {
-        var output = Run.Program(Uses + "def CommandResult r run \"git\" list_of string \"no-such-subcommand\" end\nwrite_line greater the exit_code of r 0\nwrite_line greater length_of the errors of r 0\n", host: RealCommands);
+        var output = Run.Program(Uses + "define CommandResult r run \"git\" list_of string \"no-such-subcommand\" end\nwrite_line greater the exit_code of r 0\nwrite_line greater length_of the errors of r 0\n", host: RealCommands);
 
         Assert.Equal("true\ntrue\n", output);
     }
@@ -181,7 +181,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void AProgramThatCannotBeFoundFails()
     {
-        Assert.Contains("no such program was found", Run.Failure(Uses + "def CommandResult r run \"pyrop_no_such_program\" list_of string end\n", host: RealCommands).Message);
+        Assert.Contains("no such program was found", Run.Failure(Uses + "define CommandResult r run \"pyrop_no_such_program\" list_of string end\n", host: RealCommands).Message);
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public sealed class CommandsAndConstructorsTests
 
     [Theory]
     [InlineData("write_line variants_of int\n")]
-    [InlineData("record P int x\nwrite_line variants_of P\n")]
+    [InlineData("record P int x end\nwrite_line variants_of P\n")]
     public void VariantsOfRejectsAnythingButAChoice(string source)
     {
         Assert.Contains("is not one", Run.Failure(source).Message);
@@ -249,10 +249,10 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void VariantsOfIsReserved()
     {
-        Assert.Contains("reserved", Run.Failure("def int variants_of 1\n").Message);
+        Assert.Contains("reserved", Run.Failure("define int variants_of 1\n").Message);
     }
 
-    private const string Point = "record Point int x int y\n";
+    private const string Point = "record Point int x int y end\n";
 
     [Theory]
     [InlineData("Point with x 1 with y 2")]
@@ -294,32 +294,29 @@ public sealed class CommandsAndConstructorsTests
     }
 
     [Fact]
-    public void ACopyAsANonFinalLabelledValueSaysWhatHappened()
+    public void ACopyAsANonFinalLabelledValueEndsAtItsEnd()
     {
-        var message = Run.Failure("record A int n\nrecord B A a int c\ndef A one A 1\nwrite_line B with a copy one with n 2 with c 3\n").Message;
-
-        Assert.Contains("took the 'with'", message);
+        Assert.Equal("B a (A n 2) c 3\n", Run.Program("record A int n end\nrecord B A a int c end\ndefine A one A 1\nwrite_line B with a copy one with n 2 end with c 3\n"));
     }
 
     [Fact]
     public void AForgottenFieldAfterACopyDoesNotBlameTheCopy()
     {
-        var message = Run.Failure("record A int n\nrecord B A a int c\ndef A one A 1\nwrite_line B with a copy one with n 2\n").Message;
+        var message = Run.Failure("record A int n end\nrecord B A a int c end\ndefine A one A 1\nwrite_line B with a copy one with n 2 end\n").Message;
 
         Assert.StartsWith("'B' still needs c:", message);
-        Assert.DoesNotContain("took the", message);
     }
 
     [Fact]
     public void ACopyAsTheLastLabelledValueWorks()
     {
-        Assert.Equal("B c 3 a (A n 2)\n", Run.Program("record A int n\nrecord B int c A a\ndef A one A 1\nwrite_line B with c 3 with a copy one with n 2\n"));
+        Assert.Equal("B c 3 a (A n 2)\n", Run.Program("record A int n end\nrecord B int c A a end\ndefine A one A 1\nwrite_line B with c 3 with a copy one with n 2 end\n"));
     }
 
     [Fact]
     public void ACopyOfALabelledConstructorTakesTheWithsAfterItsFields()
     {
-        Assert.Equal("Point x 9 y 2\n", Run.Program(Point + "write_line copy Point with x 1 with y 2 with x 9\n"));
+        Assert.Equal("Point x 9 y 2\n", Run.Program(Point + "write_line copy Point with x 1 with y 2 with x 9 end\n"));
     }
 
     [Fact]
@@ -328,7 +325,7 @@ public sealed class CommandsAndConstructorsTests
         var directory = Directory.CreateTempSubdirectory("pyrop-labels-").FullName;
         try
         {
-            File.WriteAllText(Path.Combine(directory, "shapes.prp"), "export record Point int x int y\n");
+            File.WriteAllText(Path.Combine(directory, "shapes.prp"), "export record Point int x int y end\n");
             const string source = "use shapes \"shapes.prp\"\nwrite_line from shapes Point with y 2 with x 1\n";
             var path = Path.Combine(directory, "main.prp");
             var output = new StringOutput();
@@ -348,7 +345,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void TheTreeShowsLabelsAndVariantsOf()
     {
-        var tree = Quiet().Inspect("choice D a b end\nrecord P int x int y\nwrite_line P with y add 1 2 with x 3\nwrite_line variants_of D\n", "main.prp").Text;
+        var tree = Quiet().Inspect("choice D a b end\nrecord P int x int y end\nwrite_line P with y add 1 2 with x 3\nwrite_line variants_of D\n", "main.prp").Text;
 
         Assert.Contains("P with y (add 1 2) with x 3", tree);
         Assert.Contains("variants_of D", tree);
@@ -357,15 +354,15 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void TheFormatterIndentsLabelsUnderTheirConstructor()
     {
-        const string source = "record P int x int y\ndef P p P\nwith x 1\nwith y 2\nwrite_line p\n";
+        const string source = "record P int x int y end\ndefine P p P\nwith x 1\nwith y 2\nwrite_line p\n";
 
-        Assert.Equal("record P int x int y\ndef P p P\n    with x 1\n    with y 2\nwrite_line p\n", Quiet().Format(source, "main.prp"));
+        Assert.Equal("record P int x int y end\ndefine P p P\n    with x 1\n    with y 2\nwrite_line p\n", Quiet().Format(source, "main.prp"));
     }
 
     [Fact]
     public void HoverAndDefinitionUnderstandLabels()
     {
-        const string source = "record A int x\nrecord B int x\nwrite_line B with x 1\n";
+        const string source = "record A int x end\nrecord B int x end\nwrite_line B with x 1\n";
         var analyzed = Quiet().Analyze(source, "main.prp");
 
         Assert.NotNull(analyzed);
@@ -377,7 +374,7 @@ public sealed class CommandsAndConstructorsTests
     [Fact]
     public void LibraryTypesAndVariantsHaveNoDefinition()
     {
-        const string source = "use terminal library\nimport from terminal View text end\ndef View v text \"a\"\n";
+        const string source = "use terminal library\nimport from terminal View text end\ndefine View v text \"a\"\n";
         var analyzed = Quiet().Analyze(source, "main.prp");
 
         Assert.NotNull(analyzed);

@@ -19,16 +19,11 @@ public sealed record LoadedModule(Module Module, ModuleNamespace Names, SourceFi
 
 public sealed record ModuleUse(string Name, LoadedModule Target, SourcePosition Position, Token Statement);
 
-public sealed record ModuleImport(string Module, string Name, object Target, SourcePosition Position, Token Statement, bool AllVariants = true)
+public sealed record ModuleImport(string Module, string Name, object Target, SourcePosition Position, Token Statement)
 {
     public ChoiceVariant? Variant => Target as ChoiceVariant;
 
-    public IEnumerable<ChoiceVariant> BroughtVariants => Target switch
-    {
-        ChoiceType choice when AllVariants => choice.Variants,
-        ChoiceVariant variant => [variant],
-        _ => [],
-    };
+    public IEnumerable<ChoiceVariant> BroughtVariants => Target is ChoiceVariant variant ? [variant] : [];
 
     public FunctionSignature? Function => Target as FunctionSignature;
 
@@ -138,7 +133,27 @@ public sealed class ModuleNamespace
     public BuiltinOperation? FindOperation(string name) =>
         Builtins.All.GetValueOrDefault(name) ?? Imports.GetValueOrDefault(name)?.Operation;
 
-    public string? LibraryHint(string name) => Libraries.Hint(name, this);
+    public string? LibraryHint(string name) => ModuleHint(name) ?? Libraries.Hint(name, this);
+
+    private string? ModuleHint(string name)
+    {
+        foreach (var (moduleName, use) in Uses)
+        {
+            var exports = use.Target.Names;
+            var kind =
+                exports.Functions.Find(name) is { IsExported: true } ? "function"
+                : exports.Records.GetValueOrDefault(name) is { IsExported: true } ? "record"
+                : exports.Choices.GetValueOrDefault(name) is { IsExported: true } ? "choice"
+                : exports.OwnVariant(name) is { Choice.IsExported: true } ? "variant"
+                : null;
+            if (kind is not null && !use.Target.IsLibrary)
+            {
+                return $"'{name}' is a {kind} of the module {moduleName}: add {Keywords.Import} {Keywords.From} {moduleName} {name} {Keywords.End}, or write {Keywords.From} {moduleName} {name}.";
+            }
+        }
+
+        return null;
+    }
 
     public RecordType? FindRecord(string name) =>
         Records.GetValueOrDefault(name) ?? Imports.GetValueOrDefault(name)?.Record;

@@ -3,15 +3,15 @@ use files library
 use program library
 use time library
 import from data Data parse_yaml json_text yaml_text end
-import from files copy_file delete_folder folder_exists folder_of folders_in join_path listing_all load make_folder modified_at name_of save end
+import from files copy_file delete_folder files_under folder_exists folder_of folders_in join_path load make_folder modified_at name_of save end
 import from program arguments end
 import from time Moment is_before moment_text now end
 
-record Settings string destination int keep list string folders
-record Report string started list string copied list string removed
+record Settings string destination int keep list string folders end
+record Report string started list string copied list string removed end
 
-def string last_run_file "last-run.yaml"
-def string report_file "report.json"
+define string last_run_file "last-run.yaml"
+define string report_file "report.json"
 
 function Settings read_settings string path block
     if_some string text attempt load path
@@ -35,12 +35,12 @@ function bool changed_since string path option Moment since block
 end
 
 function list string copy_changed string folder string target option Moment since block
-    def list string done list_of string end
-    for string relative in listing_all folder block
-        def string source join_path folder relative
+    define list string done list_of string end
+    for string relative in files_under folder block
+        define string source join_path folder relative
         if changed_since source since block
-            def string inside join_path name_of folder relative
-            def string place join_path target inside
+            define string inside join_path name_of folder relative
+            define string place join_path target inside
             make_folder folder_of place
             copy_file source place
             set done push done inside
@@ -50,17 +50,17 @@ function list string copy_changed string folder string target option Moment sinc
 end
 
 function list string remove_oldest string destination int keep block
-    def list string backups sort folders_in destination
-    def int extra subtract length_of backups keep
+    define list string backups sort folders_in destination
+    define int extra subtract length_of backups keep
     if at_most extra 0 return list_of string end
-    def list string oldest slice backups 0 extra
+    define list string oldest slice backups 0 extra
     for string name in oldest delete_folder join_path destination name
     return oldest
 end
 
-def string settings_path "backup.yaml"
+define string settings_path "backup.yaml"
 if greater length_of arguments 0 set settings_path get arguments 0
-def Settings settings read_settings settings_path
+define Settings settings read_settings settings_path
 
 for string folder in the folders of settings
     if not folder_exists folder block
@@ -68,23 +68,23 @@ for string folder in the folders of settings
         exit 2
     end
 
-def string destination the destination of settings
+define string destination the destination of settings
 make_folder destination
 
-def Moment started now
-def string last_run_path join_path destination last_run_file
-def option Moment since read_last_run last_run_path
-def string target join_path destination moment_text started "{year}-{month}-{day}_{hour}-{minute}-{second}"
+define Moment started now
+define string last_run_path join_path destination last_run_file
+define option Moment since read_last_run last_run_path
+define string target join_path destination moment_text started "{year}-{month}-{day}_{hour}-{minute}-{second}"
 
-def list string copied list_of string end
+define list string copied list_of string end
 for string folder in the folders of settings block
     for string file in copy_changed folder target since
         set copied push copied file
 end
 
-def list string removed remove_oldest destination the keep of settings
+define list string removed remove_oldest destination the keep of settings
 save last_run_path yaml_text convert Data started
-def Report report Report moment_text started "{year}-{month}-{day} {hour}:{minute}:{second}" copied removed
+define Report report Report moment_text started "{year}-{month}-{day} {hour}:{minute}:{second}" copied removed
 save join_path destination report_file add json_text convert Data report "\n"
 
 write_line fill "Copied {} files and removed {} old backups." list_of int length_of copied length_of removed end

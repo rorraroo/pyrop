@@ -155,7 +155,17 @@ public sealed class TypeChecker
 
                 break;
             case CallStatement call:
+                var reported = _errors.Count;
                 TypeOf(call.Call, scope);
+                if (call.Call is BuiltinCallExpression { Operation: { MayBeDiscarded: false } operation } && _errors.Count == reported)
+                {
+                    Report(
+                        $"'{operation.Name}' only gives a result, and here the result is thrown away, so this line does nothing. " +
+                        $"Use the result, as in {Keywords.Set} <name> {operation.Name} …, or {Keywords.WriteLine} {operation.Name} … to show it. " +
+                        "If this line was meant as a value of the call before it, that call was given too many values.",
+                        call.Position);
+                }
+
                 break;
             case BreakStatement or ContinueStatement or UseStatement or ImportStatement or RecordStatement or ChoiceStatement:
                 break;
@@ -182,7 +192,7 @@ public sealed class TypeChecker
         {
             if (_undeclared.Add(set.Name))
             {
-                Report($"Undeclared variable '{set.Name}'. Declare it first with {Keywords.Def} <type> {set.Name} <value>.", set.Position);
+                Report($"Undeclared variable '{set.Name}'. Declare it first with {Keywords.Define} <type> {set.Name} <value>.", set.Position);
             }
 
             return;

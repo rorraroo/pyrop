@@ -116,7 +116,12 @@ public static class TimeOperations
             }
             else
             {
+                var before = position;
                 numbers[piece.Text] = ReadNumber(text, ref position, NumberWidths[piece.Text]) ?? throw misfit();
+                if (piece.Text == Year && position - before != NumberWidths[Year])
+                {
+                    throw invocation.Fail($"\"{text}\" does not fit the layout \"{layout}\": a year is written with four digits.");
+                }
             }
         }
 

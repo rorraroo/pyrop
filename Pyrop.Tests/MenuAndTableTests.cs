@@ -12,7 +12,7 @@ public class MenuAndTableTests
     [Fact]
     public void ChooseWritesANumberedListAndReturnsTheChosenEntry()
     {
-        var output = Run.Program($"def string room choose \"Where do you go?\" {Rooms}\nwrite_line add \"Going to \" room", "2\n");
+        var output = Run.Program($"define string room choose \"Where do you go?\" {Rooms}\nwrite_line add \"Going to \" room", "2\n");
 
         Assert.Equal("Where do you go?\n1. Hall\n2. Cellar\n3. Tower\nChoose a number from 1 to 3: \nGoing to Cellar\n", output);
     }
@@ -111,8 +111,8 @@ public class MenuAndTableTests
     [Fact]
     public void ChooseAndWriteTableAreReserved()
     {
-        Assert.Equal(ErrorStage.Parse, Run.Failure("def string choose \"x\"").Stage);
-        Assert.Equal(ErrorStage.Parse, Run.Failure("def int write_table 1").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure("define string choose \"x\"").Stage);
+        Assert.Equal(ErrorStage.Parse, Run.Failure("define int write_table 1").Stage);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class MenuAndTableTests
     public void ATableAfterAPipedAnswerStartsOnTheNextLine()
     {
         const string source =
-            "def string room choose \"Where do you go?\" list_of string \"Hall\" \"Cellar\" \"Tower\" end\n" +
+            "define string room choose \"Where do you go?\" list_of string \"Hall\" \"Cellar\" \"Tower\" end\n" +
             "write_table list_of string \"Item\" \"Count\" end list_of list string\n" +
             "    list_of string \"lamp\" \"1\" end\n" +
             "    list_of string \"rope\" \"12\" end\n" +
@@ -205,7 +205,7 @@ public class MenuAndTableTests
     public void WriteTableRejectsALineThatWouldBeTooLong()
     {
         const string source =
-            "def string wide repeat \"a\" 50000001\n" +
+            "define string wide repeat \"a\" 50000001\n" +
             "write_table list_of string \"x\" \"y\" end list_of list string list_of string wide wide end end";
 
         var error = Run.Failure(source);
@@ -244,12 +244,12 @@ public class MenuAndTableTests
     [Fact]
     public void TreeBracketsChooseAndWriteTableOperands()
     {
-        var source = "def string r choose \"Go?\" list_of string \"a\" end\nwrite_table list_of string \"h\" end list_of list string end";
+        var source = "define string r choose \"Go?\" list_of string \"a\" end\nwrite_table list_of string \"h\" end list_of list string end";
         var inspected = new PyropSession(new StringReader(""), new StringOutput()).Inspect(source, "main.prp");
 
         Assert.Null(inspected.Error);
         Assert.Equal(
-            "def string r (choose \"Go?\" (list_of string \"a\" end))\nwrite_table (list_of string \"h\" end) (list_of list string end)\n",
+            "define string r (choose \"Go?\" (list_of string \"a\" end))\nwrite_table (list_of string \"h\" end) (list_of list string end)\n",
             TreePrinter.Print(inspected.Tree!));
     }
 

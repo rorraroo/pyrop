@@ -39,7 +39,7 @@ public class StandardErrorTests
 
     [Theory]
     [InlineData("write_error_line 1 2", "cannot stand alone")]
-    [InlineData("if true def int x 1", "cannot be the body")]
+    [InlineData("if true define int x 1", "cannot be the body")]
     public void WriteErrorFollowsTheStatementRules(string source, string message)
     {
         var error = Run.Failure(source);
@@ -89,7 +89,7 @@ public class StandardErrorTests
         var console = new ConsoleProgramOutput(output, plain: true, errors: new ConsoleStream(errors, plain: true));
         var session = new PyropSession(new StringReader("Ann\n"), console);
 
-        session.Run($"{(toErrors ? "write_error" : "write")} \"Name: \"\ndef string name read\nwrite_line name");
+        session.Run($"{(toErrors ? "write_error" : "write")} \"Name: \"\ndefine string name read\nwrite_line name");
 
         Assert.Equal(toErrors ? "Ann\n" : "Name: \nAnn\n", output.ToString());
         Assert.Equal(toErrors ? "Name: \n" : "", errors.ToString());

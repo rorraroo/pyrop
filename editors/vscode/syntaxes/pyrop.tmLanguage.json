@@ -19,6 +19,7 @@
     { "include": "#number" },
     { "include": "#control" },
     { "include": "#keyword" },
+    { "include": "#reserved" },
     { "include": "#type" },
     { "include": "#boolean" },
     { "include": "#builtin" },
@@ -114,7 +115,7 @@
         "1": { "name": "storage.type.choice.pyrop" },
         "2": { "name": "entity.name.type.pyrop" }
       },
-      "end": "\\b(end)\\b|(?=\\b(?:def|set|if|else|while|for|break|continue|block|function|return|write|write_line|write_error|write_error_line|exit|styled|use|import|export|record|choice|if_some|match|when)\\b|[\"\\d])",
+      "end": "\\b(end)\\b|(?=\\b(?:define|set|if|else|while|for|break|continue|block|function|return|write|write_line|write_error|write_error_line|exit|styled|use|import|export|record|choice|if_some|match|when)\\b|[\"\\d])",
       "endCaptures": {
         "1": { "name": "keyword.control.pyrop" }
       },
@@ -159,7 +160,7 @@
       ]
     },
     "declaration": {
-      "match": "\\b(def)\\s+(?:((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?([^\\W\\d]\\w*)?",
+      "match": "\\b(define)\\s+(?:((?:(?:map\\s+(?:[A-Z]\\w*|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*)|list|map|option|int|float|string|bool)\\s+)*(?:int|float|string|bool|from\\s+[^\\W\\d]\\w*\\s+[A-Z]\\w*|[A-Z]\\w*))\\s+)?([^\\W\\d]\\w*)?",
       "captures": {
         "1": { "name": "storage.modifier.pyrop" },
         "2": { "name": "storage.type.pyrop" },
@@ -211,6 +212,10 @@
       "match": "\\b(write|write_line|write_error|write_error_line|styled)\\b",
       "name": "keyword.other.pyrop"
     },
+    "reserved": {
+      "match": "\\b(call|function_type|function_of|at_once)\\b",
+      "name": "keyword.other.reserved.pyrop"
+    },
     "type": {
       "match": "\\b(int|float|string|bool|void|list|map|option)\\b",
       "name": "storage.type.pyrop"
@@ -220,7 +225,7 @@
       "name": "constant.language.boolean.pyrop"
     },
     "builtin": {
-      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|at_least|at_most|smaller|larger|length_of|substring|find_from|find|replace|starts_with|ends_with|upper|lower|trim|repeat|pad_left|pad_right|split|join|fill|get|push|put|remove|has|keys_of|positions_of|slice|sort|reverse|distinct|some|value_or|is_some|is_none)\\b",
+      "match": "\\b(add|subtract|multiply|divide|modulo|equal|greater|less|and|or|not|read|ask|confirm|choose|write_table|input_ended|at_least|at_most|smaller_of|larger_of|length_of|find_from|find|replace|starts_with|ends_with|uppercase|lowercase|trim|repeat|pad_left|pad_right|split|join|fill|get|push|put|remove|has|keys_of|values_of|positions_of|slice|sort|reverse|distinct|some|value_or|is_some|is_none)\\b",
       "name": "support.function.builtin.pyrop"
     },
     "user-type": {

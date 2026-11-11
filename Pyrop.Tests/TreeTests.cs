@@ -18,16 +18,16 @@ public class TreeTests
     public void BracketsEveryCallThatTakesArguments()
     {
         Assert.Equal(
-            "def int product 0\nset product (multiply (add 1 2) (subtract 10 4))\n",
-            Tree("def int product 0 set product multiply add 1 2 subtract 10 4"));
+            "define int product 0\nset product (multiply (add 1 2) (subtract 10 4))\n",
+            Tree("define int product 0 set product multiply add 1 2 subtract 10 4"));
     }
 
     [Fact]
     public void PrintsTheChangesOfOneCopyOneAfterAnother()
     {
         Assert.Equal(
-            "record Point float x float y\ndef Point p (Point 1.0 2.0)\nset p (copy p with x 3.0 with y (add 1.0 1.0))\n",
-            Tree("record Point float x float y\ndef Point p Point 1.0 2.0\nset p copy p with x 3.0 with y add 1.0 1.0"));
+            "record Point float x float y end\ndefine Point p (Point 1.0 2.0)\nset p (copy p with x 3.0 with y (add 1.0 1.0) end)\n",
+            Tree("record Point float x float y end\ndefine Point p Point 1.0 2.0\nset p copy p with x 3.0 with y add 1.0 1.0 end"));
     }
 
     [Fact]
@@ -105,9 +105,9 @@ public class TreeTests
     [Fact]
     public void ShowsWhatParsedBeforeAParseError()
     {
-        var inspected = Inspect("write_line add 1 2\ndef int x multiply 2 3 4\nwrite_line \"after\"");
+        var inspected = Inspect("write_line add 1 2\ndefine int x multiply 2 3 4\nwrite_line \"after\"");
 
-        Assert.Equal("write_line (add 1 2)\ndef int x (multiply 2 3)\n", TreePrinter.Print(inspected.Tree!));
+        Assert.Equal("write_line (add 1 2)\ndefine int x (multiply 2 3)\n", TreePrinter.Print(inspected.Tree!));
         var error = Assert.Single(inspected.Error!.Errors);
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Equal(2, error.Position.Line);
@@ -126,14 +126,14 @@ public class TreeTests
     public void BracketsCollectionFormsAndPrintsTypesInFull()
     {
         const string source =
-            "def map string list int m map_of string list int \"k\" list_of int 7 end end\n" +
-            "def list list int a list_of list int\n    list_of int 1 add 1 1 end\n    list_of int end\nend\n" +
+            "define map string list int m map_of string list int \"k\" list_of int 7 end end\n" +
+            "define list list int a list_of list int\n    list_of int 1 add 1 1 end\n    list_of int end\nend\n" +
             "function list string names map string list int scores return keys_of scores\n" +
             "set m put m \"x\" get a 0\nwrite_line list_of string \"a\\\"b\" end";
 
         Assert.Equal(
-            "def map string list int m (map_of string list int \"k\" (list_of int 7 end) end)\n" +
-            "def list list int a (list_of list int (list_of int 1 (add 1 1) end) (list_of int end) end)\n" +
+            "define map string list int m (map_of string list int \"k\" (list_of int 7 end) end)\n" +
+            "define list list int a (list_of list int (list_of int 1 (add 1 1) end) (list_of int end) end)\n" +
             "function list string names map string list int scores\n    return (keys_of scores)\n" +
             "set m (put m \"x\" (get a 0))\n" +
             "write_line (list_of string \"a\\\"b\" end)\n",
@@ -144,14 +144,14 @@ public class TreeTests
     public void PrintsDeeplyNestedProgramsWithoutRunningOutOfStack()
     {
         const int depth = 900;
-        var source = "use math library\nimport from math abs end\n" +
-            $"write_line {string.Concat(Enumerable.Repeat("abs ", depth))}1\n" +
-            $"def int n length_of list_of {string.Concat(Enumerable.Repeat("list ", depth))}int end";
+        var source = "use math library\nimport from math absolute end\n" +
+            $"write_line {string.Concat(Enumerable.Repeat("absolute ", depth))}1\n" +
+            $"define int n length_of list_of {string.Concat(Enumerable.Repeat("list ", depth))}int end";
 
         var inspected = Inspect(source);
 
         Assert.Null(inspected.Error);
-        Assert.StartsWith("use math library\nimport from math abs end\nwrite_line (abs (abs ", inspected.Text);
+        Assert.StartsWith("use math library\nimport from math absolute end\nwrite_line (absolute (absolute ", inspected.Text);
         Assert.EndsWith(" list int end))\n", inspected.Text);
     }
 

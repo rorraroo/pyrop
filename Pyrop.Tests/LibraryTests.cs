@@ -50,13 +50,13 @@ public sealed class LibraryTests : IDisposable
     [Fact]
     public void AnImportedLibraryOperationIsCalledByItsName()
     {
-        Assert.Equal("5\n2\n", Run.Program("use math library\nimport from math abs round_down end\nwrite_line abs -5\nwrite_line round_down 2.7"));
+        Assert.Equal("5\n2\n", Run.Program("use math library\nimport from math absolute round_down end\nwrite_line absolute -5\nwrite_line round_down 2.7"));
     }
 
     [Fact]
     public void ALibraryCanBeUsedBelowItsCalls()
     {
-        Assert.Equal("5\n", Run.Program("write_line from math abs -5\nuse math library"));
+        Assert.Equal("5\n", Run.Program("write_line from math absolute -5\nuse math library"));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class LibraryTests : IDisposable
 
         Assert.Equal(
             "2\nb\n",
-            Run.Program("use program library\ndef list string given from program arguments\nwrite_line length_of given\nwrite_line get given 1", host: host));
+            Run.Program("use program library\ndefine list string given from program arguments\nwrite_line length_of given\nwrite_line get given 1", host: host));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class LibraryTests : IDisposable
     [Fact]
     public void LibraryIsAReservedWord()
     {
-        Assert.Contains("reserved word", Run.Failure("def int library 1").Message);
+        Assert.Contains("reserved word", Run.Failure("define int library 1").Message);
         Assert.Contains("reserved word", Run.Failure("use library library").Message);
     }
 
@@ -149,7 +149,7 @@ public sealed class LibraryTests : IDisposable
     {
         WriteFile("dice.prp", "use random library\nimport from random roll seed end\nexport function int d6 return roll 1 6\nseed 3");
 
-        var output = RunFile("main.prp", "use dice \"dice.prp\"\ndef int first from dice d6\nwrite_line and at_least first 1 at_most first 6");
+        var output = RunFile("main.prp", "use dice \"dice.prp\"\ndefine int first from dice d6\nwrite_line and at_least first 1 at_most first 6");
 
         Assert.Equal("true\n", output);
     }
@@ -168,7 +168,7 @@ public sealed class LibraryTests : IDisposable
     public void ANameALibraryDoesNotHaveIsReported()
     {
         Assert.Equal(
-            "The library math has no 'floor'; it offers abs, sign, power, square_root, round, round_down.",
+            "The library math has no 'floor'; it offers absolute, sign, power, square_root, round, round_down.",
             Run.Failure("use math library\nwrite_line from math floor 2.5").Message);
         Assert.Equal(
             "The library random has no 'roll_dice'; it is now called 'roll'.",
@@ -183,7 +183,7 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.Equal(
             "'round' of the library math is an operation, not a type.",
-            Run.Failure("use math library\ndef from math round x 1").Message);
+            Run.Failure("use math library\ndefine from math round x 1").Message);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.Contains(
             "'round' is an imported operation and cannot be used as a variable name.",
-            Run.Failure("use math library\nimport from math round end\ndef int round 1").Message);
+            Run.Failure("use math library\nimport from math round end\ndefine int round 1").Message);
         Assert.Contains(
             "'round' is a function of this file and cannot also be imported.",
             Run.Failure("use math library\nimport from math round end\nfunction int round return 1").Message);
@@ -226,7 +226,7 @@ public sealed class LibraryTests : IDisposable
             Run.Program(
                 $"use files library\nwrite_line attempt from files save \"{quoted}\" \"hi\"\n" +
                 $"write_line attempt from files load \"{quoted}\"\n" +
-                "write_line attempt from random between 2.0 1.0\nuse random library"));
+                "write_line attempt from random float_between 2.0 1.0\nuse random library"));
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public sealed class LibraryTests : IDisposable
     {
         WriteFile("tools.prp", "export function int one return 1");
 
-        var error = FailFile("main.prp", "use tools \"tools.prp\"\ndef option int x attempt from tools one");
+        var error = FailFile("main.prp", "use tools \"tools.prp\"\ndefine option int x attempt from tools one");
 
         Assert.Contains("found the function 'one' of module 'tools'; a function's own failures are runtime errors", error.Message);
     }
@@ -244,7 +244,7 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.Equal(
             "'program' is not a module of this file; load the library with use program library.",
-            Run.Failure("def option string home attempt from program environment \"HOME\"").Message);
+            Run.Failure("define option string home attempt from program environment \"HOME\"").Message);
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.EndsWith(
             "found 'load'. 'load' comes from the library files: add use files library and import from files load end, or write from files load.",
-            Run.Failure("def option string text attempt load \"notes.txt\"").Message);
+            Run.Failure("define option string text attempt load \"notes.txt\"").Message);
     }
 
     [Fact]
@@ -294,7 +294,7 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.Equal(
             "'round' comes from the library math: add use math library and import from math round end, or write from math round.",
-            Run.Failure("def float x 2.5\nwrite_line round").Message);
+            Run.Failure("define float x 2.5\nwrite_line round").Message);
     }
 
     [Fact]
@@ -308,7 +308,7 @@ public sealed class LibraryTests : IDisposable
     [Fact]
     public void AttemptOnAVariableNamedLikeALibraryOperationKeepsTheGeneralMessage()
     {
-        var error = Run.Failure("def string load \"x\"\ndef option string y attempt load");
+        var error = Run.Failure("define string load \"x\"\ndefine option string y attempt load");
 
         Assert.StartsWith("'attempt' takes a built-in operation or a convert", error.Message);
         Assert.EndsWith("'load' comes from the library files: add use files library and import from files load end, or write from files load.", error.Message);
@@ -327,13 +327,13 @@ public sealed class LibraryTests : IDisposable
     {
         Assert.Equal(
             "3\n4\n5\n",
-            Run.Program("def int round 3\ndef int roll_dice 4\nfunction int seed return 5\nwrite_line round\nwrite_line roll_dice\nwrite_line seed"));
+            Run.Program("define int round 3\ndefine int roll_dice 4\nfunction int seed return 5\nwrite_line round\nwrite_line roll_dice\nwrite_line seed"));
     }
 
     [Fact]
     public void AFileThatDoesNotImportANameKeepsItWhileUsingTheLibrary()
     {
-        Assert.Equal("7\n3\n", Run.Program("use math library\ndef int round 7\nwrite_line round\nwrite_line from math round 2.5"));
+        Assert.Equal("7\n3\n", Run.Program("use math library\ndefine int round 7\nwrite_line round\nwrite_line from math round 2.5"));
     }
 
     [Fact]
@@ -341,9 +341,9 @@ public sealed class LibraryTests : IDisposable
     {
         var session = new PyropSession(new StringReader(""), _output);
 
-        session.Run("use math library\nimport from math abs end");
+        session.Run("use math library\nimport from math absolute end");
         session.Run("use math library");
-        session.Run("write_line abs -2");
+        session.Run("write_line absolute -2");
         session.Run("write_line from math power 3 2");
 
         Assert.Equal("2\n9\n", _output.ToString());
@@ -356,19 +356,19 @@ public sealed class LibraryTests : IDisposable
 
         Assert.Throws<PyropException>(() => session.Run("use math library\nwrite_line undefined_name"));
 
-        Assert.Contains("is not a module of this file", Assert.Throws<PyropException>(() => session.Run("write_line from math abs -1")).Message);
+        Assert.Contains("is not a module of this file", Assert.Throws<PyropException>(() => session.Run("write_line from math absolute -1")).Message);
     }
 
     [Fact]
     public void TheTreeShowsLibraryCalls()
     {
         var inspected = _session.Inspect(
-            "use math library\nimport from math abs end\nwrite_line add abs -1 from math round 2.5",
+            "use math library\nimport from math absolute end\nwrite_line add absolute -1 from math round 2.5",
             Path.Combine(_directory, "tree.prp"));
 
         Assert.Null(inspected.Error);
         Assert.Equal(
-            "use math library\nimport from math abs end\nwrite_line (add (abs -1) (from math round 2.5))\n",
+            "use math library\nimport from math absolute end\nwrite_line (add (absolute -1) (from math round 2.5))\n",
             inspected.Text);
     }
 
@@ -393,7 +393,7 @@ public sealed class LibraryTests : IDisposable
     [Fact]
     public void SemanticTokensMarkLibraryOperationsAsBuiltIn()
     {
-        const string source = "use math library\nimport from math abs power end\nwrite_line abs from math round 2.5\nwrite_line length_of \"x\"";
+        const string source = "use math library\nimport from math absolute power end\nwrite_line absolute from math round 2.5\nwrite_line length_of \"x\"";
         var analyzed = _session.Analyze(source, Path.Combine(_directory, "tokens.prp"))!;
 
         var tokens = SemanticClassifier.Classify(analyzed);
@@ -403,10 +403,10 @@ public sealed class LibraryTests : IDisposable
 
         Assert.Equal((SemanticKind.Module, SemanticModifiers.None), At(0, 4));
         Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn | SemanticModifiers.Imported), At(1, 17));
-        Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn | SemanticModifiers.Imported), At(1, 21));
+        Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn | SemanticModifiers.Imported), At(1, 26));
         Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn | SemanticModifiers.Imported), At(2, 11));
-        Assert.Equal((SemanticKind.Module, SemanticModifiers.None), At(2, 20));
-        Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn), At(2, 25));
+        Assert.Equal((SemanticKind.Module, SemanticModifiers.None), At(2, 25));
+        Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn), At(2, 30));
         Assert.Equal((SemanticKind.Function, SemanticModifiers.BuiltIn), At(3, 11));
     }
 }

@@ -37,7 +37,7 @@ public class InterpreterTests
     public void LoopsWithBreakAndContinue()
     {
         const string source = """
-            def int i 0
+            define int i 0
             while true block
                 set i add i 1
                 if equal modulo i 2 0 continue
@@ -53,9 +53,9 @@ public class InterpreterTests
     public void BlocksCreateFreshScopesPerIteration()
     {
         const string source = """
-            def int i 0
+            define int i 0
             while less i 2 block
-                def int x i
+                define int x i
                 write x
                 set i add i 1
             end
@@ -67,7 +67,7 @@ public class InterpreterTests
     [Fact]
     public void InitializerSeesTheOuterVariableItShadows()
     {
-        Assert.Equal("2\n1\n", Run.Program("def int x 1\nblock def int x add x 1 write_line x end\nwrite_line x"));
+        Assert.Equal("2\n1\n", Run.Program("define int x 1\nblock define int x add x 1 write_line x end\nwrite_line x"));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class InterpreterTests
         const string source = """
             function void count int limit
             block
-                def int i 0
+                define int i 0
                 while true
                 block
                     if equal i limit return void
@@ -160,8 +160,8 @@ public class InterpreterTests
     [InlineData("write_line convert int -9223372036854777856.0", "out of range for int")]
     [InlineData("write_line read", "end of input")]
     [InlineData("function int down int n return down add n 1\nwrite_line down 0", "Call depth limit")]
-    [InlineData("function int fetch return late\nwrite_line fetch\ndef int late 1", "does not exist yet")]
-    [InlineData("function int fetch return late\ndef int late fetch", "does not exist yet")]
+    [InlineData("function int fetch return late\nwrite_line fetch\ndefine int late 1", "does not exist yet")]
+    [InlineData("function int fetch return late\ndefine int late fetch", "does not exist yet")]
     public void ReportsRuntimeErrors(string source, string message)
     {
         var error = Run.Failure(source);

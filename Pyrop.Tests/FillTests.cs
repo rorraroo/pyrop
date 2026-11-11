@@ -21,7 +21,7 @@ public class FillTests
     public void FillWritesRecordsAndChoicesInTheirTextForm()
     {
         const string source = """
-            record Point int x int y
+            record Point int x int y end
             choice Move go int stay end
             write_line fill "at {}" list_of Point Point 1 2 end
             write_line fill "{} then {}" list_of Move go 3 stay end

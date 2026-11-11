@@ -22,7 +22,7 @@ internal sealed class FixedClock(DateTimeOffset now) : IClock
 public class TimeTests
 {
     private const string Imports =
-        "use time library\nimport from time Moment now now_utc moment_text parse_moment milliseconds_between plus_milliseconds is_before wait end\n";
+        "use time library\nimport from time Moment now now_utc moment_text parse_moment milliseconds_between add_milliseconds is_before wait end\n";
 
     private static readonly DateTimeOffset Noon = new(2026, 11, 9, 12, 30, 15, 250, TimeSpan.FromHours(1));
 
@@ -38,7 +38,7 @@ public class TimeTests
     public void NowIsAMomentWithNamedFields()
     {
         const string source =
-            "def Moment today now\n" +
+            "define Moment today now\n" +
             "write_line list_of int the year of today the month of today the day of today the hour of today the minute of today the second of today the millisecond of today the offset_minutes of today end";
 
         Assert.Equal("[2026, 11, 9, 12, 30, 15, 250, 60]\n", Program(source));
@@ -48,7 +48,7 @@ public class TimeTests
     public void NowUtcIsTheSameInstantAtOffsetZero()
     {
         const string source =
-            "def Moment there now_utc\nwrite_line the hour of there\nwrite_line the offset_minutes of there\nwrite_line milliseconds_between now there";
+            "define Moment there now_utc\nwrite_line the hour of there\nwrite_line the offset_minutes of there\nwrite_line milliseconds_between now there";
 
         Assert.Equal("11\n0\n0\n", Program(source));
     }
@@ -58,7 +58,7 @@ public class TimeTests
     {
         var clock = new FixedClock(Noon);
 
-        Assert.Equal("1500\n", Program("def Moment a now\nwait 1500\nwrite_line milliseconds_between a now", clock));
+        Assert.Equal("1500\n", Program("define Moment a now\nwait 1500\nwrite_line milliseconds_between a now", clock));
         Assert.Equal(1500, clock.Waited);
     }
 
@@ -104,7 +104,7 @@ public class TimeTests
     public void ReadsAMomentByLayout(string text, string layout, string expected)
     {
         var source =
-            $"def Moment m parse_moment \"{text}\" \"{layout}\"\n" +
+            $"define Moment m parse_moment \"{text}\" \"{layout}\"\n" +
             "write_line list_of int the year of m the month of m the day of m the hour of m the minute of m the second of m the millisecond of m the offset_minutes of m end";
 
         Assert.Equal(expected + "\n", Program(source));
@@ -164,7 +164,7 @@ public class TimeTests
     [Fact]
     public void ALayoutThatIsNotALiteralIsCheckedWhenUsed()
     {
-        var error = Failure("def string layout \"{nope}\"\nwrite_line moment_text now layout");
+        var error = Failure("define string layout \"{nope}\"\nwrite_line moment_text now layout");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.StartsWith("There is no part {nope}", error.Message);
@@ -174,8 +174,8 @@ public class TimeTests
     public void ComparesInstantsAcrossOffsets()
     {
         const string source =
-            "def Moment east parse_moment \"2026-06-01 12:00 +02:00\" \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
-            "def Moment west parse_moment \"2026-06-01 11:30 +00:00\" \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
+            "define Moment east parse_moment \"2026-06-01 12:00 +02:00\" \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
+            "define Moment west parse_moment \"2026-06-01 11:30 +00:00\" \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
             "write_line milliseconds_between east west\nwrite_line is_before east west\nwrite_line is_before west east\nwrite_line is_before east east";
 
         Assert.Equal("5400000\ntrue\nfalse\nfalse\n", Program(source));
@@ -187,8 +187,8 @@ public class TimeTests
         Assert.Equal(
             "2026-11-10 12:30 +01:00\n2026-11-08 12:30 +01:00\n",
             Program(
-                "write_line moment_text plus_milliseconds now 86400000 \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
-                "write_line moment_text plus_milliseconds now -86400000 \"{year}-{month}-{day} {hour}:{minute} {offset}\""));
+                "write_line moment_text add_milliseconds now 86400000 \"{year}-{month}-{day} {hour}:{minute} {offset}\"\n" +
+                "write_line moment_text add_milliseconds now -86400000 \"{year}-{month}-{day} {hour}:{minute} {offset}\""));
     }
 
     [Theory]
@@ -202,7 +202,7 @@ public class TimeTests
     [InlineData("Moment 2026 1 1 0 0 0 0 900", "offset_minutes is 900")]
     public void AnUnrealMomentFailsWhereItIsUsed(string moment, string detail)
     {
-        var error = Failure($"def Moment m {moment}\nwrite_line is_before m now");
+        var error = Failure($"define Moment m {moment}\nwrite_line is_before m now");
 
         Assert.Equal(ErrorStage.Runtime, error.Stage);
         Assert.Equal($"This is not a real moment: its {detail}.", error.Message);
@@ -219,7 +219,7 @@ public class TimeTests
     {
         Assert.Equal(
             "Moving this moment by 9223372036854775807 milliseconds leaves the years 1 to 9999.",
-            Failure("write_line plus_milliseconds now 9223372036854775807").Message);
+            Failure("write_line add_milliseconds now 9223372036854775807").Message);
     }
 
     [Fact]
@@ -233,6 +233,6 @@ public class TimeTests
     [Fact]
     public void TheNamesAreFreeWithoutTheLibrary()
     {
-        Assert.Equal("1\n", Run.Program("def int now 1\nwrite_line now"));
+        Assert.Equal("1\n", Run.Program("define int now 1\nwrite_line now"));
     }
 }

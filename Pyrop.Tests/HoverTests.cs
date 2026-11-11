@@ -39,7 +39,7 @@ public class HoverTests
     [Fact]
     public void ABuiltInCallShowsItsGroupingTypeAndOverloads()
     {
-        const string source = "def int x 2\nwrite_line add 1 multiply 2 x";
+        const string source = "define int x 2\nwrite_line add 1 multiply 2 x";
 
         Assert.Equal(
             $"{Code("add 1 (multiply 2 x)")}\n\nGives `int`.\n\n{Code("add int int → int\nadd float float → float\nadd string string → string")}",
@@ -56,7 +56,7 @@ public class HoverTests
     [Fact]
     public void AVariableShowsItsTypeWhereItIsUsedAndDeclared()
     {
-        const string source = "def list int xs list_of int 1 end\nfor int n in xs write_line n";
+        const string source = "define list int xs list_of int 1 end\nfor int n in xs write_line n";
 
         Assert.Equal(Code("list int xs"), Hover(source, "xs"));
         Assert.Equal(Code("list int xs"), Hover(source, "xs", 2));
@@ -78,17 +78,17 @@ public class HoverTests
     [Fact]
     public void AStatementKeywordShowsTheStatementsFirstLine()
     {
-        const string source = "if greater 3 2\n    write_line 1\nwhile false write_line 2\ndef int total add 1 2";
+        const string source = "if greater 3 2\n    write_line 1\nwhile false write_line 2\ndefine int total add 1 2";
 
         Assert.Equal(Code("if (greater 3 2)"), Hover(source, "if"));
         Assert.Equal(Code("while false"), Hover(source, "while"));
-        Assert.Equal(Code("def int total (add 1 2)"), Hover(source, "def"));
+        Assert.Equal(Code("define int total (add 1 2)"), Hover(source, "define"));
         Assert.Equal(Code("int total"), Hover(source, "total"));
     }
 
     [Theory]
-    [InlineData("export record Pt int a int b", "export")]
-    [InlineData("export record Pt int a int b", "record")]
+    [InlineData("export record Pt int a int b end", "export")]
+    [InlineData("export record Pt int a int b end", "record")]
     [InlineData("export choice Mode on off end", "export")]
     public void ExportAndTheDeclarationKeywordShowTheDeclaration(string source, string word)
     {
@@ -98,10 +98,10 @@ public class HoverTests
     [Fact]
     public void RecordsShowTheirDeclarationAndFieldsTheirType()
     {
-        const string source = "record Point float x float y\ndef Point p Point 1.0 2.0\nwrite_line the x of p";
+        const string source = "record Point float x float y end\ndefine Point p Point 1.0 2.0\nwrite_line the x of p";
 
-        Assert.Equal(Code("record Point float x float y"), Hover(source, "Point", 2));
-        Assert.Equal($"{Code("Point 1.0 2.0")}\n\nGives `Point`.\n\n{Code("record Point float x float y")}", Hover(source, "Point", 3));
+        Assert.Equal(Code("record Point float x float y end"), Hover(source, "Point", 2));
+        Assert.Equal($"{Code("Point 1.0 2.0")}\n\nGives `Point`.\n\n{Code("record Point float x float y end")}", Hover(source, "Point", 3));
         Assert.Equal($"{Code("float x")}\n\nA field of `Point`.", Hover(source, "x", 2));
         Assert.Equal($"{Code("float x")}\n\nA field of `Point`.", Hover(source, "x"));
         Assert.StartsWith($"{Code("the x of p")}\n\nGives `float`.", Hover(source, "the"));
@@ -110,7 +110,7 @@ public class HoverTests
     [Fact]
     public void AVariantShowsItsDataAndChoice()
     {
-        const string source = "choice Action go int stay end\ndef Action a go 3";
+        const string source = "choice Action go int stay end\ndefine Action a go 3";
 
         Assert.Equal($"{Code("go 3")}\n\nGives `Action`.\n\n{Code("go int → Action")}", Hover(source, "go", 2));
         Assert.Equal(Code("go int → Action"), Hover(source, "go"));
@@ -120,19 +120,19 @@ public class HoverTests
     [Fact]
     public void AQualifiedLibraryCallIsExplainedFromAnyOfItsWords()
     {
-        const string source = "use math library\nwrite_line from math abs -3";
-        var expected = $"{Code("from math abs -3")}\n\nGives `int`.\n\n{Code("abs int → int\nabs float → float")}";
+        const string source = "use math library\nwrite_line from math absolute -3";
+        var expected = $"{Code("from math absolute -3")}\n\nGives `int`.\n\n{Code("absolute int → int\nabsolute float → float")}";
 
         Assert.Equal(expected, Hover(source, "from"));
         Assert.Equal(expected, Hover(source, "math", 2));
-        Assert.Equal(expected, Hover(source, "abs"));
+        Assert.Equal(expected, Hover(source, "absolute"));
         Assert.Equal(Code("use math library"), Hover(source, "math"));
     }
 
     [Fact]
     public void TypeErrorsDoNotStopHover()
     {
-        const string source = "def string s add 1 2\nwrite_line add s true";
+        const string source = "define string s add 1 2\nwrite_line add s true";
 
         Assert.Contains("Gives `int`.", Hover(source, "add"));
         Assert.Equal(
@@ -152,12 +152,12 @@ public class HoverTests
     [Fact]
     public void AParameterNamedLikeAModuleIsTheParameter()
     {
-        const string source = "use math library\nfunction int twice int math\n    return multiply 2 math\nwrite_line twice from math abs -3";
+        const string source = "use math library\nfunction int twice int math\n    return multiply 2 math\nwrite_line twice from math absolute -3";
 
         Assert.Equal(Code("use math library"), Hover(source, "math"));
         Assert.Equal(Code("int math"), Hover(source, "math", 2));
         Assert.Equal(Code("int math"), Hover(source, "math", 3));
-        Assert.StartsWith(Code("from math abs -3"), Hover(source, "math", 4));
+        Assert.StartsWith(Code("from math absolute -3"), Hover(source, "math", 4));
     }
 
     [Fact]
@@ -176,9 +176,9 @@ public class HoverTests
         var directory = Directory.CreateTempSubdirectory("pyrop-hover-").FullName;
         try
         {
-            File.WriteAllText(Path.Combine(directory, "shapes.prp"), "export record Point float x float y\nexport function Point origin\n    return Point 0.0 0.0\n");
+            File.WriteAllText(Path.Combine(directory, "shapes.prp"), "export record Point float x float y end\nexport function Point origin\n    return Point 0.0 0.0\n");
             var main = Path.Combine(directory, "main.prp");
-            const string source = "use shapes \"shapes.prp\"\ndef from shapes Point p from shapes origin\nwrite_line p";
+            const string source = "use shapes \"shapes.prp\"\ndefine from shapes Point p from shapes origin\nwrite_line p";
             var analyzed = new PyropSession(TextReader.Null, new ConsoleProgramOutput(TextWriter.Null, plain: true)).Analyze(source, main, main);
 
             var hover = HoverProvider.Describe(analyzed!, 2, 33)?.Markdown;

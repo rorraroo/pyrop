@@ -298,7 +298,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
     {
         var value = Evaluate(set.Value, scope);
         var variable = scope.Find(set.Name)
-            ?? throw Runtime($"Variable '{set.Name}' does not exist yet; its def has not run.", set.Position);
+            ?? throw Runtime($"Variable '{set.Name}' does not exist yet; its define has not run.", set.Position);
         if (variable.Type != value.Type)
         {
             throw Internal($"Type mismatch assigning {value.Type.Name} to {variable.Type.Name} variable '{set.Name}'.", set.Position);
@@ -348,7 +348,7 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
                 return literal.Value;
             case VariableExpression variable:
                 var slot = scope.Find(variable.Name)
-                    ?? throw Runtime($"Variable '{variable.Name}' does not exist yet; its def has not run.", variable.Position);
+                    ?? throw Runtime($"Variable '{variable.Name}' does not exist yet; its define has not run.", variable.Position);
                 return slot.Value;
             case BuiltinCallExpression call:
                 return CallBuiltin(call, scope)
@@ -590,8 +590,6 @@ public sealed class Interpreter(LineInput input, IProgramOutput output, HostCont
         public int CollectionLimit => interpreter.CollectionLimit;
 
         public int NestingLimit => interpreter.NestingLimit;
-
-        public bool IsAttempted => failure is not null;
 
         public Exception Fail(string message) =>
             failure is null ? Runtime(message, call.Position) : new OperationFailed(failure);

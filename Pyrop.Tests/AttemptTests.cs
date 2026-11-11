@@ -5,10 +5,10 @@ public class AttemptTests
     private const string Direction = "choice Direction north east south west end\n";
 
     private const string Libraries =
-        "use math library\nimport from math abs power square_root round round_down end\n" +
-        "use random library\nimport from random between roll seed end\n" +
+        "use math library\nimport from math absolute power square_root round round_down end\n" +
+        "use random library\nimport from random float_between roll seed end\n" +
         "use program library\nimport from program arguments environment end\n" +
-        "use files library\nimport from files load save append exists load_lines listing end\n";
+        "use files library\nimport from files load save append file_exists load_lines files_in end\n";
 
     private const string Files = "use files library\nimport from files load save append end\n";
 
@@ -35,9 +35,9 @@ public class AttemptTests
     [InlineData("square_root -1.0")]
     [InlineData("round 100000000000000000000000.0")]
     [InlineData("round_down -100000000000000000000000.0")]
-    [InlineData("abs subtract -9223372036854775807 1")]
+    [InlineData("absolute subtract -9223372036854775807 1")]
     [InlineData("subtract 0 subtract -9223372036854775807 1")]
-    [InlineData("between 1.0 1.0")]
+    [InlineData("float_between 1.0 1.0")]
     [InlineData("roll 2 1")]
     [InlineData("read")]
     [InlineData("ask \"Name? \"")]
@@ -50,10 +50,10 @@ public class AttemptTests
     [InlineData("load \"no such file for attempt.txt\"")]
     [InlineData("load \"\"")]
     [InlineData("load_lines \"no such file for attempt.txt\"")]
-    [InlineData("listing \"no such directory for attempt\"")]
+    [InlineData("files_in \"no such directory for attempt\"")]
     [InlineData("from files load \"no such file for attempt.txt\"")]
     [InlineData("from math square_root -1.0")]
-    [InlineData("substring \"abc\" 2 5")]
+    [InlineData("slice \"abc\" 2 5")]
     [InlineData("get \"abc\" 3")]
     [InlineData("find_from \"abc\" \"a\" 9")]
     [InlineData("replace \"abc\" \"\" \"x\"")]
@@ -150,12 +150,12 @@ public class AttemptTests
     public void ResultTypesAreOptionsOfTheOperationsResultOrBool()
     {
         const string source = Files + """
-            def option int number attempt convert int "5"
-            def option string text attempt load "no such file for attempt.txt"
-            def option list string pieces attempt split "a" ","
-            def option float half attempt divide 1.0 2.0
-            def bool saved attempt save "" "x"
-            def option bool flag attempt equal 1 1
+            define option int number attempt convert int "5"
+            define option string text attempt load "no such file for attempt.txt"
+            define option list string pieces attempt split "a" ","
+            define option float half attempt divide 1.0 2.0
+            define bool saved attempt save "" "x"
+            define option bool flag attempt equal 1 1
             write_line number write_line text write_line pieces write_line half write_line saved write_line flag
             """;
 
@@ -165,10 +165,10 @@ public class AttemptTests
     [Fact]
     public void ResultTypeIsCheckedLikeAnyOtherType()
     {
-        var error = Failure("def int n attempt convert int \"5\"", ErrorStage.Type, 1, 11);
+        var error = Failure("define int n attempt convert int \"5\"", ErrorStage.Type, 1, 14);
         Assert.Equal("Cannot initialize int variable 'n' with a value of type option int.", error.Message);
 
-        error = Failure("use files library\ndef option int b attempt from files save \"a\" \"b\"", ErrorStage.Type, 2, 18);
+        error = Failure("use files library\ndefine option int b attempt from files save \"a\" \"b\"", ErrorStage.Type, 2, 21);
         Assert.Equal("Cannot initialize option int variable 'b' with a value of type bool.", error.Message);
 
         error = Failure("write_line attempt add 1 2.0", ErrorStage.Type, 1, 20);
@@ -255,28 +255,28 @@ public class AttemptTests
     }
 
     [Fact]
-    public void EnvironmentTellsUnsetFromEmptyOnlyUnderAttempt()
+    public void EnvironmentTellsUnsetFromEmpty()
     {
         var host = new Runtime.HostContext([], name => name == "EMPTY" ? "" : name == "HOME" ? "/home/ann" : null);
         const string source = """
             use program library
             import from program environment end
-            write_line attempt environment "HOME"
-            write_line attempt environment "EMPTY"
+            write_line environment "HOME"
+            write_line environment "EMPTY"
+            write_line environment "UNSET"
             write_line attempt environment "UNSET"
-            write_line equal environment "UNSET" environment "EMPTY"
-            write_line value_or attempt environment "UNSET" "fallback"
+            write_line value_or environment "UNSET" "fallback"
             """;
 
-        Assert.Equal("some \"/home/ann\"\nsome \"\"\nnone\ntrue\nfallback\n", Run.Program(source, host: host));
+        Assert.Equal("some \"/home/ann\"\nsome \"\"\nnone\nsome none\nfallback\n", Run.Program(source, host: host));
     }
 
     [Fact]
     public void AttemptReadsInputUntilItEnds()
     {
         const string source = """
-            def int total 0
-            def bool reading true
+            define int total 0
+            define bool reading true
             while reading block
                 if_some string line attempt read set total add total value_or attempt convert int line 0
                 else set reading false
@@ -303,8 +303,8 @@ public class AttemptTests
     }
 
     private const string Deep =
-        "def list list list list int deep list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n" +
-        "def list list list list int other list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n";
+        "define list list list list int deep list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n" +
+        "define list list list list int other list_of list list list int list_of list list int list_of list int list_of int 1 end end end end\n";
 
     [Theory]
     [InlineData("write_line attempt equal deep other", 20, "'equal' cannot compare values nested this deeply.")]
@@ -347,13 +347,13 @@ public class AttemptTests
     [Theory]
     [InlineData("write_line attempt 5", 1, 20, "found '5'.")]
     [InlineData("write_line attempt \"text\"", 1, 20, "found string \"text\".")]
-    [InlineData("def int x 1 write_line attempt x", 1, 32, "found 'x'.")]
+    [InlineData("define int x 1 write_line attempt x", 1, 35, "found 'x'.")]
     [InlineData("write_line attempt attempt read", 1, 20, "found 'attempt'.")]
     [InlineData("write_line attempt map_of string int end", 1, 20, "found 'map_of'.")]
     [InlineData("write_line attempt none int", 1, 20, "found 'none'.")]
     [InlineData("write_line attempt list_of int end", 1, 20, "found 'list_of'.")]
     [InlineData("write_line attempt true", 1, 20, "found 'true'.")]
-    [InlineData("record Point float x float y\nwrite_line attempt Point 1.0 2.0", 2, 20, "found 'Point'.")]
+    [InlineData("record Point float x float y end\nwrite_line attempt Point 1.0 2.0", 2, 20, "found 'Point'.")]
     [InlineData("choice Direction north end\nwrite_line attempt north", 2, 20, "found 'north'.")]
     public void TheOperandMustBeABuiltinOperationOrAConvert(string source, int line, int column, string ending)
     {
@@ -413,7 +413,7 @@ public class AttemptTests
     [Fact]
     public void AVoidOperationIsStillNotAValueWithoutAttempt()
     {
-        var error = Failure(Files + "def bool saved save \"a\" \"b\"", ErrorStage.Parse, 3, 16);
+        var error = Failure(Files + "define bool saved save \"a\" \"b\"", ErrorStage.Parse, 3, 19);
         Assert.Equal("Operation 'save' returns void and cannot be used as a value.", error.Message);
     }
 
@@ -432,7 +432,7 @@ public class AttemptTests
     [Fact]
     public void AttemptIsAReservedWord()
     {
-        var error = Failure("def int attempt 1", ErrorStage.Parse, 1, 9);
+        var error = Failure("define int attempt 1", ErrorStage.Parse, 1, 12);
         Assert.Equal("'attempt' is a reserved word and cannot be used as a variable name.", error.Message);
     }
 
@@ -441,8 +441,8 @@ public class AttemptTests
     {
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output);
-        session.Run("def option int n attempt convert int \"7\"");
-        Assert.Throws<PyropException>(() => session.Run("def option int m attempt convert int \"8\" set n m write_line attempt foo"));
+        session.Run("define option int n attempt convert int \"7\"");
+        Assert.Throws<PyropException>(() => session.Run("define option int m attempt convert int \"8\" set n m write_line attempt foo"));
         session.Run("write_line n write_line attempt convert int \"x\"");
         Assert.Equal("some 7\nnone\n", output.ToString());
     }

@@ -115,8 +115,8 @@ public static class Formatter
 
     private sealed class Layout
     {
-        private static readonly HashSet<string> Openers = [Keywords.Block, Keywords.ListOf, Keywords.MapOf, Keywords.Choice, Keywords.Import, Keywords.Match];
-        private static readonly HashSet<string> Continued = [Keywords.ListOf, Keywords.MapOf, Keywords.Choice, Keywords.Import];
+        private static readonly HashSet<string> Openers = [Keywords.Block, Keywords.ListOf, Keywords.MapOf, Keywords.Choice, Keywords.Import, Keywords.Match, Keywords.Record, Keywords.Copy];
+        private static readonly HashSet<string> Continued = [Keywords.ListOf, Keywords.MapOf, Keywords.Choice, Keywords.Import, Keywords.Record];
 
         private readonly IReadOnlyList<Token> _tokens;
         private readonly Dictionary<SourcePosition, int> _index = [];

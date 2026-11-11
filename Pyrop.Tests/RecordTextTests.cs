@@ -8,10 +8,10 @@ public sealed class RecordTextTests
     private const string Types =
         "choice Place hall study end\n" +
         "choice Shape circle float rect float float node Shape Shape leaf Place end\n" +
-        "record Point float x float y\n" +
-        "record Player Place place int moves list string inventory option Point spot\n" +
-        "record Inner string name option Inner next list Shape shapes\n" +
-        "record Outer int n float f bool b string s list int ints map string Inner inners option Shape shape Place place Inner inner map Place list string tags\n";
+        "record Point float x float y end\n" +
+        "record Player Place place int moves list string inventory option Point spot end\n" +
+        "record Inner string name option Inner next list Shape shapes end\n" +
+        "record Outer int n float f bool b string s list int ints map string Inner inners option Shape shape Place place Inner inner map Place list string tags end\n";
 
     private static string Program(string body) => Run.Program(Types + body);
 
@@ -21,7 +21,7 @@ public sealed class RecordTextTests
     public void ARecordReadsBackFromItsTextForm()
     {
         Assert.Equal("true\n", Program(
-            "def Player p Player study 5 list_of string \"lamp\" \"say \\\"hi\\\"\\n\" end some Point 1.0 -2.5\n" +
+            "define Player p Player study 5 list_of string \"lamp\" \"say \\\"hi\\\"\\n\" end some Point 1.0 -2.5\n" +
             "write_line equal convert Player convert string p p"));
     }
 
@@ -29,7 +29,7 @@ public sealed class RecordTextTests
     public void AChoiceWithDataReadsBackFromItsTextForm()
     {
         Assert.Equal("node (circle 1.0) (leaf study)\ntrue\n", Program(
-            "def Shape s convert Shape \"node (circle 1.0) (leaf study)\"\nwrite_line s\nwrite_line equal s node circle 1.0 leaf study"));
+            "define Shape s convert Shape \"node (circle 1.0) (leaf study)\"\nwrite_line s\nwrite_line equal s node circle 1.0 leaf study"));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class RecordTextTests
     public void FloatsKeepTheirTextForm()
     {
         Assert.Equal("Point x 1E+20 y -0.001\ntrue\n", Program(
-            "def Point p convert Point \"Point x 1E+20 y -0.001\"\nwrite_line p\nwrite_line equal p Point multiply 100000.0 1000000000000000.0 -0.001"));
+            "define Point p convert Point \"Point x 1E+20 y -0.001\"\nwrite_line p\nwrite_line equal p Point multiply 100000.0 1000000000000000.0 -0.001"));
     }
 
     [Theory]
@@ -108,8 +108,8 @@ public sealed class RecordTextTests
     public void AViewReadsBackFromItsTextForm()
     {
         Assert.Equal("true\n", Run.Program(
-            "use terminal library\nimport from terminal View end\n" +
-            "def View v panel \"Hero\" rows list_of View bar \"Health\" 7 20 in_style \"danger\" text \"Poisoned\" menu list_of string \"a\" end 0 end\n" +
+            "use terminal library\nimport from terminal View panel rows bar in_style text menu end\n" +
+            "define View v panel \"Hero\" rows list_of View bar \"Health\" 7 20 in_style \"danger\" text \"Poisoned\" menu list_of string \"a\" end 0 end\n" +
             "write_line equal convert View convert string v v"));
     }
 
@@ -131,7 +131,7 @@ public sealed class RecordTextTests
     public void AValueNestedExactlyToTheLimitReadsBack()
     {
         const string program =
-            "choice T leaf int wrap T end\ndef T t leaf 1\ndef int i 0\nwhile less i 49 block\n    set t wrap t\n    set i add i 1\nend\n" +
+            "choice T leaf int wrap T end\ndefine T t leaf 1\ndefine int i 0\nwhile less i 49 block\n    set t wrap t\n    set i add i 1\nend\n" +
             "write_line equal convert T convert string t t";
         var output = new StringOutput();
         var session = new PyropSession(new StringReader(""), output) { NestingLimit = 50 };
@@ -145,7 +145,7 @@ public sealed class RecordTextTests
     public void ExtremeNumbersReadBack()
     {
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", Run.Program(
-            "record N int i float f\n" +
+            "record N int i float f end\n" +
             "function bool same N n return equal convert N convert string n n\n" +
             "write_line same N subtract -9223372036854775807 1 convert float \"1E-05\"\n" +
             "write_line same N 9223372036854775807 convert float \"5E-324\"\n" +
@@ -159,7 +159,7 @@ public sealed class RecordTextTests
     public void NestedOptionsReadBack()
     {
         Assert.Equal("O o some some 2\ntrue\n", Run.Program(
-            "record O option option int o\ndef O v O some some 2\nwrite_line v\nwrite_line equal convert O convert string v v"));
+            "record O option option int o end\ndefine O v O some some 2\nwrite_line v\nwrite_line equal convert O convert string v v"));
     }
 
     [Theory]
@@ -168,7 +168,7 @@ public sealed class RecordTextTests
     [InlineData("I n 00")]
     public void AnIntNotWrittenAsTheTextFormWritesItFails(string text)
     {
-        Assert.Equal("none\n", Run.Program($"record I int n\nwrite_line attempt convert I \"{text}\""));
+        Assert.Equal("none\n", Run.Program($"record I int n end\nwrite_line attempt convert I \"{text}\""));
     }
 
     [Fact]
@@ -192,9 +192,9 @@ public sealed class RecordTextTests
     public void RandomValuesReadBackEqual()
     {
         var random = new Random(20261103);
-        var body = new StringBuilder("def Outer v ");
+        var body = new StringBuilder("define Outer v ");
         body.Append(new Generator(random).Outer(3)).Append('\n');
-        body.Append("def int same 0\n");
+        body.Append("define int same 0\n");
         for (var round = 0; round < 150; round++)
         {
             body.Append("set v ").Append(new Generator(random).Outer(3)).Append('\n');

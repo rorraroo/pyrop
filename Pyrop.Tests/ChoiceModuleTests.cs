@@ -11,7 +11,7 @@ public sealed class ChoiceModuleTests : IDisposable
         _session = new PyropSession(new StringReader(""), _output);
         WriteFile("items.prp", Items);
         WriteFile("tools.prp", "export choice Tool sword hammer end\n");
-        WriteFile("relay.prp", "use items \"items.prp\"\nimport from items Item end\nexport function Item first return sword\n");
+        WriteFile("relay.prp", "use items \"items.prp\"\nimport from items Item sword end\nexport function Item first return sword\n");
     }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
@@ -46,11 +46,11 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         const string source = """
             use items "items.prp"
-            def from items Item a from items sword
+            define from items Item a from items sword
             write_line a
             write_line equal a from items best
             write_line from items describe from items lamp
-            def map from items Item int counts put map_of from items Item int end from items shield 2
+            define map from items Item int counts put map_of from items Item int end from items shield 2
             write_line counts
             write_line convert from items Item " lamp "
             function from items Item pick from items Item x return x
@@ -64,9 +64,9 @@ public sealed class ChoiceModuleTests : IDisposable
     public void ImportingAChoiceImportsItsVariants()
     {
         const string source = """
-            def Item a lamp
+            define Item a lamp
             use items "items.prp"
-            import from items Item end
+            import from items Item sword shield lamp end
             write_line list_of Item sword shield lamp end
             write_line equal a from items lamp
             write_line equal from items best sword
@@ -107,7 +107,7 @@ public sealed class ChoiceModuleTests : IDisposable
         const string source = """
             use items "items.prp"
             import from items Item sword end
-            def Item shield from items shield
+            define Item shield from items shield
             write_line list_of Item sword shield end
             """;
 
@@ -115,25 +115,27 @@ public sealed class ChoiceModuleTests : IDisposable
     }
 
     [Fact]
-    public void ReplImportsOfAChoiceAfterOneOfItsVariantsBringOnlyTheNamedVariants()
+    public void ImportingAChoiceLeavesItsVariantsFreeAsNames()
     {
-        var items = Path.Combine(_directory, "items.prp").Replace("\\", "\\\\");
-        _session.Run($"use items \"{items}\"\nimport from items sword end");
+        const string source = """
+            use items "items.prp"
+            import from items Item end
+            function string lamp Item sword return from items describe sword
+            write_line lamp from items shield
+            """;
 
-        _session.Run("import from items Item sword end\nwrite_line list_of Item sword end");
-
-        Assert.Equal("[sword]\n", _output.ToString());
+        Assert.Equal("shield\n", RunFile(source));
     }
 
     [Fact]
-    public void ReplRepeatingAPartlyImportedChoiceNamesTheMissingVariants()
+    public void ReplImportsOfAVariantAfterItsChoiceAddTheVariant()
     {
         var items = Path.Combine(_directory, "items.prp").Replace("\\", "\\\\");
-        _session.Run($"use items \"{items}\"\nimport from items Item sword end");
+        _session.Run($"use items \"{items}\"\nimport from items Item end");
 
-        var error = Assert.Throws<PyropException>(() => _session.Run("import from items Item end")).Errors[0];
+        _session.Run("import from items sword end\nwrite_line list_of Item sword end");
 
-        Assert.Equal("'Item' was imported earlier with only some of its variants; import the others by name, as in import from items shield lamp end.", error.Message);
+        Assert.Equal("[sword]\n", _output.ToString());
     }
 
     [Fact]
@@ -142,7 +144,7 @@ public sealed class ChoiceModuleTests : IDisposable
         const string source = """
             use items "items.prp"
             import from items lamp end
-            def from items Item item lamp
+            define from items Item item lamp
             write_line from items describe item
             """;
 
@@ -154,7 +156,7 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         const string source = """
             use items "items.prp"
-            import from items Item end
+            import from items Item lamp end
             function string items Item item return from items describe item
             write_line items lamp
             """;
@@ -177,37 +179,48 @@ public sealed class ChoiceModuleTests : IDisposable
 
     [Theory]
     [InlineData("use items \"items.prp\"\nwrite_line from items hidden", 2, 23, "Variant 'hidden' of module 'items' belongs to the choice 'Secret', which is not exported; mark its declaration in ")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\nimport from items sword end", 3, 19, "'sword' is a variant of the imported choice 'Item' and cannot also be imported.")]
     [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items sword end", 3, 19, "'sword' is a function of this file and cannot also be imported.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item sword end\nwrite_line lamp", 3, 12, "Undeclared variable 'lamp'.")]
-    [InlineData("use items \"items.prp\"\nfunction int sword return 1\nimport from items Item end", 3, 19, "Importing 'Item' would also import its variant 'sword', but 'sword' is a function of this file.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\nchoice Mine lamp end", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a variant of this file.")]
-    [InlineData("use items \"items.prp\"\nuse tools \"tools.prp\"\nimport from items Item end\nimport from tools Tool end", 4, 19, "Importing 'Tool' would also import its variant 'sword', but 'sword' is a variant of the imported choice 'Item'.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item sword end\nwrite_line lamp", 3, 12, "'lamp' is a variant of the module items: add import from items lamp end, or write from items lamp.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nwrite_line lamp", 3, 12, "'lamp' is a variant of the module items: add import from items lamp end, or write from items lamp.")]
+    [InlineData("use items \"items.prp\"\nimport from items lamp end\nchoice Mine lamp end", 2, 19, "'lamp' is a variant of this file and cannot also be imported.")]
+    [InlineData("use items \"items.prp\"\nuse tools \"tools.prp\"\nimport from items sword end\nimport from tools sword end", 4, 19, "'sword' is already imported in this file.")]
     [InlineData("use items \"items.prp\"\nimport from items Item end\nimport from items Item end", 3, 19, "'Item' is already imported in this file.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\ndef int lamp 1", 3, 9, "'lamp' is an imported variant and cannot be used as a variable name.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\nfunction void f Item lamp write_line lamp", 3, 22, "'lamp' is an imported variant and cannot be used as a parameter name.")]
-    [InlineData("use items \"items.prp\"\nimport from items Item end\nfunction int lamp return 1", 2, 19, "Importing 'Item' would also import its variant 'lamp', but 'lamp' is a function of this file.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item lamp end\ndefine int lamp 1", 3, 12, "'lamp' is an imported variant and cannot be used as a variable name.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item lamp end\nfunction void f Item lamp write_line lamp", 3, 22, "'lamp' is an imported variant and cannot be used as a parameter name.")]
+    [InlineData("use items \"items.prp\"\nimport from items lamp end\nfunction int lamp return 1", 2, 19, "'lamp' is a function of this file and cannot also be imported.")]
     [InlineData("use items \"items.prp\"\nwrite_line from items Item", 2, 12, "'Item' is a choice, not a value; name one of its variants, such as from items sword.")]
-    [InlineData("use items \"items.prp\"\nfrom items Item", 2, 1, "A statement cannot start with the choice 'Item': a choice is a type, and no statement may start with a type name. Use one of its variants as a value, as in def from items Item <name> from items sword.")]
+    [InlineData("use items \"items.prp\"\nfrom items Item", 2, 1, "A statement cannot start with the choice 'Item': a choice is a type, and no statement may start with a type name. Use one of its variants as a value, as in define from items Item <name> from items sword.")]
     [InlineData("use items \"items.prp\"\nfrom items sword", 2, 1, "'from items sword' cannot stand alone as a statement.")]
-    [InlineData("use items \"items.prp\"\ndef from items sword x 1", 2, 16, "'sword' of module 'items' is a variant of the choice 'Item', not a type.")]
-    [InlineData("use items \"items.prp\"\ndef from items Secret x 1", 2, 16, "Choice 'Secret' of module 'items' is not exported")]
-    [InlineData("use items \"items.prp\"\ndef int x from items axe", 2, 22, "Module 'items' has no function, record, choice or variant 'axe'.")]
-    [InlineData("use items \"items.prp\"\ndef from items Axe x 1", 2, 16, "Module 'items' has no record or choice 'Axe'.")]
+    [InlineData("use items \"items.prp\"\ndefine from items sword x 1", 2, 19, "'sword' of module 'items' is a variant of the choice 'Item', not a type.")]
+    [InlineData("use items \"items.prp\"\ndefine from items Secret x 1", 2, 19, "Choice 'Secret' of module 'items' is not exported")]
+    [InlineData("use items \"items.prp\"\ndefine int x from items axe", 2, 25, "Module 'items' has no function, record, choice or variant 'axe'.")]
+    [InlineData("use items \"items.prp\"\ndefine from items Axe x 1", 2, 19, "Module 'items' has no record or choice 'Axe'.")]
     [InlineData("use relay \"relay.prp\"\nwrite_line from relay sword", 2, 23, "Module 'relay' only imports 'sword' and cannot pass it on; use the module that exports it.")]
-    [InlineData("use relay \"relay.prp\"\ndef from relay Item x from relay first", 2, 16, "Module 'relay' only imports 'Item' and cannot pass it on; use the module that exports it.")]
+    [InlineData("use relay \"relay.prp\"\ndefine from relay Item x from relay first", 2, 19, "Module 'relay' only imports 'Item' and cannot pass it on; use the module that exports it.")]
     public void RejectsInvalidUsesOfOtherModulesChoices(string source, int line, int column, string message)
     {
         var error = FailFile(source);
 
-        Assert.Equal(message.StartsWith("Undeclared", StringComparison.Ordinal) ? ErrorStage.Type : ErrorStage.Parse, error.Stage);
+        Assert.Equal(message.StartsWith("Undeclared", StringComparison.Ordinal) || message.Contains("is a variant of the module", StringComparison.Ordinal) ? ErrorStage.Type : ErrorStage.Parse, error.Stage);
         Assert.StartsWith(message, error.Message);
         Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
     }
 
     [Theory]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\ndefine Item i sword", 3, 15, "'sword' is a variant of the module items: add import from items sword end, or write from items sword.")]
+    [InlineData("use items \"items.prp\"\nimport from items Item end\nmatch from items best\n    when sword write_line 1\nend", 4, 10, "'sword' is a variant of the module items: add import from items sword end, or write from items sword.")]
+    [InlineData("use items \"items.prp\"\nwrite_line best", 2, 12, "'best' is a function of the module items: add import from items best end, or write from items best.")]
+    public void ANameOfAUsedModuleSaysHowToImportIt(string source, int line, int column, string message)
+    {
+        var error = FailFile(source);
+
+        Assert.Equal(message, error.Message);
+        Assert.Equal((line, column), (error.Position.Line, error.Position.Column));
+    }
+
+    [Theory]
     [InlineData("choice Mood calm end\nexport function Mood feel return calm\n", 2, 22, "Exported function 'feel' uses the choice 'Mood', but 'Mood' is not exported; export it too.")]
-    [InlineData("choice Mood calm end\nexport record Face Mood mood\n", 2, 15, "Exported record 'Face' uses the choice 'Mood' in its field 'mood', but 'Mood' is not exported; export it too.")]
+    [InlineData("choice Mood calm end\nexport record Face Mood mood end\n", 2, 15, "Exported record 'Face' uses the choice 'Mood' in its field 'mood', but 'Mood' is not exported; export it too.")]
     [InlineData("choice Mood calm end\nexport function void show list Mood moods write_line moods\n", 2, 22, "Exported function 'show' uses the choice 'Mood', but 'Mood' is not exported; export it too.")]
     public void AnExportedDeclarationCannotMentionAPrivateChoice(string module, int line, int column, string message)
     {
@@ -231,11 +244,11 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         var main = Path.Combine(_directory, "main.prp");
         _session.Run("use items \"items.prp\"", main);
-        _session.Run("import from items Item end", main);
-        _session.Run("def Item i shield", main);
+        _session.Run("import from items Item shield lamp end", main);
+        _session.Run("define Item i shield", main);
         _session.Run("write_line equal i from items shield", main);
         var error = Assert.Single(Assert.Throws<PyropException>(() => _session.Run("choice Foo lamp end", main)).Errors);
-        _session.Run("import from items Item end", main);
+        _session.Run("import from items lamp end", main);
         _session.Run("write_line lamp", main);
 
         Assert.Equal("'lamp' is imported in this file and cannot also be a variant.", error.Message);
@@ -247,14 +260,14 @@ public sealed class ChoiceModuleTests : IDisposable
     {
         const string source = """
             use items "items.prp"
-            def from items Item a from items sword
+            define from items Item a from items sword
             write_line equal a from items lamp
             """;
         var inspected = new PyropSession(new StringReader(""), new StringOutput()).Inspect(source, WriteFile("main.prp", source));
 
         Assert.Null(inspected.Error);
         Assert.Equal(
-            "use items \"items.prp\"\ndef from items Item a from items sword\nwrite_line (equal a from items lamp)\n",
+            "use items \"items.prp\"\ndefine from items Item a from items sword\nwrite_line (equal a from items lamp)\n",
             inspected.Text);
     }
 
@@ -265,7 +278,7 @@ public sealed class ChoiceModuleTests : IDisposable
         const string source = """
             use moves "moves.prp"
             use items "items.prp"
-            def from moves Move m from moves go 3
+            define from moves Move m from moves go 3
             write_line m
             write_line from moves pick from items lamp
             for from moves Move each in list_of from moves Move m from moves longest from moves rest end
@@ -274,7 +287,7 @@ public sealed class ChoiceModuleTests : IDisposable
                     when from moves pick item write_line item
                     when from moves rest write_line "rest"
                 end
-            import from moves Move end
+            import from moves Move go pick rest end
             match pick from items shield
                 when go n write_line n
                 when pick item write_line item
@@ -298,7 +311,7 @@ public sealed class ChoiceModuleTests : IDisposable
     [Fact]
     public void AnExportedChoiceCannotCarryAPrivateType()
     {
-        WriteFile("bad.prp", "record Secret int x\nexport choice Leak show Secret end\n");
+        WriteFile("bad.prp", "record Secret int x end\nexport choice Leak show Secret end\n");
 
         var error = FailFile("use bad \"bad.prp\"\nwrite_line 1");
 

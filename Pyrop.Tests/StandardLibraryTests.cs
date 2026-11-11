@@ -18,8 +18,8 @@ public class StandardLibraryTests
     }
 
     private const string NumberLibraries =
-        "use math library\nimport from math abs sign power square_root round round_down end\n" +
-        "use random library\nimport from random between roll seed end\n";
+        "use math library\nimport from math absolute sign power square_root round round_down end\n" +
+        "use random library\nimport from random float_between roll seed end\n";
 
     private static string EvaluateNumber(string expression) => Run.Program(NumberLibraries + $"write_line {expression}").TrimEnd('\n');
 
@@ -42,11 +42,11 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("substring \"Pyrop rocks\" 6 5", "rocks")]
-    [InlineData("substring \"Pyrop rocks\" 0 5", "Pyrop")]
-    [InlineData("substring \"abc\" 3 0", "")]
-    [InlineData("substring \"" + Sword + "x\" 1 1", "x")]
-    [InlineData("substring \"" + Sword + "x\" 0 1", Sword)]
+    [InlineData("slice \"Pyrop rocks\" 6 5", "rocks")]
+    [InlineData("slice \"Pyrop rocks\" 0 5", "Pyrop")]
+    [InlineData("slice \"abc\" 3 0", "")]
+    [InlineData("slice \"" + Sword + "x\" 1 1", "x")]
+    [InlineData("slice \"" + Sword + "x\" 0 1", Sword)]
     [InlineData("get \"čau\" 0", "č")]
     [InlineData("get \"" + DecomposedC + "au\" 0", DecomposedC)]
     [InlineData("get \"" + Sword + "x\" 1", "x")]
@@ -56,10 +56,10 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("substring \"abc\" 2 2", "Cannot take 2 characters from position 2 of a 3-character text.")]
-    [InlineData("substring \"abc\" 4 0", "Position 4 is out of range for a 3-character text, numbered from 0.")]
-    [InlineData("substring \"abc\" -1 1", "Position -1 is out of range for a 3-character text, numbered from 0.")]
-    [InlineData("substring \"abc\" 0 -1", "'substring' cannot take a negative count (-1).")]
+    [InlineData("slice \"abc\" 2 2", "Cannot take 2 characters from position 2 of a 3-character text.")]
+    [InlineData("slice \"abc\" 4 0", "Position 4 is out of range for a 3-character text, numbered from 0.")]
+    [InlineData("slice \"abc\" -1 1", "Position -1 is out of range for a 3-character text, numbered from 0.")]
+    [InlineData("slice \"abc\" 0 -1", "'slice' cannot take a negative count (-1).")]
     [InlineData("get \"abc\" 3", "Position 3 is out of range for a 3-character text, numbered from 0.")]
     [InlineData("get \"\" 0", "Position 0 is out of range for a 0-character text, numbered from 0.")]
     public void RejectsPositionsOutsideTheText(string expression, string message)
@@ -132,8 +132,8 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("upper \"čau Pyrop\"", "ČAU PYROP")]
-    [InlineData("lower \"ČAU Pyrop\"", "čau pyrop")]
+    [InlineData("uppercase \"čau Pyrop\"", "ČAU PYROP")]
+    [InlineData("lowercase \"ČAU Pyrop\"", "čau pyrop")]
     [InlineData("trim \"  x y \\t\"", "x y")]
     [InlineData("repeat \"ab\" 3", "ababab")]
     [InlineData("repeat \"ab\" 0", "")]
@@ -159,12 +159,12 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("abs -5", "5")]
-    [InlineData("abs -2.5", "2.5")]
-    [InlineData("smaller 3 7", "3")]
-    [InlineData("larger 2.5 1.5", "2.5")]
-    [InlineData("smaller \"b\" \"a\"", "a")]
-    [InlineData("larger \"b\" \"a\"", "b")]
+    [InlineData("absolute -5", "5")]
+    [InlineData("absolute -2.5", "2.5")]
+    [InlineData("smaller_of 3 7", "3")]
+    [InlineData("larger_of 2.5 1.5", "2.5")]
+    [InlineData("smaller_of \"b\" \"a\"", "a")]
+    [InlineData("larger_of \"b\" \"a\"", "b")]
     [InlineData("power 2 10", "1024")]
     [InlineData("power 2 62", "4611686018427387904")]
     [InlineData("power -3 3", "-27")]
@@ -195,7 +195,7 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("abs -9223372036854775808", "Integer overflow.")]
+    [InlineData("absolute -9223372036854775808", "Integer overflow.")]
     [InlineData("power 2 63", "Integer overflow.")]
     [InlineData("power 2 -1", "'power' on ints cannot take a negative exponent (-1); use floats instead.")]
     [InlineData("power -8.0 0.5", "Float result is not a real number.")]
@@ -210,7 +210,7 @@ public class StandardLibraryTests
     [Fact]
     public void SeedMakesRandomnessReproducible()
     {
-        const string source = NumberLibraries + "seed 42\nwrite_line roll 1 1000000\nwrite_line roll 1 1000000\nwrite_line between 0.0 1.0";
+        const string source = NumberLibraries + "seed 42\nwrite_line roll 1 1000000\nwrite_line roll 1 1000000\nwrite_line float_between 0.0 1.0";
 
         Assert.Equal("558743\n543103\n0.6800434110281394\n", Run.Program(source));
     }
@@ -227,7 +227,7 @@ public class StandardLibraryTests
     [Fact]
     public void RollCoversItsInclusiveRange()
     {
-        var output = Run.Program(NumberLibraries + "def int count 0\nwhile less count 600 block\n    write_line roll 1 6\n    set count add count 1\nend");
+        var output = Run.Program(NumberLibraries + "define int count 0\nwhile less count 600 block\n    write_line roll 1 6\n    set count add count 1\nend");
 
         var rolls = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
         Assert.Equal([1, 2, 3, 4, 5, 6], rolls.Distinct().Order());
@@ -248,7 +248,7 @@ public class StandardLibraryTests
     [Fact]
     public void BetweenStaysBelowItsUpperBound()
     {
-        var output = Run.Program(NumberLibraries + "def int count 0\nwhile less count 500 block\n    write_line between 2.0 3.0\n    set count add count 1\nend");
+        var output = Run.Program(NumberLibraries + "define int count 0\nwhile less count 500 block\n    write_line float_between 2.0 3.0\n    set count add count 1\nend");
 
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -259,7 +259,7 @@ public class StandardLibraryTests
 
     [Theory]
     [InlineData("roll 6 1", "'roll' needs a lower bound no greater than its upper bound, found 6 and 1.")]
-    [InlineData("between 1.0 1.0", "'between' needs a lower bound below its upper bound, found 1.0 and 1.0.")]
+    [InlineData("float_between 1.0 1.0", "'float_between' needs a lower bound below its upper bound, found 1.0 and 1.0.")]
     public void RejectsReversedRandomBounds(string expression, string message)
     {
         Assert.Equal(message, NumberFailure(expression));
@@ -291,9 +291,9 @@ public class StandardLibraryTests
         var host = new HostContext([text], _ => null);
 
         var output = Run.Program(
-            "use program library\ndef string text get from program arguments 0\n" +
+            "use program library\ndefine string text get from program arguments 0\n" +
             "write_line length_of text\nwrite_line get text 241\nwrite_line find text \"b \"\n" +
-            "write_line substring text 237 3\nwrite_line length_of replace text \"c\" \"x\"",
+            "write_line slice text 237 3\nwrite_line length_of replace text \"c\" \"x\"",
             host: host);
 
         Assert.Equal($"360\n{DecomposedC}\nsome 4\nab \n360\n", output);
@@ -333,8 +333,8 @@ public class StandardLibraryTests
     }
 
     [Theory]
-    [InlineData("def int lower 1")]
-    [InlineData("def string find \"x\"")]
+    [InlineData("define int lowercase 1")]
+    [InlineData("define string find \"x\"")]
     public void ReservesTheNewNames(string source)
     {
         Assert.Equal(ErrorStage.Parse, Run.Failure(source).Stage);

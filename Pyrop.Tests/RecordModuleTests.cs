@@ -10,14 +10,14 @@ public sealed class RecordModuleTests : IDisposable
     {
         _session = new PyropSession(new StringReader(""), _output);
         WriteFile("geo.prp", Geometry);
-        WriteFile("other.prp", "export record Point float x float y\n");
+        WriteFile("other.prp", "export record Point float x float y end\n");
     }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private const string Geometry =
-        "export record Point float x float y\n" +
-        "record Secret int code\n" +
+        "export record Point float x float y end\n" +
+        "record Secret int code end\n" +
         "export function Point origin return Point 0.0 0.0\n" +
         "export function float sum Point p return add the x of p the y of p\n";
 
@@ -45,8 +45,8 @@ public sealed class RecordModuleTests : IDisposable
     {
         const string source = """
             use geo "geo.prp"
-            def from geo Point a from geo Point 3.0 4.0
-            def list from geo Point all list_of from geo Point a from geo origin end
+            define from geo Point a from geo Point 3.0 4.0
+            define list from geo Point all list_of from geo Point a from geo origin end
             write_line from geo sum a
             write_line all
             write_line equal get all 1 from geo Point 0.0 0.0
@@ -59,7 +59,7 @@ public sealed class RecordModuleTests : IDisposable
     public void AnImportedRecordWorksUnqualified()
     {
         const string source = """
-            def Point a Point 1.0 2.0
+            define Point a Point 1.0 2.0
             use geo "geo.prp"
             import from geo Point end
             function Point twice Point p return Point multiply 2.0 the x of p multiply 2.0 the y of p
@@ -100,10 +100,10 @@ public sealed class RecordModuleTests : IDisposable
     [Fact]
     public void RecordsWithTheSameNameInTwoModulesAreDifferentTypes()
     {
-        var error = FailFile("use geo \"geo.prp\"\nuse other \"other.prp\"\ndef from geo Point a from other Point 1.0 2.0");
+        var error = FailFile("use geo \"geo.prp\"\nuse other \"other.prp\"\ndefine from geo Point a from other Point 1.0 2.0");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
-        Assert.Equal((3, 22), (error.Position.Line, error.Position.Column));
+        Assert.Equal((3, 25), (error.Position.Line, error.Position.Column));
         Assert.Matches(
             @"^Cannot initialize Point \(declared in .*geo\.prp\) variable 'a' with a value of type Point \(declared in .*other\.prp\)\.$",
             error.Message);
@@ -123,23 +123,23 @@ public sealed class RecordModuleTests : IDisposable
     [Fact]
     public void AModuleRecordAndALocalRecordWithTheSameNameAreDifferent()
     {
-        var error = FailFile("use geo \"geo.prp\"\nrecord Point float x float y\ndef Point p from geo origin");
+        var error = FailFile("use geo \"geo.prp\"\nrecord Point float x float y end\ndefine Point p from geo origin");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
         Assert.Matches(@"^Cannot initialize Point \(declared in .*main\.prp\) variable 'p' with a value of type Point \(declared in .*geo\.prp\)\.$", error.Message);
     }
 
     [Theory]
-    [InlineData("use geo \"geo.prp\"\ndef from geo Secret s 1", 2, 14, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
+    [InlineData("use geo \"geo.prp\"\ndefine from geo Secret s 1", 2, 17, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
     [InlineData("use geo \"geo.prp\"\nimport from geo Secret end", 2, 17, "Record 'Secret' of module 'geo' is not exported; mark its declaration in")]
-    [InlineData("use geo \"geo.prp\"\ndef from geo sum s 1", 2, 14, "'sum' of module 'geo' is a function, not a type.")]
-    [InlineData("use geo \"geo.prp\"\ndef from geo Line s 1", 2, 14, "Module 'geo' has no record or choice 'Line'.")]
+    [InlineData("use geo \"geo.prp\"\ndefine from geo sum s 1", 2, 17, "'sum' of module 'geo' is a function, not a type.")]
+    [InlineData("use geo \"geo.prp\"\ndefine from geo Line s 1", 2, 17, "Module 'geo' has no record or choice 'Line'.")]
     [InlineData("use geo \"geo.prp\"\nwrite_line from geo Line 1", 2, 21, "Module 'geo' has no function, record, choice or variant 'Line'.")]
-    [InlineData("def from shapes Point p 1", 1, 10, "'shapes' is not a module of this file; load it with use shapes \"<path>\".")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\nrecord Point int x", 2, 17, "'Point' is a record of this file and cannot also be imported.")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\ndef int Point 1", 3, 9, "'Point' is an imported record and cannot be used as a variable name.")]
-    [InlineData("use geo \"nope.prp\"\nrecord R from geo Point p", 1, 9, "Cannot use \"nope.prp\": no file at")]
-    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nrecord R Pointt p", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
+    [InlineData("define from shapes Point p 1", 1, 13, "'shapes' is not a module of this file; load it with use shapes \"<path>\".")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\nrecord Point int x end", 2, 17, "'Point' is a record of this file and cannot also be imported.")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Point end\ndefine int Point 1", 3, 12, "'Point' is an imported record and cannot be used as a variable name.")]
+    [InlineData("use geo \"nope.prp\"\nrecord R from geo Point p end", 1, 9, "Cannot use \"nope.prp\": no file at")]
+    [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nrecord R Pointt p end", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
     [InlineData("use geo \"geo.prp\"\nimport from geo Pointt end\nfunction void f Pointt p write_line 1", 2, 17, "Module 'geo' has no function, record, choice or variant 'Pointt'.")]
     public void ReportsWrongQualifiedRecords(string source, int line, int column, string message)
     {
@@ -158,7 +158,7 @@ public sealed class RecordModuleTests : IDisposable
         Assert.Equal(ErrorStage.Parse, error.Stage);
         Assert.Equal((2, 1), (error.Position.Line, error.Position.Column));
         Assert.StartsWith("A record constructor cannot be a statement: 'from geo Point …' would make a record", error.Message);
-        Assert.EndsWith("as in def from geo Point <name> from geo Point ….", error.Message);
+        Assert.EndsWith("as in define from geo Point <name> from geo Point ….", error.Message);
     }
 
     [Fact]
@@ -166,14 +166,14 @@ public sealed class RecordModuleTests : IDisposable
     {
         WriteFile("relay.prp", "use geo \"geo.prp\"\nimport from geo Point end\nexport function Point make return Point 1.0 1.0\n");
 
-        var error = FailFile("use relay \"relay.prp\"\ndef from relay Point p from relay make");
+        var error = FailFile("use relay \"relay.prp\"\ndefine from relay Point p from relay make");
 
         Assert.Equal("Module 'relay' only imports 'Point' and cannot pass it on; use the module that exports it.", error.Message);
     }
 
     [Theory]
-    [InlineData("export record Hero list Stats stats\nrecord Stats int strength\n", 1, 15, "Exported record 'Hero' uses the record 'Stats' in its field 'stats', but 'Stats' is not exported; export it too.")]
-    [InlineData("record Stats int strength\nexport function void best map string Stats all return void\n", 2, 22, "Exported function 'best' uses the record 'Stats', but 'Stats' is not exported; export it too.")]
+    [InlineData("export record Hero list Stats stats end\nrecord Stats int strength end\n", 1, 15, "Exported record 'Hero' uses the record 'Stats' in its field 'stats', but 'Stats' is not exported; export it too.")]
+    [InlineData("record Stats int strength end\nexport function void best map string Stats all return void\n", 2, 22, "Exported function 'best' uses the record 'Stats', but 'Stats' is not exported; export it too.")]
     public void AModuleCannotExportDeclarationsThatExposeAPrivateRecord(string module, int line, int column, string message)
     {
         WriteFile("stats.prp", module);
@@ -189,7 +189,7 @@ public sealed class RecordModuleTests : IDisposable
     [Fact]
     public void ErrorsInsideAModuleNameTheirFile()
     {
-        WriteFile("broken.prp", "export record Node int value Node next\n");
+        WriteFile("broken.prp", "export record Node int value Node next end\n");
 
         var error = FailFile("use broken \"broken.prp\"\nwrite_line 1");
 
@@ -206,7 +206,7 @@ public sealed class RecordModuleTests : IDisposable
             use other "other.prp"
             import from other Point end
             function from geo Point flip Point p return from geo Point the y of p the x of p
-            def list from geo Point all list_of from geo Point end
+            define list from geo Point all list_of from geo Point end
             """;
 
         var inspected = _session.Inspect(source, WriteFile("main.prp", source));
@@ -215,7 +215,7 @@ public sealed class RecordModuleTests : IDisposable
         Assert.Equal(
             "use geo \"geo.prp\"\nuse other \"other.prp\"\nimport from other Point end\n" +
             "function from geo Point flip Point p\n    return (from geo Point (the y of p) (the x of p))\n" +
-            "def list from geo Point all (list_of from geo Point end)\n",
+            "define list from geo Point all (list_of from geo Point end)\n",
             inspected.Text);
     }
 
@@ -223,7 +223,7 @@ public sealed class RecordModuleTests : IDisposable
     public void ReplInputsCanUseModuleRecords()
     {
         _session.Run($"use geo \"{Path.Combine(_directory, "geo.prp").Replace("\\", "\\\\")}\"");
-        _session.Run("def from geo Point p from geo origin");
+        _session.Run("define from geo Point p from geo origin");
         _session.Run("import from geo Point end");
         _session.Run("set p Point 2.0 3.0");
         _session.Run("write_line from geo sum p");

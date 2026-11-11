@@ -5,7 +5,7 @@ import from items ItemKind end
 import from state Player end
 import from files save load_lines end
 
-def string header "pyrop adventure save 2"
+define string header "pyrop adventure save 2"
 
 export function bool save_game string path Player player
     return attempt save path fill "{}\n{}\n" list_of string header convert string player end
@@ -16,7 +16,7 @@ export function option Player load_game string path block
         if not equal get lines 0 header return none Player
         if_some Player player attempt convert Player get lines 1 block
             if or less the moves of player 0 greater the moves of player 1000000 return none Player
-            def list ItemKind seen list_of ItemKind end
+            define list ItemKind seen list_of ItemKind end
             for ItemKind item in the inventory of player block
                 if has seen item return none Player
                 set seen push seen item

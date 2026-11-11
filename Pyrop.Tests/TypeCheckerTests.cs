@@ -3,9 +3,9 @@ namespace Pyrop.Tests;
 public class TypeCheckerTests
 {
     [Theory]
-    [InlineData("def int a 0\nset a \"text\"", "Cannot set int variable")]
-    [InlineData("def int a \"text\"", "Cannot initialize int variable 'a' with a value of type string")]
-    [InlineData("def int a add a 1", "Undeclared variable 'a'")]
+    [InlineData("define int a 0\nset a \"text\"", "Cannot set int variable")]
+    [InlineData("define int a \"text\"", "Cannot initialize int variable 'a' with a value of type string")]
+    [InlineData("define int a add a 1", "Undeclared variable 'a'")]
     [InlineData("write_line add 1 2.0", "'add' cannot take int float")]
     [InlineData("write_line convert int true", "Cannot convert bool to int")]
     [InlineData("if 1 write_line 1", "condition of 'if' must be bool")]
@@ -13,8 +13,8 @@ public class TypeCheckerTests
     [InlineData("write_line missing", "Undeclared variable 'missing'")]
     [InlineData("function int f return \"x\"", "must return int, found string")]
     [InlineData("function int f int x return x\nwrite_line f 1.5", "Argument 'x' of 'f' must be int")]
-    [InlineData("write_line later\ndef int later 1", "Undeclared variable 'later'")]
-    [InlineData("block def int inner 1 end\nfunction int f return inner", "Undeclared variable 'inner'")]
+    [InlineData("write_line later\ndefine int later 1", "Undeclared variable 'later'")]
+    [InlineData("block define int inner 1 end\nfunction int f return inner", "Undeclared variable 'inner'")]
     [InlineData("write_line lengthof", "did you mean 'length_of'?")]
     public void RejectsTypeErrors(string source, string message)
     {
@@ -39,7 +39,7 @@ public class TypeCheckerTests
     [Fact]
     public void FunctionsSeeGlobalsDeclaredLaterInTheFile()
     {
-        Assert.Equal("5\n", Run.Program("function int fetch return value\ndef int value 5\nwrite_line fetch"));
+        Assert.Equal("5\n", Run.Program("function int fetch return value\ndefine int value 5\nwrite_line fetch"));
     }
 
     [Theory]

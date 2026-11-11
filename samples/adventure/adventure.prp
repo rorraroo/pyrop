@@ -4,28 +4,28 @@ use state "state.prp"
 use saving "saving.prp"
 use files library
 use program library
-import from items item_description ItemKind end
-import from world Direction Place Room compass build_world end
+import from items item_description ItemKind crown end
+import from world Direction Place garden Room compass build_world end
 import from state Player new_player carries can_see items_in end
 import from saving save_game load_game end
 
 choice Opening fresh_start saved_start leave_game end
 choice Action go Direction take ItemKind show_inventory save quit end
 
-def string save_path "adventure.save"
-def list string arguments from program arguments
+define string save_path "adventure.save"
+define list string arguments from program arguments
 if greater length_of arguments 0 set save_path get arguments 0
 
-def map Place Room rooms build_world
+define map Place Room rooms build_world
 
 function list string names_of list ItemKind kinds block
-    def list string names list_of string end
+    define list string names list_of string end
     for ItemKind kind in kinds set names push names fill "the {}" list_of ItemKind kind end
     return names
 end
 
 function void describe Player player block
-    def Room room get rooms the place of player
+    define Room room get rooms the place of player
     write_line ""
     styled "emphasis" write_line the title of room
     if not can_see room player block
@@ -33,14 +33,14 @@ function void describe Player player block
         return void
     end
     write_line the description of room
-    def list ItemKind here items_in room player
+    define list ItemKind here items_in room player
     if greater length_of here 0 write_line fill "You see {}." list_of string join names_of here " and " end
 end
 
 function map string Action actions_for Player player block
-    def Room room get rooms the place of player
-    def map Direction Place exits the exits of room
-    def map string Action actions map_of string Action end
+    define Room room get rooms the place of player
+    define map Direction Place exits the exits of room
+    define map string Action actions map_of string Action end
     for Direction way in compass
         if has exits way
             set actions put actions fill "Go {}" list_of Direction way end go way
@@ -54,9 +54,9 @@ function map string Action actions_for Player player block
 end
 
 function Player walk Player player Direction way block
-    def Room here get rooms the place of player
-    def Place target get the exits of here way
-    def Player moved copy player with moves add the moves of player 1
+    define Room here get rooms the place of player
+    define Place target get the exits of here way
+    define Player moved copy player with moves add the moves of player 1 end
     if_some ItemKind needed the needs of get rooms target block
         if not carries player needed block
             write_line fill "The door is locked. You need the {}." list_of ItemKind needed end
@@ -65,21 +65,21 @@ function Player walk Player player Direction way block
         write_line fill "You unlock the door with the {}." list_of ItemKind needed end
     end
     write_line fill "You go {}." list_of Direction way end
-    return copy moved with place target
+    return copy moved with place target end
 end
 
 function Player take_item Player player ItemKind item block
     write_line fill "You take the {}." list_of ItemKind item end
-    return copy player with inventory push the inventory of player item with moves add the moves of player 1
+    return copy player with inventory push the inventory of player item with moves add the moves of player 1 end
 end
 
 function void show_inventory_of Player player block
-    def list ItemKind carried the inventory of player
+    define list ItemKind carried the inventory of player
     if equal length_of carried 0 block
         write_line "You carry nothing."
         return void
     end
-    def list list string rows list_of list string end
+    define list list string rows list_of list string end
     for ItemKind item in carried
         set rows push rows list_of string convert string item item_description item end
     write_table list_of string "Item" "Description" end rows
@@ -90,7 +90,7 @@ function void save_to string path Player player
     else styled "warning" write_line "The game could not be saved."
 
 function Player restored string path block
-    if not from files exists path block
+    if not from files file_exists path block
         styled "warning" write_line "There is no saved game yet, so a new game begins."
         return new_player
     end
@@ -105,26 +105,26 @@ end
 styled "emphasis" write_line "The Crown of Pyrop"
 write_line "Find the lost crown and carry it out into the garden."
 
-def map string Opening openings map_of string Opening
+define map string Opening openings map_of string Opening
     "Start a new game" fresh_start
     "Load the saved game" saved_start
     "Leave" leave_game
 end
-def Opening opening get openings choose "How do you begin?" keys_of openings
+define Opening opening get openings choose "How do you begin?" keys_of openings
 if equal opening leave_game exit 0
 
-def Player player new_player
+define Player player new_player
 if equal opening saved_start set player restored save_path
 
-def bool playing true
+define bool playing true
 while playing block
     describe player
     if and equal the place of player garden carries player crown block
         styled "success" write_line fill "You carry the crown out into the sunlight. You won in {} moves." list_of int the moves of player end
         break
     end
-    def map string Action actions actions_for player
-    def Action action get actions choose "What do you do?" keys_of actions
+    define map string Action actions actions_for player
+    define Action action get actions choose "What do you do?" keys_of actions
     match action
         when go way set player walk player way
         when take item set player take_item player item

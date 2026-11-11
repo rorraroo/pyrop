@@ -82,11 +82,11 @@ public sealed class ModuleTests : IDisposable
     [Fact]
     public void OneImportCanNameSeveralDeclarations()
     {
-        WriteFile("geometry.prp", Geometry + "export record Point int x int y\nexport choice Axis horizontal vertical end\n");
+        WriteFile("geometry.prp", Geometry + "export record Point int x int y end\nexport choice Axis horizontal vertical end\n");
 
         var output = RunFile(
             "main.prp",
-            "use geometry \"geometry.prp\"\nimport from geometry\n    square cube\n    Point Axis\nend\n" +
+            "use geometry \"geometry.prp\"\nimport from geometry\n    square cube\n    Point Axis vertical\nend\n" +
             "write_line add square 2 cube 2\nwrite_line Point 1 2\nwrite_line vertical");
 
         Assert.Equal("12\nPoint x 1 y 2\nvertical\n", output);
@@ -98,7 +98,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("import from geometry square 5 end", 1, 29, "Expected a name to import or 'end' to close the import started at line 1, column 1, found '5'.")]
     [InlineData("import from geometry square square end", 1, 29, "'square' is named twice in the import started at line 1, column 1; if the names were meant to stop before it, close the import with 'end'.")]
     [InlineData("import from geometry square\nsquare 3", 2, 1, "'square' is named twice in the import started at line 1, column 1;")]
-    [InlineData("import from geometry square cube\nrecord r int x", 2, 1, "Expected a name to import or 'end' to close the import started at line 1, column 1, found 'record'.")]
+    [InlineData("import from geometry square cube\nrecord r int x end", 2, 1, "Expected a name to import or 'end' to close the import started at line 1, column 1, found 'record'.")]
     [InlineData("import from geometry square hidden end", 1, 29, "Function 'hidden' of module 'geometry' is not exported; mark its definition in ")]
     public void RejectsMalformedImports(string import, int line, int column, string message)
     {
@@ -169,7 +169,7 @@ public sealed class ModuleTests : IDisposable
     [Fact]
     public void AFailedUseIsReportedBeforeADeclarationAfterItsQualifiedName()
     {
-        var error = FailFile("main.prp", "use broken \"missing.prp\"\nwrite_line from broken x\nrecord q int z");
+        var error = FailFile("main.prp", "use broken \"missing.prp\"\nwrite_line from broken x\nrecord q int z end");
 
         Assert.StartsWith("Cannot use \"missing.prp\": no file at", error.Message);
         Assert.Equal((1, 12), (error.Position.Line, error.Position.Column));
@@ -190,12 +190,12 @@ public sealed class ModuleTests : IDisposable
     public void EachFileHasItsOwnFunctionsAndGlobals()
     {
         WriteFile("counter.prp",
-            "def int count 0\nfunction int next block set count add count 1 return count end\n" +
+            "define int count 0\nfunction int next block set count add count 1 return count end\n" +
             "export function int step return next\nexport function int current return count");
 
         var output = RunFile(
             "main.prp",
-            "use counter \"counter.prp\"\ndef int count 100\nfunction int next return 0\n" +
+            "use counter \"counter.prp\"\ndefine int count 100\nfunction int next return 0\n" +
             "write_line from counter step\nwrite_line from counter step\nwrite_line next\nwrite_line count\nwrite_line from counter current");
 
         Assert.Equal("1\n2\n0\n100\n2\n", output);
@@ -206,7 +206,7 @@ public sealed class ModuleTests : IDisposable
     {
         WriteFile("lib.prp", "export function int peek return secret");
 
-        var error = FailFile("main.prp", "use lib \"lib.prp\"\ndef int secret 1\nwrite_line from lib peek");
+        var error = FailFile("main.prp", "use lib \"lib.prp\"\ndefine int secret 1\nwrite_line from lib peek");
 
         Assert.Equal(ErrorStage.Type, error.Stage);
         Assert.Equal("Undeclared variable 'secret'.", error.Message);
@@ -230,7 +230,7 @@ public sealed class ModuleTests : IDisposable
     [Fact]
     public void AModuleIsSetUpBeforeACallPlacedAboveItsUse()
     {
-        WriteFile("config.prp", "def string greeting \"ready\"\nexport function string read_greeting return greeting");
+        WriteFile("config.prp", "define string greeting \"ready\"\nexport function string read_greeting return greeting");
 
         Assert.Equal("ready\n", RunFile("main.prp", "write_line from config read_greeting\nuse config \"config.prp\""));
     }
@@ -329,9 +329,9 @@ public sealed class ModuleTests : IDisposable
     [InlineData("function void f use lib \"lib.prp\"", "'use' is only allowed at the top level.")]
     [InlineData("use lib \"lib.prp\"\nif true import from lib answer end", "'import' is only allowed at the top level.")]
     [InlineData("block export function int f return 1 end", "'export' is only allowed at the top level.")]
-    [InlineData("export def int x 1", "'export' must be followed by a function, record or choice definition, found 'def'.")]
+    [InlineData("export define int x 1", "'export' must be followed by a function, record or choice definition, found 'define'.")]
     [InlineData("export write_line 1", "'export' must be followed by a function, record or choice definition, found 'write_line'.")]
-    [InlineData("def string path \"lib.prp\"\nuse lib path", "'use' takes a module name and then a string literal path or the word library: use lib \"<path>\" or use lib library, found 'path'.")]
+    [InlineData("define string path \"lib.prp\"\nuse lib path", "'use' takes a module name and then a string literal path or the word library: use lib \"<path>\" or use lib library, found 'path'.")]
     [InlineData("use \"lib.prp\"", "Expected a module name after 'use', found string \"lib.prp\".")]
     [InlineData("use if \"lib.prp\"", "'if' is a reserved word and cannot be used as a module name.")]
     [InlineData("function void f use t \"nope.prp\"", "'use' is only allowed at the top level.")]
@@ -360,7 +360,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("use lib \"lib.prp\"\nuse other \"other.prp\"\nimport from lib answer end\nimport from other answer end", "'answer' is already imported in this file.", 4, 19)]
     [InlineData("use lib \"lib.prp\"\nfunction int answer return 1\nimport from lib answer end", "'answer' is a function of this file and cannot also be imported.", 3, 17)]
     [InlineData("import from lib answer end\nuse lib \"lib.prp\"\nfunction int answer return 1", "'answer' is a function of this file and cannot also be imported.", 1, 17)]
-    [InlineData("use lib \"lib.prp\"\nimport from lib answer end\ndef int answer 1", "'answer' is an imported function and cannot be used as a variable name.", 3, 9)]
+    [InlineData("use lib \"lib.prp\"\nimport from lib answer end\ndefine int answer 1", "'answer' is an imported function and cannot be used as a variable name.", 3, 12)]
     [InlineData("use lib \"lib.prp\"\nimport from lib answer end\nfunction int f int answer return answer", "'answer' is an imported function and cannot be used as a parameter name.", 3, 20)]
     [InlineData("use lib \"lib.prp\"\nset from lib answer 1", "A variable name must be a plain name; 'from' starts a qualified name, which can only name an exported function, record, choice or variant, or an operation of a library.", 2, 5)]
     public void RejectsClashingNames(string main, string message, int line, int column)
@@ -378,8 +378,8 @@ public sealed class ModuleTests : IDisposable
     [Fact]
     public void SameNamesInDifferentModulesDoNotClash()
     {
-        WriteFile("lib.prp", "def int answer 1\nexport function int value return answer");
-        WriteFile("other.prp", "def int answer 2\nexport function int value return answer");
+        WriteFile("lib.prp", "define int answer 1\nexport function int value return answer");
+        WriteFile("other.prp", "define int answer 2\nexport function int value return answer");
 
         var output = RunFile(
             "main.prp",
@@ -397,7 +397,7 @@ public sealed class ModuleTests : IDisposable
     [Fact]
     public void IncludeIsAnOrdinaryNameAgain()
     {
-        Assert.Equal("1\n", RunFile("main.prp", "def int include 1\nwrite_line include"));
+        Assert.Equal("1\n", RunFile("main.prp", "define int include 1\nwrite_line include"));
     }
 
     [Theory]
@@ -407,7 +407,7 @@ public sealed class ModuleTests : IDisposable
     [InlineData("from")]
     public void ModuleKeywordsAreReserved(string word)
     {
-        var error = FailFile("main.prp", $"def int {word} 1");
+        var error = FailFile("main.prp", $"define int {word} 1");
 
         Assert.Equal(ErrorStage.Parse, error.Stage);
     }
@@ -446,7 +446,7 @@ public sealed class ModuleTests : IDisposable
     {
         WriteFile("lib.prp", "export function int answer return 42");
         WriteFile("other.prp", "export function int answer return 43");
-        _session.Run($"use lib {Quoted("lib.prp")}\nimport from lib answer end\ndef int total 0\nfunction int helper return 1");
+        _session.Run($"use lib {Quoted("lib.prp")}\nimport from lib answer end\ndefine int total 0\nfunction int helper return 1");
 
         Assert.StartsWith("Module name 'lib' already names ", Failure($"use lib {Quoted("other.prp")}").Message);
         Assert.Equal("'answer' is imported in this file and cannot also be a function name.", Failure("function int answer return 1").Message);
@@ -462,7 +462,7 @@ public sealed class ModuleTests : IDisposable
         var output = RunFile(
             "main.prp",
             "use lib \"lib.prp\"\nuse answer \"other.prp\"\nimport from lib answer end\n" +
-            "function int twice int lib return multiply lib 2\ndef int other twice answer\nwrite_line other\nwrite_line from answer answer");
+            "function int twice int lib return multiply lib 2\ndefine int other twice answer\nwrite_line other\nwrite_line from answer answer");
 
         Assert.Equal("84\n43\n", output);
     }
@@ -493,7 +493,7 @@ public sealed class ModuleTests : IDisposable
     public void ReplModuleNamesMayMatchEarlierFunctionsAndGlobals()
     {
         WriteFile("other.prp", "export function int answer return 43");
-        _session.Run("def int total 0\nfunction int helper return 1");
+        _session.Run("define int total 0\nfunction int helper return 1");
 
         _session.Run($"use helper {Quoted("other.prp")}\nuse total {Quoted("other.prp")}\nwrite_line add helper from total answer");
 
@@ -504,7 +504,7 @@ public sealed class ModuleTests : IDisposable
     public void ReplImportsOfGlobalNamesAreRejected()
     {
         WriteFile("lib.prp", "export function int answer return 42");
-        _session.Run($"use lib {Quoted("lib.prp")}\ndef int answer 1");
+        _session.Run($"use lib {Quoted("lib.prp")}\ndefine int answer 1");
 
         Assert.Equal("'answer' is already a global variable and cannot be used as an imported name.", Failure("import from lib answer end").Message);
     }
@@ -573,7 +573,7 @@ public sealed class ModuleTests : IDisposable
     public void ARuntimeErrorWhileSettingUpAModuleInTheReplKeepsItLoaded()
     {
         WriteFile("lib.prp",
-            "def int stage 1\nexport function int read_stage return stage\nwrite_line \"setting up\"\nwrite_line divide 1 0\nset stage 2");
+            "define int stage 1\nexport function int read_stage return stage\nwrite_line \"setting up\"\nwrite_line divide 1 0\nset stage 2");
         var use = $"use lib {Quoted("lib.prp")}";
 
         var error = Failure(use);

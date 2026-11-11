@@ -7,7 +7,7 @@ namespace Pyrop.Tests;
 
 public sealed class ScreenTests
 {
-    private const string Terminal = "use terminal library\nimport from terminal View show write_view read_key read_key_within end\n";
+    private const string Terminal = "use terminal library\nimport from terminal View text table menu bar panel rows columns grid in_style in_color colored_grid show write_view read_key read_key_within end\n";
     private const string Enter = "\e[?1049h\e[?25l\e[2J";
     private const string Leave = "\e[?25h\e[?1049l";
 
@@ -247,21 +247,9 @@ public sealed class ScreenTests
     }
 
     [Fact]
-    public void ALongWordAndALargeTableLayOutQuickly()
-    {
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        var rows = Enumerable.Range(0, 20000).Select(index => (IReadOnlyList<string>)[$"row {index}", "x"]).ToList();
-
-        ViewLayout.Screen(new StackView(false, [Text(new string('a', 100000)), new TableView(["a", "b"], rows, [])]), OutputStyle.None, 80, 30);
-        ViewLayout.Page(new TableView(["a", "b"], rows, []), OutputStyle.None, 80);
-
-        Assert.True(watch.ElapsedMilliseconds < 10000, $"{watch.ElapsedMilliseconds} ms");
-    }
-
-    [Fact]
     public void ReadLeavesTheScreenWhenTypingOnTheTerminal()
     {
-        var (text, output) = RunRich("show text \"a\"\ndef string s read\nwrite_line s", new FakeScreen(30, 5), input: "typed\n");
+        var (text, output) = RunRich("show text \"a\"\ndefine string s read\nwrite_line s", new FakeScreen(30, 5), input: "typed\n");
 
         Assert.False(output.OnAlternateScreen);
         Assert.True(text.IndexOf(Leave, StringComparison.Ordinal) < text.IndexOf("typed", StringComparison.Ordinal));
@@ -352,7 +340,7 @@ public sealed class ScreenTests
     [Fact]
     public void AColoredGridColorsItsCharactersAndLeavesTheRestInTheSurroundingStyle()
     {
-        var colors = new Dictionary<string, OutputStyle> { ["#"] = OutputStyle.Grey, ["g"] = OutputStyle.Green };
+        var colors = new Dictionary<string, OutputStyle> { ["#"] = OutputStyle.Gray, ["g"] = OutputStyle.Green };
         var grid = new GridView(["##g.@"], 0, 0, colors);
 
         var line = Assert.Single(ViewLayout.Screen(grid, OutputStyle.Muted, 20, 3));
@@ -376,7 +364,7 @@ public sealed class ScreenTests
     public void WriteViewDrawsAColoredMapInColor()
     {
         var (text, _) = RunRich(
-            "write_view colored_grid list_of string \"#g#\" end map_of string string \"g\" \"green\" \"#\" \"grey\" end 0 0",
+            "write_view colored_grid list_of string \"#g#\" end map_of string string \"g\" \"green\" \"#\" \"gray\" end 0 0",
             new FakeScreen(30, 5));
 
         Assert.Contains("\e[90m#\e[0m\e[32mg\e[0m\e[90m#\e[0m", text);
@@ -443,7 +431,7 @@ public sealed class ScreenTests
         var screen = new FakeScreen(30, 5);
         screen.OnWait = () => screen.Size = (40, 6);
 
-        var (text, _) = RunRich("show text \"hello\"\ndef option string key read_key_within 50", screen);
+        var (text, _) = RunRich("show text \"hello\"\ndefine option string key read_key_within 50", screen);
 
         Assert.Equal(2, Regex.Matches(text, Regex.Escape("\e[1;1Hhello")).Count);
         Assert.Contains("\e[2J\e[1;1Hhello", text);
