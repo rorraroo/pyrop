@@ -43,6 +43,7 @@ pyrop --help                    # everything else
 - The [guide](docs/guide/index.md) teaches the language from the start.
 - The [reference](docs/reference/index.md) describes every statement and operation.
 - `dotnet run --project tools/DocsSite` builds both into a website in `publish/site/`.
+- The [changelog](CHANGELOG.md) lists what changed in each release.
 - The [samples](samples/) are complete programs: a log checker, a text adventure, a roguelite, a live log dashboard, a git summary and a backup tool.
 
 ## License
