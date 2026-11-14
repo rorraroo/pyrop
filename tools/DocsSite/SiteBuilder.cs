@@ -68,14 +68,19 @@ public sealed class SiteBuilder
         }
 
         File.WriteAllText(Path.Combine(output, "site.css"), Stylesheet.Text, new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(output, "search.js"), SearchScript.Text, new UTF8Encoding(false));
+        var entries = pages.Values.SelectMany(page => SearchIndex.EntriesOf(page.OutputPath, page.Document));
+        File.WriteAllText(Path.Combine(output, "search-index.js"), SearchIndex.Script(entries), new UTF8Encoding(false));
         File.Copy(_icon, Path.Combine(output, "pyrop.svg"), overwrite: true);
         return [];
     }
 
+    public static MarkdownDocument Parse(string markdown) => Markdown.Parse(markdown, Pipeline);
+
     private Page Load(string path)
     {
         var relative = Path.GetRelativePath(_docs, path).Replace('\\', '/');
-        var document = Markdown.Parse(File.ReadAllText(path), Pipeline);
+        var document = Parse(File.ReadAllText(path));
         var anchors = document.Descendants<HeadingBlock>()
             .Select(heading => heading.GetAttributes().Id)
             .OfType<string>()
@@ -158,11 +163,16 @@ public sealed class SiteBuilder
             <nav class="navbar navbar-expand navbar-dark sticky-top site-navbar">
             <div class="container-xxl">
             <button class="btn docs-sidebar-toggle d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#site-sidebar" aria-controls="site-sidebar" aria-label="Show contents"><span class="navbar-toggler-icon"></span></button>
-            <a class="navbar-brand" href="{root}index.html"><img src="{root}pyrop.svg" alt="">Pyrop</a>
+            <a class="navbar-brand" href="{root}index.html"><img src="{root}pyrop.svg" alt=""><span class="site-name">Pyrop</span></a>
             <ul class="navbar-nav me-auto">
             <li class="nav-item"><a class="nav-link{Active(page, "guide/")}" href="{root}guide/index.html"{Current(page, "guide/")}>Guide</a></li>
             <li class="nav-item"><a class="nav-link{Active(page, "reference/")}" href="{root}reference/index.html"{Current(page, "reference/")}>Reference</a></li>
             </ul>
+            <form class="docs-search" role="search" data-root="{root}" hidden>
+            <input class="form-control form-control-sm" type="search" placeholder="Search" aria-label="Search the documentation" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="docs-search-results">
+            <kbd class="docs-search-key" aria-hidden="true">/</kbd>
+            <ul class="docs-search-results list-unstyled" id="docs-search-results" role="listbox" aria-label="Search results" hidden></ul>
+            </form>
             </div>
             </nav>
             <div class="container-xxl">
@@ -188,6 +198,7 @@ public sealed class SiteBuilder
             </div>
             <script src="{BootstrapJs}" integrity="{BootstrapJsIntegrity}" crossorigin="anonymous"></script>
             <script>{CurrentIntoViewScript}</script>
+            <script src="{root}search.js"></script>
             </body>
             </html>
 

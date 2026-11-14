@@ -41,6 +41,55 @@ public sealed class DocsSiteTests
     }
 
     [Fact]
+    public void TheSearchIndexCoversEveryPageAndLeadsToHeadingsThatExist()
+    {
+        var root = RepositoryRoot();
+        var output = Directory.CreateTempSubdirectory("pyrop-site-").FullName;
+        try
+        {
+            var builder = new SiteBuilder(Path.Combine(root, "docs"), Path.Combine(root, "editors", "vscode", "icons", "pyrop.svg"));
+            Assert.Empty(builder.Build(output));
+            Assert.True(File.Exists(Path.Combine(output, "search.js")));
+            var script = File.ReadAllText(Path.Combine(output, "search-index.js"));
+            const string prefix = "window.pyropSearchIndex=";
+            Assert.StartsWith(prefix, script);
+            using var index = System.Text.Json.JsonDocument.Parse(script[prefix.Length..].TrimEnd().TrimEnd(';'));
+            var urls = index.RootElement.EnumerateArray().Select(entry => entry.GetProperty("u").GetString()!).ToList();
+            var pages = Directory.EnumerateFiles(output, "*.html", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(output, path).Replace('\\', '/'))
+                .ToList();
+            Assert.All(pages, page => Assert.Contains(urls, url => url == page || url.StartsWith(page + "#", StringComparison.Ordinal)));
+            foreach (var url in urls.Where(url => url.Contains('#')))
+            {
+                var hash = url.IndexOf('#');
+                Assert.Contains($"id=\"{url[(hash + 1)..]}\"", File.ReadAllText(Path.Combine(output, url[..hash])));
+            }
+
+            Assert.Contains("reference/operations/files.html#when-a-file-is-missing", urls);
+            var chapter = File.ReadAllText(Path.Combine(output, "guide", "04-functions.html"));
+            Assert.Contains("<form class=\"docs-search\" role=\"search\" data-root=\"../\" hidden>", chapter);
+            Assert.Contains("<script src=\"../search.js\"></script>", chapter);
+        }
+        finally
+        {
+            Directory.Delete(output, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SearchEntriesAreSectionsWithTheirWordsButNotTheirOutput()
+    {
+        var document = SiteBuilder.Parse(
+            "# The page\n\nIntro with `code`.\n\n## First part\n\n| a | b |\n|---|---|\n| cell | more |\n\n```pyrop\nwrite_line \"shown\"\n```\n\n```output\nhidden\n```\n\n#### Small heading\n\n- a list item\n");
+        Assert.Equal(
+            [
+                new SearchEntry("page.html", "The page", "The page", "Intro with code."),
+                new SearchEntry("page.html#first-part", "The page", "First part", "a b cell more write_line \"shown\" Small heading a list item"),
+            ],
+            SearchIndex.EntriesOf("page.html", document));
+    }
+
+    [Fact]
     public void BrokenLinksAndAnchorsStopTheBuild()
     {
         var docs = Directory.CreateTempSubdirectory("pyrop-docs-").FullName;
